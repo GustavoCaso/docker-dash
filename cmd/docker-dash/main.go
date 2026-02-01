@@ -476,12 +476,28 @@ func (m model) renderStatusBar() string {
 }
 
 func main() {
-	// Use mock client for now
-	client := service.NewMockClient()
-	defer client.Close()
+	// Try to connect to real Docker, fall back to mock
+	var dockerClient service.DockerClient
+	var err error
+
+	realClient, err := service.NewLocalDockerClient()
+	if err == nil {
+		// Test connection
+		if pingErr := realClient.Ping(context.Background()); pingErr == nil {
+			dockerClient = realClient
+		} else {
+			realClient.Close()
+		}
+	}
+
+	// Fall back to mock client
+	if dockerClient == nil {
+		dockerClient = service.NewMockClient()
+	}
+	defer dockerClient.Close()
 
 	p := tea.NewProgram(
-		initialModel(client),
+		initialModel(dockerClient),
 		tea.WithAltScreen(),
 	)
 
