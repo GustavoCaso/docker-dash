@@ -89,12 +89,7 @@ func (s *Sidebar) MoveDown() {
 func (s *Sidebar) View() string {
 	var b strings.Builder
 
-	logoStyle := lipgloss.NewStyle().
-		Foreground(theme.DockerBlue).
-		Bold(true).
-		MarginBottom(2)
-
-	b.WriteString(logoStyle.Render(theme.IconDocker + " Docker"))
+	b.WriteString(theme.LogoStyle.Render(theme.IconDocker + " Docker"))
 	b.WriteString("\n\n")
 
 	for i, item := range s.items {

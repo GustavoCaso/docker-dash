@@ -2,7 +2,9 @@
 // and Lip Gloss styles for the docker-dash TUI application.
 package theme
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Docker Desktop inspired color palette
 var (
@@ -55,6 +57,11 @@ const (
 	IconInfo    = "\uf05a" // Info circle
 	IconSuccess = "\uf00c" // Checkmark
 )
+
+var LogoStyle = lipgloss.NewStyle().
+	Foreground(DockerBlue).
+	Bold(true).
+	MarginBottom(2)
 
 // Sidebar styles
 var (

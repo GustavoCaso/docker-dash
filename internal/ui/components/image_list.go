@@ -55,7 +55,6 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the list
 func (i *ImageList) View() string {
-
 	return style.Render(i.list.View())
 }
 
