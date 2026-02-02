@@ -79,8 +79,7 @@ var (
 // Main panel styles
 var (
 	MainPanelStyle = lipgloss.NewStyle().
-			Background(Background).
-			Padding(1, 2)
+			Background(Background)
 
 	HeaderStyle = lipgloss.NewStyle().
 			Foreground(TextPrimary).

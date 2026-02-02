@@ -12,20 +12,20 @@ import (
 type View int
 
 const (
-	ViewContainers View = iota
-	ViewImages
-	ViewVolumes
+	ViewImages View = iota
+	// ViewContainers - commented out for now
+	// ViewVolumes - commented out for now
 )
 
 // String returns the string representation of the View
 func (v View) String() string {
 	switch v {
-	case ViewContainers:
-		return "Containers"
 	case ViewImages:
 		return "Images"
-	case ViewVolumes:
-		return "Volumes"
+	// case ViewContainers:
+	// 	return "Containers"
+	// case ViewVolumes:
+	// 	return "Volumes"
 	default:
 		return "Unknown"
 	}
@@ -50,9 +50,9 @@ type Sidebar struct {
 func NewSidebar() *Sidebar {
 	return &Sidebar{
 		items: []sidebarItem{
-			{icon: theme.IconContainer, label: "Containers", view: ViewContainers},
 			{icon: theme.IconImage, label: "Images", view: ViewImages},
-			{icon: theme.IconVolume, label: "Volumes", view: ViewVolumes},
+			// {icon: theme.IconContainer, label: "Containers", view: ViewContainers},
+			// {icon: theme.IconVolume, label: "Volumes", view: ViewVolumes},
 		},
 		activeIndex: 0,
 		focused:     false,
@@ -85,7 +85,7 @@ func (s *Sidebar) ActiveView() View {
 	if s.activeIndex >= 0 && s.activeIndex < len(s.items) {
 		return s.items[s.activeIndex].view
 	}
-	return ViewContainers
+	return ViewImages
 }
 
 // MoveUp moves the selection up, wrapping to the bottom if at the top
