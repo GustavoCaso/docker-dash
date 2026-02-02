@@ -6,7 +6,10 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
+
+var style = lipgloss.NewStyle().PaddingTop(1)
 
 // ImageItem implements list.Item interface
 type ImageItem struct {
@@ -30,14 +33,17 @@ func NewImageList(images []service.Image) *ImageList {
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	l.Title = "Docker Images"
+	l.SetShowTitle(false)
+	l.SetShowHelp(false) // We still support filtering with /
+	l.SetShowStatusBar(false)
 
 	return &ImageList{list: l}
 }
 
 // SetSize sets dimensions
 func (i *ImageList) SetSize(width, height int) {
-	i.list.SetSize(width, height)
+	x, y := style.GetFrameSize()
+	i.list.SetSize(width-x, height-y)
 }
 
 // Update handles messages
@@ -49,7 +55,8 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the list
 func (i *ImageList) View() string {
-	return i.list.View()
+
+	return style.Render(i.list.View())
 }
 
 func formatSize(bytes int64) string {

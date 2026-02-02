@@ -7,6 +7,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var sideBarStyle = lipgloss.NewStyle().
+	PaddingTop(1).
+	PaddingLeft(1)
+
 // View represents the different views available in the sidebar
 type View int
 
@@ -34,6 +38,7 @@ type Sidebar struct {
 	items       []sidebarItem
 	activeIndex int
 	focused     bool
+	width       int
 	height      int
 }
 
@@ -45,12 +50,15 @@ func NewSidebar() *Sidebar {
 		},
 		activeIndex: 0,
 		focused:     false,
+		width:       24,
 		height:      0,
 	}
 }
 
-func (s *Sidebar) SetHeight(height int) {
-	s.height = height
+func (s *Sidebar) SetSize(width, height int) {
+	x, y := sideBarStyle.GetFrameSize()
+	s.width = width - x
+	s.height = height - y
 }
 
 func (s *Sidebar) SetFocused(focused bool) {
@@ -106,13 +114,5 @@ func (s *Sidebar) View() string {
 		b.WriteString("\n")
 	}
 
-	contentHeight := 3 + len(s.items)
-	if s.height > contentHeight {
-		padding := s.height - contentHeight
-		for i := 0; i < padding; i++ {
-			b.WriteString("\n")
-		}
-	}
-
-	return theme.SidebarStyle.Height(s.height).Render(b.String())
+	return sideBarStyle.Width(s.width).Height(s.height).Render(b.String())
 }

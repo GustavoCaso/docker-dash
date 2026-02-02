@@ -52,7 +52,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		sidebarWidth := 24
 		listWidth := msg.Width - sidebarWidth
 
-		m.sidebar.SetHeight(msg.Height)
+		m.sidebar.SetSize(sidebarWidth, msg.Height)
 		m.imageList.SetSize(listWidth, msg.Height)
 
 	case tea.KeyMsg:
