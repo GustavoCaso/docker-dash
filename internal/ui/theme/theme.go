@@ -59,7 +59,6 @@ const (
 // Sidebar styles
 var (
 	SidebarStyle = lipgloss.NewStyle().
-			Width(24).
 			Background(DockerDark).
 			Padding(1, 2)
 

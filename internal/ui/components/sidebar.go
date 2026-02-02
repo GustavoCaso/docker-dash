@@ -7,10 +7,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var sideBarStyle = lipgloss.NewStyle().
-	PaddingTop(1).
-	PaddingLeft(1)
-
 // View represents the different views available in the sidebar
 type View int
 
@@ -56,7 +52,7 @@ func NewSidebar() *Sidebar {
 }
 
 func (s *Sidebar) SetSize(width, height int) {
-	x, y := sideBarStyle.GetFrameSize()
+	x, y := theme.SidebarStyle.GetFrameSize()
 	s.width = width - x
 	s.height = height - y
 }
@@ -114,5 +110,5 @@ func (s *Sidebar) View() string {
 		b.WriteString("\n")
 	}
 
-	return sideBarStyle.Width(s.width).Height(s.height).Render(b.String())
+	return theme.SidebarStyle.Width(s.width).Height(s.height).Render(b.String())
 }
