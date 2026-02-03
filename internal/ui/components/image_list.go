@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
-	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -23,6 +23,17 @@ var (
 	listStyle          = lipgloss.NewStyle()
 	listFocusedStyle   = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
 	listUnfocusedStyle = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
+)
+
+// Key bindings for image list actions
+var layersKey = key.NewBinding(
+	key.WithKeys("l"),
+	key.WithHelp("l", "layers"),
+)
+
+var focusKey = key.NewBinding(
+	key.WithKeys("enter"),
+	key.WithHelp("enter", "switch focus"),
 )
 
 // ImageItem implements list.Item interface
@@ -55,8 +66,13 @@ func NewImageList(images []service.Image) *ImageList {
 
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
 	l.SetShowTitle(false)
-	l.SetShowHelp(false) // We still support filtering with /
+	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
+
+	// Add custom key bindings to help
+	l.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{layersKey, focusKey}
+	}
 
 	vp := viewport.New(0, 0)
 
@@ -98,13 +114,10 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		case "enter":
 			if i.focused == focusList {
 				i.focused = focusViewport
-				return nil
-			}
-		case "esc":
-			if i.focused == focusViewport {
+			} else {
 				i.focused = focusList
-				return nil
 			}
+			return nil
 		case "l":
 			if i.focused == focusList {
 				i.showLayers = !i.showLayers
@@ -148,18 +161,9 @@ func (i *ImageList) View() string {
 		currentDetailStyle = listFocusedStyle
 	}
 
-	// Build help bar
-	helpBar := theme.HelpStyle.Render("l: layers")
-
-	// Combine list and help bar vertically
-	listWithHelp := lipgloss.JoinVertical(lipgloss.Left,
-		i.list.View(),
-		helpBar,
-	)
-
 	listView := currentListStyle.
 		Width(i.list.Width()).
-		Render(listWithHelp)
+		Render(i.list.View())
 
 	// Only show viewport when layers are toggled on
 	if !i.showLayers {
