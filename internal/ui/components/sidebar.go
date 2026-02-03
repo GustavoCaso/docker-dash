@@ -52,9 +52,8 @@ func NewSidebar() *Sidebar {
 }
 
 func (s *Sidebar) SetSize(width, height int) {
-	x, y := theme.SidebarStyle.GetFrameSize()
-	s.width = width - x
-	s.height = height - y
+	s.width = width - theme.SidebarStyle.GetHorizontalFrameSize()
+	s.height = height
 }
 
 func (s *Sidebar) SetFocused(focused bool) {

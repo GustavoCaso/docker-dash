@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	listStyle          = lipgloss.NewStyle().PaddingTop(1)
+	listStyle          = lipgloss.NewStyle()
 	listFocusedStyle   = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
 	listUnfocusedStyle = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
 )
@@ -29,8 +29,10 @@ type ImageItem struct {
 	image service.Image
 }
 
-func (i ImageItem) Title() string       { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
-func (i ImageItem) Description() string { return formatSize(i.image.Size) }
+func (i ImageItem) Title() string { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
+func (i ImageItem) Description() string {
+	return formatSize(i.image.Size) + formatContainerUse(i.image)
+}
 func (i ImageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
 // ImageList wraps bubbles/list
@@ -133,9 +135,11 @@ func (i *ImageList) View() string {
 	}
 
 	listView := currentListStyle.
+		Width(i.list.Width()).
 		Render(i.list.View())
 
 	detailView := currentDetailStyle.
+		Width(i.viewport.Width).
 		Render(i.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
@@ -226,4 +230,12 @@ func formatSize(bytes int64) string {
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}
+}
+
+func formatContainerUse(img service.Image) string {
+	if img.Containers > 0 {
+		return fmt.Sprintf(" used by %d containers", img.Containers)
+	}
+
+	return " unused"
 }

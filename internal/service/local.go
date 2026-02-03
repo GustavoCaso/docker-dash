@@ -189,13 +189,14 @@ func (s *localImageService) List(ctx context.Context) ([]Image, error) {
 		layers := s.fetchLayers(ctx, img.ID)
 
 		result[i] = Image{
-			ID:       img.ID,
-			Repo:     repo,
-			Tag:      tag,
-			Size:     img.Size,
-			Created:  timeFromUnix(img.Created),
-			Dangling: len(img.RepoTags) == 0 || img.RepoTags[0] == "<none>:<none>",
-			Layers:   layers,
+			ID:         img.ID,
+			Repo:       repo,
+			Tag:        tag,
+			Size:       img.Size,
+			Created:    timeFromUnix(img.Created),
+			Dangling:   len(img.RepoTags) == 0 || img.RepoTags[0] == "<none>:<none>",
+			Layers:     layers,
+			Containers: img.Containers,
 		}
 	}
 

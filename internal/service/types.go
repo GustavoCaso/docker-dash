@@ -45,14 +45,15 @@ type Layer struct {
 
 // Image represents a Docker image
 type Image struct {
-	ID       string
-	Repo     string
-	Tag      string
-	Size     int64
-	Created  time.Time
-	Dangling bool
-	UsedBy   []string // Container IDs using this image
-	Layers   []Layer  // Image layers from history
+	ID         string
+	Repo       string
+	Tag        string
+	Size       int64
+	Created    time.Time
+	Dangling   bool
+	Containers int64
+	UsedBy     []string // Container IDs using this image
+	Layers     []Layer  // Image layers from history
 }
 
 // Volume represents a Docker volume
