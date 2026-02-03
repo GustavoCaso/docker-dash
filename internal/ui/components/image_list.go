@@ -69,11 +69,6 @@ func NewImageList(images []service.Image) *ImageList {
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(false)
 
-	// Add custom key bindings to help
-	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{layersKey, focusKey}
-	}
-
 	vp := viewport.New(0, 0)
 
 	il := &ImageList{list: l, viewport: vp, lastSelected: -1}
@@ -147,6 +142,11 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	return tea.Batch(cmds...)
+}
+
+// KeyBindings returns the key bindings for the current state
+func (i *ImageList) KeyBindings() []key.Binding {
+	return []key.Binding{layersKey, focusKey}
 }
 
 // View renders the list

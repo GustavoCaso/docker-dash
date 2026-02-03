@@ -165,12 +165,10 @@ var (
 var (
 	StatusBarStyle = lipgloss.NewStyle().
 			Foreground(TextSecondary).
-			Background(DockerDark).
-			Padding(0, 1)
+			Background(DockerDark)
 
 	HelpStyle = lipgloss.NewStyle().
-			Foreground(TextMuted).
-			Padding(0, 1)
+			Foreground(TextMuted)
 )
 
 // StatusStyle returns the appropriate style for a given container/resource state.

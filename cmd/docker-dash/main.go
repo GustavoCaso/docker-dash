@@ -22,6 +22,7 @@ type model struct {
 	client    service.DockerClient
 	sidebar   *components.Sidebar
 	imageList *components.ImageList
+	statusBar *components.StatusBar
 	focus     focus
 	width     int
 	height    int
@@ -35,6 +36,7 @@ func initialModel(client service.DockerClient) model {
 		client:    client,
 		sidebar:   components.NewSidebar(),
 		imageList: components.NewImageList(images),
+		statusBar: components.NewStatusBar(),
 		focus:     focusSidebar,
 	}
 }
@@ -49,11 +51,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+		// Reserve space for status bar
+		statusBarHeight := lipgloss.Height(m.statusBar.View())
+		contentHeight := msg.Height - statusBarHeight
+
 		sidebarWidth := 24
 		listWidth := msg.Width - sidebarWidth
 
-		m.sidebar.SetSize(sidebarWidth, msg.Height)
-		m.imageList.SetSize(listWidth, msg.Height)
+		m.sidebar.SetSize(sidebarWidth, contentHeight)
+		m.imageList.SetSize(listWidth, contentHeight)
+		m.statusBar.SetWidth(msg.Width)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -86,10 +93,18 @@ func (m model) View() string {
 	// Mark which component is focused
 	m.sidebar.SetFocused(m.focus == focusSidebar)
 
+	// Set status bar bindings based on focused component
+	if m.focus == focusList {
+		m.statusBar.SetBindings(m.imageList.KeyBindings())
+	} else {
+		m.statusBar.SetBindings(nil)
+	}
+
 	sidebar := m.sidebar.View()
 	list := m.imageList.View()
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, sidebar, list)
+	content := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, list)
+	return lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())
 }
 
 func main() {
