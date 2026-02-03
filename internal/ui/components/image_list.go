@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -42,6 +43,7 @@ type ImageList struct {
 	width, height int
 	lastSelected  int
 	focused       focusedPane
+	showLayers    bool
 }
 
 // NewImageList creates a new image list
@@ -69,23 +71,28 @@ func (i *ImageList) SetSize(width, height int) {
 	i.width = width
 	i.height = height
 
-	// Calculate widths (40% list, 60% details)
-	listWidth := int(float64(width) * 0.4)
-	detailWidth := width - listWidth
-
 	// Account for padding and borders
 	listX, listY := listFocusedStyle.GetFrameSize()
 
-	i.list.SetSize(listWidth-listX, height-listY)
-	i.viewport.Width = detailWidth - listX
-	i.viewport.Height = height - listY
+	if i.showLayers {
+		// Split view: 40% list, 60% details
+		listWidth := int(float64(width) * 0.4)
+		detailWidth := width - listWidth
+
+		i.list.SetSize(listWidth-listX, height-listY)
+		i.viewport.Width = detailWidth - listX
+		i.viewport.Height = height - listY
+	} else {
+		// Full width list when viewport is hidden
+		i.list.SetSize(width-listX, height-listY)
+	}
 }
 
 // Update handles messages
 func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
-	// Handle focus switching
+	// Handle focus switching and actions
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
 		case "enter":
@@ -96,6 +103,13 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		case "esc":
 			if i.focused == focusViewport {
 				i.focused = focusList
+				return nil
+			}
+		case "l":
+			if i.focused == focusList {
+				i.showLayers = !i.showLayers
+				i.SetSize(i.width, i.height) // Recalculate layout
+				i.updateDetails()
 				return nil
 			}
 		}
@@ -134,9 +148,23 @@ func (i *ImageList) View() string {
 		currentDetailStyle = listFocusedStyle
 	}
 
+	// Build help bar
+	helpBar := theme.HelpStyle.Render("l: layers")
+
+	// Combine list and help bar vertically
+	listWithHelp := lipgloss.JoinVertical(lipgloss.Left,
+		i.list.View(),
+		helpBar,
+	)
+
 	listView := currentListStyle.
 		Width(i.list.Width()).
-		Render(i.list.View())
+		Render(listWithHelp)
+
+	// Only show viewport when layers are toggled on
+	if !i.showLayers {
+		return listView
+	}
 
 	detailView := currentDetailStyle.
 		Width(i.viewport.Width).
@@ -158,30 +186,16 @@ func (i *ImageList) updateDetails() {
 	var content strings.Builder
 
 	// Header
-	content.WriteString("Image Details\n")
-	content.WriteString("═════════════\n\n")
-
-	fmt.Fprintf(&content, "Name:    %s:%s\n", img.Repo, img.Tag)
-	fmt.Fprintf(&content, "ID:      %s\n", shortID(img.ID))
-	fmt.Fprintf(&content, "Size:    %s\n", formatSize(img.Size))
-	fmt.Fprintf(&content, "Created: %s\n", img.Created.Format("2006-01-02 15:04:05"))
-
-	if img.Dangling {
-		content.WriteString("Status:  Dangling (untagged)\n")
-	}
-
-	// Layers section
-	content.WriteString("\n")
-	fmt.Fprintf(&content, "Layers (%d)\n", len(img.Layers))
-	content.WriteString("──────────\n")
+	fmt.Fprintf(&content, "Layers for %s:%s\n", img.Repo, img.Tag)
+	content.WriteString("═══════════════════════\n\n")
 
 	if len(img.Layers) == 0 {
 		content.WriteString("No layer information available\n")
 	} else {
 		for idx, layer := range img.Layers {
 			cmd := truncateCommand(layer.Command, 50)
-			fmt.Fprintf(&content, "\n%2d. %s\n", idx+1, cmd)
-			fmt.Fprintf(&content, "    Size: %-10s  ID: %s\n",
+			fmt.Fprintf(&content, "%2d. %s\n", idx+1, cmd)
+			fmt.Fprintf(&content, "    Size: %-10s  ID: %s\n\n",
 				formatSize(layer.Size),
 				shortID(layer.ID))
 		}
