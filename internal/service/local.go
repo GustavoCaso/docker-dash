@@ -185,6 +185,9 @@ func (s *localImageService) List(ctx context.Context) ([]Image, error) {
 			}
 		}
 
+		// Fetch layer history for this image
+		layers := s.fetchLayers(ctx, img.ID)
+
 		result[i] = Image{
 			ID:       img.ID,
 			Repo:     repo,
@@ -192,10 +195,31 @@ func (s *localImageService) List(ctx context.Context) ([]Image, error) {
 			Size:     img.Size,
 			Created:  timeFromUnix(img.Created),
 			Dangling: len(img.RepoTags) == 0 || img.RepoTags[0] == "<none>:<none>",
+			Layers:   layers,
 		}
 	}
 
 	return result, nil
+}
+
+// fetchLayers retrieves the layer history for an image
+func (s *localImageService) fetchLayers(ctx context.Context, imageID string) []Layer {
+	history, err := s.cli.ImageHistory(ctx, imageID)
+	if err != nil {
+		return nil
+	}
+
+	layers := make([]Layer, 0, len(history))
+	for _, h := range history {
+		layers = append(layers, Layer{
+			ID:      h.ID,
+			Command: h.CreatedBy,
+			Size:    h.Size,
+			Created: timeFromUnix(h.Created),
+		})
+	}
+
+	return layers
 }
 
 func (s *localImageService) Get(ctx context.Context, id string) (*Image, error) {

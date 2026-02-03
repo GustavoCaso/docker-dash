@@ -35,6 +35,14 @@ type Mount struct {
 	Destination string
 }
 
+// Layer represents a Docker image layer
+type Layer struct {
+	ID      string    // Layer digest/ID
+	Command string    // Dockerfile instruction that created this layer
+	Size    int64     // Layer size in bytes
+	Created time.Time // When the layer was created
+}
+
 // Image represents a Docker image
 type Image struct {
 	ID       string
@@ -44,6 +52,7 @@ type Image struct {
 	Created  time.Time
 	Dangling bool
 	UsedBy   []string // Container IDs using this image
+	Layers   []Layer  // Image layers from history
 }
 
 // Volume represents a Docker volume
