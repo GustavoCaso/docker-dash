@@ -19,12 +19,9 @@ const (
 )
 
 var (
-	listStyle          = lipgloss.NewStyle().PaddingTop(1).PaddingRight(1)
+	listStyle          = lipgloss.NewStyle().PaddingTop(1)
 	listFocusedStyle   = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
 	listUnfocusedStyle = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
-
-	detailFocusedStyle   = lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
-	detailUnfocusedStyle = lipgloss.NewStyle().PaddingTop(1).PaddingLeft(1).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
 )
 
 // ImageItem implements list.Item interface
@@ -76,11 +73,10 @@ func (i *ImageList) SetSize(width, height int) {
 
 	// Account for padding and borders
 	listX, listY := listFocusedStyle.GetFrameSize()
-	detailX, detailY := detailFocusedStyle.GetFrameSize()
 
 	i.list.SetSize(listWidth-listX, height-listY)
-	i.viewport.Width = detailWidth - detailX
-	i.viewport.Height = height - detailY
+	i.viewport.Width = detailWidth - listX
+	i.viewport.Height = height - listY
 }
 
 // Update handles messages
@@ -126,28 +122,20 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the list
 func (i *ImageList) View() string {
-	// Calculate widths (40% list, 60% details)
-	listWidth := int(float64(i.width) * 0.4)
-	detailWidth := i.width - listWidth
-
 	// Choose styles based on focus
 	var currentListStyle, currentDetailStyle lipgloss.Style
 	if i.focused == focusList {
 		currentListStyle = listFocusedStyle
-		currentDetailStyle = detailUnfocusedStyle
+		currentDetailStyle = listUnfocusedStyle
 	} else {
 		currentListStyle = listUnfocusedStyle
-		currentDetailStyle = detailFocusedStyle
+		currentDetailStyle = listFocusedStyle
 	}
 
 	listView := currentListStyle.
-		Width(listWidth - currentListStyle.GetHorizontalFrameSize()).
-		Height(i.height - currentListStyle.GetVerticalFrameSize()).
 		Render(i.list.View())
 
 	detailView := currentDetailStyle.
-		Width(detailWidth - currentDetailStyle.GetHorizontalFrameSize()).
-		Height(i.height - currentDetailStyle.GetVerticalFrameSize()).
 		Render(i.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
