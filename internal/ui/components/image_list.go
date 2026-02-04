@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -27,33 +28,14 @@ type imagesLoadedMsg struct {
 	items []list.Item
 }
 
-type imageRemovedMsg struct {
-	id    string
-	idx   int
-	error error
+// ImageRemovedMsg is sent when an image deletion completes
+type ImageRemovedMsg struct {
+	ID    string
+	Idx   int
+	Error error
 }
 
-// clearBannerMsg is sent to clear the banner after a timeout
-type clearBannerMsg struct{}
-
-type bannerType int
-
-const (
-	bannerNone bannerType = iota
-	bannerSuccess
-	bannerError
-)
-
 var (
-	bannerSuccessStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("229")).
-				Background(lipgloss.Color("34")).
-				Padding(0, 1)
-	bannerErrorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("229")).
-				Background(lipgloss.Color("196")).
-				Padding(0, 1)
-
 	listStyle          = lipgloss.NewStyle()
 	listFocusedStyle   = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
 	listUnfocusedStyle = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
@@ -103,8 +85,6 @@ type ImageList struct {
 	showLayers    bool
 	loading       bool
 	spinner       spinner.Model
-	bannerMsg     string
-	bannerKind    bannerType
 }
 
 // NewImageList creates a new image list
@@ -178,24 +158,22 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(cmds...)
 	}
 
-	if removeMsg, ok := msg.(imageRemovedMsg); ok {
-		if removeMsg.error != nil {
-			i.bannerMsg = fmt.Sprintf("Error deleting image: %s", removeMsg.error.Error())
-			i.bannerKind = bannerError
-		} else {
-			i.list.RemoveItem(removeMsg.idx)
-			i.bannerMsg = fmt.Sprintf("Image %s deleted", shortID(removeMsg.id))
-			i.bannerKind = bannerSuccess
+	if removeMsg, ok := msg.(ImageRemovedMsg); ok {
+		if removeMsg.Error != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Error deleting image: %s", removeMsg.Error.Error()),
+					IsError: true,
+				}
+			}
 		}
-		return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
-			return clearBannerMsg{}
-		})
-	}
-
-	if _, ok := msg.(clearBannerMsg); ok {
-		i.bannerMsg = ""
-		i.bannerKind = bannerNone
-		return nil
+		i.list.RemoveItem(removeMsg.Idx)
+		return func() tea.Msg {
+			return message.ShowBannerMsg{
+				Message: fmt.Sprintf("Image %s deleted", shortID(removeMsg.ID)),
+				IsError: false,
+			}
+		}
 	}
 
 	// Handle focus switching and actions
@@ -266,19 +244,7 @@ func (i *ImageList) View() string {
 	// Overlay spinner in bottom right corner when loading
 	if i.loading {
 		spinnerText := i.spinner.View() + " Refreshing..."
-		listContent = i.overlayBottomRight(listContent, spinnerText, i.list.Width())
-	}
-
-	// Overlay banner in bottom right corner when showing
-	if i.bannerMsg != "" {
-		var style lipgloss.Style
-		if i.bannerKind == bannerError {
-			style = bannerErrorStyle
-		} else {
-			style = bannerSuccessStyle
-		}
-		bannerText := style.Render(i.bannerMsg)
-		listContent = i.overlayBottomRight(listContent, bannerText, i.list.Width())
+		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, i.list.Width())
 	}
 
 	listView := currentListStyle.
@@ -295,27 +261,6 @@ func (i *ImageList) View() string {
 		Render(i.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
-}
-
-// overlayBottomRight places text in the bottom right corner of content
-func (i *ImageList) overlayBottomRight(content, overlay string, width int) string {
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 {
-		return overlay
-	}
-
-	lastIdx := len(lines) - 1
-	lastLine := lines[lastIdx]
-	overlayWidth := lipgloss.Width(overlay)
-	padding := width - lipgloss.Width(lastLine) - overlayWidth
-
-	if padding > 0 {
-		lines[lastIdx] = lastLine + strings.Repeat(" ", padding) + overlay
-	} else {
-		lines[lastIdx] = lastLine + overlay
-	}
-
-	return strings.Join(lines, "\n")
 }
 
 func (i *ImageList) deleteImageCmd() tea.Cmd {
@@ -336,7 +281,7 @@ func (i *ImageList) deleteImageCmd() tea.Cmd {
 		ctx := context.Background()
 		err := svc.Remove(ctx, dockerImage.ID(), true)
 
-		return imageRemovedMsg{id: dockerImage.ID(), idx: idx, error: err}
+		return ImageRemovedMsg{ID: dockerImage.ID(), Idx: idx, Error: err}
 	}
 }
 

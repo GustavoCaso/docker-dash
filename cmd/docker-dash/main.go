@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components"
+	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -19,14 +22,38 @@ const (
 	focusList
 )
 
+type bannerType int
+
+const (
+	bannerNone bannerType = iota
+	bannerSuccess
+	bannerError
+)
+
+// clearBannerMsg is sent to clear the banner after a timeout
+type clearBannerMsg struct{}
+
+var (
+	bannerSuccessStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("229")).
+				Background(lipgloss.Color("34")).
+				Padding(0, 1)
+	bannerErrorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("229")).
+				Background(lipgloss.Color("196")).
+				Padding(0, 1)
+)
+
 type model struct {
-	client    service.DockerClient
-	sidebar   *components.Sidebar
-	imageList *components.ImageList
-	statusBar *components.StatusBar
-	focus     focus
-	width     int
-	height    int
+	client     service.DockerClient
+	sidebar    *components.Sidebar
+	imageList  *components.ImageList
+	statusBar  *components.StatusBar
+	focus      focus
+	width      int
+	height     int
+	bannerMsg  string
+	bannerKind bannerType
 }
 
 // Key bindings for image list actions
@@ -72,6 +99,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.imageList.SetSize(listWidth, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
+	case message.ShowBannerMsg:
+		m.bannerMsg = msg.Message
+		if msg.IsError {
+			m.bannerKind = bannerError
+		} else {
+			m.bannerKind = bannerSuccess
+		}
+		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			return clearBannerMsg{}
+		})
+
+	case clearBannerMsg:
+		m.bannerMsg = ""
+		m.bannerKind = bannerNone
+		return m, nil
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -114,6 +157,19 @@ func (m model) View() string {
 	list := m.imageList.View()
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, list)
+
+	// Overlay banner on content area (before status bar)
+	if m.bannerMsg != "" {
+		var style lipgloss.Style
+		if m.bannerKind == bannerError {
+			style = bannerErrorStyle
+		} else {
+			style = bannerSuccessStyle
+		}
+		bannerText := style.Render(m.bannerMsg)
+		content = helper.OverlayBottomRight(2, content, bannerText, m.width)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())
 }
 
