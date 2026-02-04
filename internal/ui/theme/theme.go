@@ -61,25 +61,26 @@ const (
 var LogoStyle = lipgloss.NewStyle().
 	Foreground(DockerBlue).
 	Bold(true).
-	MarginBottom(2)
+	PaddingLeft(1).
+	PaddingTop(1)
 
 // Sidebar styles
 var (
 	SidebarStyle = lipgloss.NewStyle().
 			Background(DockerDark).
-			Padding(1, 2)
+			Border(lipgloss.HiddenBorder())
 
 	SidebarItemStyle = lipgloss.NewStyle().
-				Foreground(TextSecondary).
 				Padding(0, 1).
-				MarginBottom(1)
+				MarginBottom(1).
+				Foreground(TextSecondary)
 
 	SidebarActiveStyle = lipgloss.NewStyle().
 				Foreground(TextPrimary).
 				Background(DockerBlue).
-				Bold(true).
 				Padding(0, 1).
-				MarginBottom(1)
+				MarginBottom(1).
+				Bold(true)
 )
 
 // Main panel styles
