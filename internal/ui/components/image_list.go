@@ -1,12 +1,14 @@
 package components
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -18,6 +20,11 @@ const (
 	focusList focusedPane = iota
 	focusViewport
 )
+
+// imagesLoadedMsg is sent when images have been loaded asynchronously
+type imagesLoadedMsg struct {
+	items []list.Item
+}
 
 var (
 	listStyle          = lipgloss.NewStyle()
@@ -36,6 +43,11 @@ var focusKey = key.NewBinding(
 	key.WithHelp("enter", "switch focus"),
 )
 
+var refreshKey = key.NewBinding(
+	key.WithKeys("r"),
+	key.WithHelp("r", "refresh"),
+)
+
 // ImageItem implements list.Item interface
 type ImageItem struct {
 	image service.Image
@@ -51,14 +63,17 @@ func (i ImageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 type ImageList struct {
 	list          list.Model
 	viewport      viewport.Model
+	service       service.ImageService
 	width, height int
 	lastSelected  int
 	focused       focusedPane
 	showLayers    bool
+	loading       bool
+	spinner       spinner.Model
 }
 
 // NewImageList creates a new image list
-func NewImageList(images []service.Image) *ImageList {
+func NewImageList(images []service.Image, service service.ImageService) *ImageList {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
 		items[i] = ImageItem{image: img}
@@ -67,11 +82,21 @@ func NewImageList(images []service.Image) *ImageList {
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowHelp(false)
-	l.SetShowStatusBar(false)
+	l.SetShowStatusBar(true)
 
 	vp := viewport.New(0, 0)
 
-	il := &ImageList{list: l, viewport: vp, lastSelected: -1}
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
+	il := &ImageList{
+		list:         l,
+		viewport:     vp,
+		lastSelected: -1,
+		service:      service,
+		spinner:      sp,
+	}
 	il.updateDetails()
 
 	return il
@@ -103,6 +128,21 @@ func (i *ImageList) SetSize(width, height int) {
 func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
+	// Handle spinner ticks while loading
+	if i.loading {
+		var spinnerCmd tea.Cmd
+		i.spinner, spinnerCmd = i.spinner.Update(msg)
+		cmds = append(cmds, spinnerCmd)
+	}
+
+	// Handle images loaded message
+	if loadedMsg, ok := msg.(imagesLoadedMsg); ok {
+		i.loading = false
+		cmd := i.list.SetItems(loadedMsg.items)
+		cmds = append(cmds, cmd)
+		return tea.Batch(cmds...)
+	}
+
 	// Handle focus switching and actions
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
@@ -120,6 +160,9 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 				i.updateDetails()
 				return nil
 			}
+		case "r":
+			i.loading = true
+			return tea.Batch(i.spinner.Tick, i.updateImages())
 		}
 	}
 
@@ -146,7 +189,7 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 // KeyBindings returns the key bindings for the current state
 func (i *ImageList) KeyBindings() []key.Binding {
-	return []key.Binding{layersKey, focusKey}
+	return []key.Binding{layersKey, focusKey, refreshKey}
 }
 
 // View renders the list
@@ -161,9 +204,17 @@ func (i *ImageList) View() string {
 		currentDetailStyle = listFocusedStyle
 	}
 
+	listContent := i.list.View()
+
+	// Overlay spinner in bottom right corner when loading
+	if i.loading {
+		spinnerText := i.spinner.View() + " Refreshing..."
+		listContent = i.overlayBottomRight(listContent, spinnerText, i.list.Width())
+	}
+
 	listView := currentListStyle.
 		Width(i.list.Width()).
-		Render(i.list.View())
+		Render(listContent)
 
 	// Only show viewport when layers are toggled on
 	if !i.showLayers {
@@ -175,6 +226,41 @@ func (i *ImageList) View() string {
 		Render(i.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
+}
+
+// overlayBottomRight places text in the bottom right corner of content
+func (i *ImageList) overlayBottomRight(content, overlay string, width int) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return overlay
+	}
+
+	lastIdx := len(lines) - 1
+	lastLine := lines[lastIdx]
+	overlayWidth := lipgloss.Width(overlay)
+	padding := width - lipgloss.Width(lastLine) - overlayWidth
+
+	if padding > 0 {
+		lines[lastIdx] = lastLine + strings.Repeat(" ", padding) + overlay
+	} else {
+		lines[lastIdx] = lastLine + overlay
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+// updateImages updates images asynchronously
+func (i *ImageList) updateImages() tea.Cmd {
+	svc := i.service
+	return func() tea.Msg {
+		ctx := context.Background()
+		images, _ := svc.List(ctx)
+		items := make([]list.Item, len(images))
+		for idx, img := range images {
+			items[idx] = ImageItem{image: img}
+		}
+		return imagesLoadedMsg{items: items}
+	}
 }
 
 // updateDetails updates the viewport content based on selected image

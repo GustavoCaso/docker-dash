@@ -45,7 +45,7 @@ func initialModel(client service.DockerClient) model {
 	return model{
 		client:    client,
 		sidebar:   components.NewSidebar(),
-		imageList: components.NewImageList(images),
+		imageList: components.NewImageList(images, client.Images()),
 		statusBar: components.NewStatusBar(),
 		focus:     focusSidebar,
 	}
