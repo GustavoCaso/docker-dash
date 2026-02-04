@@ -26,6 +26,12 @@ type imagesLoadedMsg struct {
 	items []list.Item
 }
 
+type imageRemovedMsg struct {
+	id    string
+	idx   int
+	error error
+}
+
 var (
 	listStyle          = lipgloss.NewStyle()
 	listFocusedStyle   = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
@@ -48,11 +54,17 @@ var refreshKey = key.NewBinding(
 	key.WithHelp("r", "refresh"),
 )
 
+var deleteKey = key.NewBinding(
+	key.WithKeys("d"),
+	key.WithHelp("d", "delete"),
+)
+
 // ImageItem implements list.Item interface
 type ImageItem struct {
 	image service.Image
 }
 
+func (i ImageItem) ID() string    { return i.image.ID }
 func (i ImageItem) Title() string { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
 func (i ImageItem) Description() string {
 	return formatSize(i.image.Size) + formatContainerUse(i.image)
@@ -143,6 +155,14 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(cmds...)
 	}
 
+	if removeMsg, ok := msg.(imageRemovedMsg); ok {
+		if removeMsg.error != nil {
+			return nil
+		}
+		i.list.RemoveItem(removeMsg.idx)
+		return nil
+	}
+
 	// Handle focus switching and actions
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
@@ -162,7 +182,9 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 			}
 		case "r":
 			i.loading = true
-			return tea.Batch(i.spinner.Tick, i.updateImages())
+			return tea.Batch(i.spinner.Tick, i.updateImagesCmd())
+		case "d":
+			return i.deleteImageCmd()
 		}
 	}
 
@@ -189,7 +211,7 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 // KeyBindings returns the key bindings for the current state
 func (i *ImageList) KeyBindings() []key.Binding {
-	return []key.Binding{layersKey, focusKey, refreshKey}
+	return []key.Binding{layersKey, focusKey, refreshKey, deleteKey}
 }
 
 // View renders the list
@@ -249,8 +271,29 @@ func (i *ImageList) overlayBottomRight(content, overlay string, width int) strin
 	return strings.Join(lines, "\n")
 }
 
-// updateImages updates images asynchronously
-func (i *ImageList) updateImages() tea.Cmd {
+func (i *ImageList) deleteImageCmd() tea.Cmd {
+	svc := i.service
+	items := i.list.Items()
+	idx := i.lastSelected
+	item := items[idx]
+	if item == nil {
+		return nil
+	}
+
+	dockerImage, ok := item.(ImageItem)
+	if !ok {
+		return nil
+	}
+
+	return func() tea.Msg {
+		ctx := context.Background()
+		err := svc.Remove(ctx, dockerImage.ID(), true)
+
+		return imageRemovedMsg{id: dockerImage.ID(), idx: idx, error: err}
+	}
+}
+
+func (i *ImageList) updateImagesCmd() tea.Cmd {
 	svc := i.service
 	return func() tea.Msg {
 		ctx := context.Background()
