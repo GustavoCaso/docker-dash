@@ -7,6 +7,7 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -27,6 +28,15 @@ type model struct {
 	width     int
 	height    int
 }
+
+// Key bindings for image list actions
+var tabKey = key.NewBinding(
+	key.WithKeys("tab", "shift+tab"),
+	key.WithHelp("tab", "change focus"),
+)
+
+// KeyBindings returns the key bindings for the current state
+var bindings = []key.Binding{tabKey}
 
 func initialModel(client service.DockerClient) model {
 	ctx := context.Background()
@@ -60,7 +70,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.sidebar.SetSize(sidebarWidth, contentHeight)
 		m.imageList.SetSize(listWidth, contentHeight)
-		m.statusBar.SetWidth(msg.Width)
+		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -97,7 +107,7 @@ func (m model) View() string {
 	if m.focus == focusList {
 		m.statusBar.SetBindings(m.imageList.KeyBindings())
 	} else {
-		m.statusBar.SetBindings(nil)
+		m.statusBar.SetBindings(bindings)
 	}
 
 	sidebar := m.sidebar.View()
