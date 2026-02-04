@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/charmbracelet/bubbles/key"
@@ -32,7 +33,27 @@ type imageRemovedMsg struct {
 	error error
 }
 
+// clearBannerMsg is sent to clear the banner after a timeout
+type clearBannerMsg struct{}
+
+type bannerType int
+
+const (
+	bannerNone bannerType = iota
+	bannerSuccess
+	bannerError
+)
+
 var (
+	bannerSuccessStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("229")).
+				Background(lipgloss.Color("34")).
+				Padding(0, 1)
+	bannerErrorStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("229")).
+				Background(lipgloss.Color("196")).
+				Padding(0, 1)
+
 	listStyle          = lipgloss.NewStyle()
 	listFocusedStyle   = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
 	listUnfocusedStyle = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
@@ -82,6 +103,8 @@ type ImageList struct {
 	showLayers    bool
 	loading       bool
 	spinner       spinner.Model
+	bannerMsg     string
+	bannerKind    bannerType
 }
 
 // NewImageList creates a new image list
@@ -157,9 +180,21 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 	if removeMsg, ok := msg.(imageRemovedMsg); ok {
 		if removeMsg.error != nil {
-			return nil
+			i.bannerMsg = fmt.Sprintf("Error deleting image: %s", removeMsg.error.Error())
+			i.bannerKind = bannerError
+		} else {
+			i.list.RemoveItem(removeMsg.idx)
+			i.bannerMsg = fmt.Sprintf("Image %s deleted", shortID(removeMsg.id))
+			i.bannerKind = bannerSuccess
 		}
-		i.list.RemoveItem(removeMsg.idx)
+		return tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			return clearBannerMsg{}
+		})
+	}
+
+	if _, ok := msg.(clearBannerMsg); ok {
+		i.bannerMsg = ""
+		i.bannerKind = bannerNone
 		return nil
 	}
 
@@ -232,6 +267,18 @@ func (i *ImageList) View() string {
 	if i.loading {
 		spinnerText := i.spinner.View() + " Refreshing..."
 		listContent = i.overlayBottomRight(listContent, spinnerText, i.list.Width())
+	}
+
+	// Overlay banner in bottom right corner when showing
+	if i.bannerMsg != "" {
+		var style lipgloss.Style
+		if i.bannerKind == bannerError {
+			style = bannerErrorStyle
+		} else {
+			style = bannerSuccessStyle
+		}
+		bannerText := style.Render(i.bannerMsg)
+		listContent = i.overlayBottomRight(listContent, bannerText, i.list.Width())
 	}
 
 	listView := currentListStyle.
