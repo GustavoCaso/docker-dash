@@ -11,11 +11,14 @@ import (
 type View int
 
 const (
-	ViewImages View = iota
+	ViewContainers View = iota
+	ViewImages
 )
 
 func (v View) String() string {
 	switch v {
+	case ViewContainers:
+		return "Containers"
 	case ViewImages:
 		return "Images"
 	default:
@@ -43,6 +46,7 @@ func NewSidebar() *Sidebar {
 	return &Sidebar{
 		items: []sidebarItem{
 			{icon: theme.IconImage, label: "Images", view: ViewImages},
+			{icon: theme.IconContainer, label: "Containers", view: ViewContainers},
 		},
 		activeIndex: 0,
 		focused:     false,

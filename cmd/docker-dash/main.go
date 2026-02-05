@@ -45,36 +45,44 @@ var (
 )
 
 type model struct {
-	client     service.DockerClient
-	sidebar    *components.Sidebar
-	imageList  *components.ImageList
-	statusBar  *components.StatusBar
-	focus      focus
-	width      int
-	height     int
-	bannerMsg  string
-	bannerKind bannerType
+	client        service.DockerClient
+	sidebar       *components.Sidebar
+	containerList *components.ContainerList
+	imageList     *components.ImageList
+	statusBar     *components.StatusBar
+	focus         focus
+	width         int
+	height        int
+	bannerMsg     string
+	bannerKind    bannerType
 }
 
-// Key bindings for image list actions
+// Key bindings for sidebar
 var tabKey = key.NewBinding(
 	key.WithKeys("tab", "shift+tab"),
 	key.WithHelp("tab", "change focus"),
 )
 
-// KeyBindings returns the key bindings for the current state
-var bindings = []key.Binding{tabKey}
+var sidebarNavKey = key.NewBinding(
+	key.WithKeys("up", "down"),
+	key.WithHelp("up/down", "navigate"),
+)
+
+// KeyBindings returns the key bindings for sidebar focus
+var sidebarBindings = []key.Binding{sidebarNavKey, tabKey}
 
 func initialModel(client service.DockerClient) model {
 	ctx := context.Background()
+	containers, _ := client.Containers().List(ctx)
 	images, _ := client.Images().List(ctx)
 
 	return model{
-		client:    client,
-		sidebar:   components.NewSidebar(),
-		imageList: components.NewImageList(images, client.Images()),
-		statusBar: components.NewStatusBar(),
-		focus:     focusSidebar,
+		client:        client,
+		sidebar:       components.NewSidebar(),
+		containerList: components.NewContainerList(containers, client.Containers()),
+		imageList:     components.NewImageList(images, client.Images()),
+		statusBar:     components.NewStatusBar(),
+		focus:         focusSidebar,
 	}
 }
 
@@ -96,6 +104,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		listWidth := msg.Width - sidebarWidth
 
 		m.sidebar.SetSize(sidebarWidth, contentHeight)
+		m.containerList.SetSize(listWidth, contentHeight)
 		m.imageList.SetSize(listWidth, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
@@ -127,13 +136,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = focusSidebar
 			}
 			return m, nil
+		case "up", "k":
+			// Navigate sidebar when focused
+			if m.focus == focusSidebar {
+				m.sidebar.MoveUp()
+				return m, nil
+			}
+		case "down", "j":
+			// Navigate sidebar when focused
+			if m.focus == focusSidebar {
+				m.sidebar.MoveDown()
+				return m, nil
+			}
 		}
 	}
 
 	// Forward messages to focused component
 	var cmd tea.Cmd
 	if m.focus == focusList {
-		cmd = m.imageList.Update(msg)
+		switch m.sidebar.ActiveView() {
+		case components.ViewContainers:
+			cmd = m.containerList.Update(msg)
+		case components.ViewImages:
+			cmd = m.imageList.Update(msg)
+		}
 	}
 	return m, cmd
 }
@@ -146,17 +172,29 @@ func (m model) View() string {
 	// Mark which component is focused
 	m.sidebar.SetFocused(m.focus == focusSidebar)
 
+	// Get the active list view and key bindings based on the active view
+	var listView string
+	var listBindings []key.Binding
+
+	switch m.sidebar.ActiveView() {
+	case components.ViewContainers:
+		listView = m.containerList.View()
+		listBindings = m.containerList.KeyBindings()
+	case components.ViewImages:
+		listView = m.imageList.View()
+		listBindings = m.imageList.KeyBindings()
+	}
+
 	// Set status bar bindings based on focused component
 	if m.focus == focusList {
-		m.statusBar.SetBindings(m.imageList.KeyBindings())
+		m.statusBar.SetBindings(listBindings)
 	} else {
-		m.statusBar.SetBindings(bindings)
+		m.statusBar.SetBindings(sidebarBindings)
 	}
 
 	sidebar := m.sidebar.View()
-	list := m.imageList.View()
 
-	content := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, list)
+	content := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, listView)
 
 	// Overlay banner on content area (before status bar)
 	if m.bannerMsg != "" {

@@ -71,14 +71,14 @@ var (
 			Border(lipgloss.HiddenBorder())
 
 	SidebarItemStyle = lipgloss.NewStyle().
-				Padding(0, 1).
+				PaddingLeft(1).
 				MarginBottom(1).
 				Foreground(TextSecondary)
 
 	SidebarActiveStyle = lipgloss.NewStyle().
 				Foreground(TextPrimary).
 				Background(DockerBlue).
-				Padding(0, 1).
+				PaddingLeft(1).
 				MarginBottom(1).
 				Bold(true)
 )
