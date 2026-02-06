@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 // containersLoadedMsg is sent when containers have been loaded asynchronously
@@ -32,8 +33,8 @@ type ContainerActionMsg struct {
 
 // Key bindings for container list actions
 var containerDetailsKey = key.NewBinding(
-	key.WithKeys("l"),
-	key.WithHelp("l", "details"),
+	key.WithKeys("d"),
+	key.WithHelp("d", "details"),
 )
 
 var containerFocusKey = key.NewBinding(
@@ -47,8 +48,8 @@ var containerRefreshKey = key.NewBinding(
 )
 
 var containerDeleteKey = key.NewBinding(
-	key.WithKeys("d"),
-	key.WithHelp("d", "delete"),
+	key.WithKeys("D"),
+	key.WithHelp("D", "delete"),
 )
 
 var containerStartStopKey = key.NewBinding(
@@ -61,6 +62,16 @@ var containerRestartKey = key.NewBinding(
 	key.WithHelp("R", "restart"),
 )
 
+var logsKey = key.NewBinding(
+	key.WithKeys("l"),
+	key.WithHelp("l", "logs"),
+)
+
+// KeyBindings returns the key bindings for the current state
+func (c *ContainerList) KeyBindings() []key.Binding {
+	return []key.Binding{containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, containerFocusKey}
+}
+
 // ContainerItem implements list.Item interface
 type ContainerItem struct {
 	container service.Container
@@ -72,7 +83,7 @@ func (c ContainerItem) Description() string {
 	stateIcon := theme.StatusIcon(string(c.container.State))
 	stateStyle := theme.StatusStyle(string(c.container.State))
 	state := stateStyle.Render(stateIcon + " " + string(c.container.State))
-	return state + " " + c.container.Image
+	return state + " " + c.container.Image + " " + c.ID()
 }
 func (c ContainerItem) FilterValue() string { return c.container.Name }
 
@@ -85,6 +96,7 @@ type ContainerList struct {
 	lastSelected  int
 	focused       focusedPane
 	showDetails   bool
+	showLogs      bool
 	loading       bool
 	spinner       spinner.Model
 }
@@ -199,7 +211,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				c.focused = focusList
 			}
 			return nil
-		case "l":
+		case "d":
 			if c.focused == focusList {
 				c.showDetails = !c.showDetails
 				c.SetSize(c.width, c.height) // Recalculate layout
@@ -209,7 +221,15 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		case "r":
 			c.loading = true
 			return tea.Batch(c.spinner.Tick, c.updateContainersCmd())
-		case "d":
+		case "l":
+			c.showLogs = !c.showLogs
+			if c.focused == focusList {
+				c.showDetails = !c.showDetails
+				c.SetSize(c.width, c.height) // Recalculate layout
+				c.updateDetails()
+				return nil
+			}
+		case "D":
 			return c.deleteContainerCmd()
 		case "s":
 			return c.toggleContainerCmd()
@@ -237,11 +257,6 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	return tea.Batch(cmds...)
-}
-
-// KeyBindings returns the key bindings for the current state
-func (c *ContainerList) KeyBindings() []key.Binding {
-	return []key.Binding{containerDetailsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, containerFocusKey}
 }
 
 // View renders the list
@@ -375,6 +390,11 @@ func (c *ContainerList) updateDetails() {
 
 	container := selected.(ContainerItem).container
 
+	if c.showLogs {
+		c.logsDetails()
+		return
+	}
+
 	var content strings.Builder
 
 	// Header
@@ -412,4 +432,28 @@ func (c *ContainerList) updateDetails() {
 
 	c.viewport.SetContent(content.String())
 	c.viewport.GotoTop()
+}
+
+func (c *ContainerList) logsDetails() {
+	selected := c.list.SelectedItem()
+	if selected == nil {
+		c.viewport.SetContent("No container selected")
+		return
+	}
+
+	container := selected.(ContainerItem).container
+	ctx := context.Background()
+	reader, err := c.service.Logs(ctx, container.ID, service.LogOptions{})
+	if err != nil {
+		c.viewport.SetContent(fmt.Sprintf("Error reading logs %s", err.Error()))
+		return
+	}
+	buf := new(strings.Builder)
+	_, err = stdcopy.StdCopy(buf, buf, reader)
+	if err != nil {
+		c.viewport.SetContent(fmt.Sprintf("Error reading logs %s", err.Error()))
+		return
+	}
+
+	c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(buf.String()))
 }
