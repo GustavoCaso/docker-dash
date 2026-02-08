@@ -1,11 +1,13 @@
 package service
 
 import (
+	"archive/tar"
 	"context"
 	"io"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
@@ -160,6 +162,71 @@ func (s *localContainerService) Logs(ctx context.Context, id string, opts LogOpt
 		Tail:       opts.Tail,
 		Timestamps: opts.Timestamps,
 	})
+}
+
+func (s *localContainerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
+	reader, err := s.cli.ContainerExport(ctx, "51bc63fdf4eb47ec2699a7affd382b487d065ea6fbf5ccfc3106e9b4f2ee64f4")
+	if err != nil {
+		return ContainerFileTree{}, err
+	}
+
+	defer reader.Close()
+
+	return buildContainerFileTree(reader), nil
+}
+
+func buildContainerFileTree(reader io.ReadCloser) ContainerFileTree {
+	tr := tar.NewReader(reader)
+	files := []string{}
+	t := tree.Root(".")
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		file := hdr.Name
+		files = append(files, file)
+		subTree := t
+		isDir := hdr.Typeflag == tar.TypeDir
+		clean := strings.TrimSuffix(file, "/")
+		parts := strings.Split(clean, "/")
+
+		for i, part := range parts {
+			if part == "." || part == "" {
+				continue
+			}
+
+			isLast := i == len(parts)-1
+
+			if isLast && !isDir {
+				// file entry — add as leaf
+				if hdr.Linkname != "" {
+					subTree.Child(part + " -> " + hdr.Linkname)
+				} else {
+					subTree.Child(part)
+				}
+			} else {
+				// directory entry — find existing subtree or create one
+				found := false
+				children := subTree.Children()
+				for j := range children.Length() {
+					child := children.At(j)
+					if sub, ok := child.(*tree.Tree); ok && child.Value() == part {
+						subTree = sub
+						found = true
+						break
+					}
+				}
+				if !found {
+					c := tree.Root(part)
+					subTree.Child(c)
+					subTree = c
+				}
+			}
+		}
+	}
+
+	return ContainerFileTree{Files: files, Tree: t}
 }
 
 // Local Image Service

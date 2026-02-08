@@ -22,6 +22,7 @@ type ContainerService interface {
 	Stop(ctx context.Context, id string) error
 	Restart(ctx context.Context, id string) error
 	Remove(ctx context.Context, id string, force bool) error
+	FileTree(ctx context.Context, id string) (ContainerFileTree, error)
 	Logs(ctx context.Context, id string, opts LogOptions) (io.ReadCloser, error)
 }
 

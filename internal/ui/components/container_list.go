@@ -67,9 +67,14 @@ var logsKey = key.NewBinding(
 	key.WithHelp("l", "logs"),
 )
 
+var treeKey = key.NewBinding(
+	key.WithKeys("t"),
+	key.WithHelp("t", "files"),
+)
+
 // KeyBindings returns the key bindings for the current state
 func (c *ContainerList) KeyBindings() []key.Binding {
-	return []key.Binding{containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, containerFocusKey}
+	return []key.Binding{containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, containerFocusKey, treeKey}
 }
 
 // ContainerItem implements list.Item interface
@@ -97,6 +102,7 @@ type ContainerList struct {
 	focused       focusedPane
 	showDetails   bool
 	showLogs      bool
+	showFileTree  bool
 	loading       bool
 	spinner       spinner.Model
 }
@@ -223,6 +229,15 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(c.spinner.Tick, c.updateContainersCmd())
 		case "l":
 			c.showLogs = !c.showLogs
+			if c.focused == focusList {
+				c.showDetails = !c.showDetails
+				c.SetSize(c.width, c.height) // Recalculate layout
+				c.updateDetails()
+				return nil
+			}
+
+		case "t":
+			c.showFileTree = !c.showFileTree
 			if c.focused == focusList {
 				c.showDetails = !c.showDetails
 				c.SetSize(c.width, c.height) // Recalculate layout
@@ -390,6 +405,11 @@ func (c *ContainerList) updateDetails() {
 
 	container := selected.(ContainerItem).container
 
+	if c.showFileTree {
+		c.fileTreeDetails()
+		return
+	}
+
 	if c.showLogs {
 		c.logsDetails()
 		return
@@ -434,6 +454,24 @@ func (c *ContainerList) updateDetails() {
 	c.viewport.GotoTop()
 }
 
+func (c *ContainerList) fileTreeDetails() {
+	selected := c.list.SelectedItem()
+	if selected == nil {
+		c.viewport.SetContent("No container selected")
+		return
+	}
+
+	container := selected.(ContainerItem).container
+	ctx := context.Background()
+	fileTree, err := c.service.FileTree(ctx, container.ID)
+	if err != nil {
+		c.viewport.SetContent(fmt.Sprintf("Error getting the file tree: %s", err.Error()))
+		return
+	}
+
+	c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(fileTree.Tree.String()))
+}
+
 func (c *ContainerList) logsDetails() {
 	selected := c.list.SelectedItem()
 	if selected == nil {
@@ -445,13 +483,13 @@ func (c *ContainerList) logsDetails() {
 	ctx := context.Background()
 	reader, err := c.service.Logs(ctx, container.ID, service.LogOptions{})
 	if err != nil {
-		c.viewport.SetContent(fmt.Sprintf("Error reading logs %s", err.Error()))
+		c.viewport.SetContent(fmt.Sprintf("Error reading logs: %s", err.Error()))
 		return
 	}
 	buf := new(strings.Builder)
 	_, err = stdcopy.StdCopy(buf, buf, reader)
 	if err != nil {
-		c.viewport.SetContent(fmt.Sprintf("Error reading logs %s", err.Error()))
+		c.viewport.SetContent(fmt.Sprintf("Error reading logs: %s", err.Error()))
 		return
 	}
 

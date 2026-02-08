@@ -6,6 +6,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss/tree"
 )
 
 // MockClient provides a mock implementation of DockerClient for development
@@ -24,11 +26,11 @@ func NewMockClient() *MockClient {
 	}
 }
 
-func (c *MockClient) Containers() ContainerService { return c.containers }
-func (c *MockClient) Images() ImageService         { return c.images }
-func (c *MockClient) Volumes() VolumeService       { return c.volumes }
+func (c *MockClient) Containers() ContainerService   { return c.containers }
+func (c *MockClient) Images() ImageService           { return c.images }
+func (c *MockClient) Volumes() VolumeService         { return c.volumes }
 func (c *MockClient) Ping(ctx context.Context) error { return nil }
-func (c *MockClient) Close() error                 { return nil }
+func (c *MockClient) Close() error                   { return nil }
 
 // mockContainerService provides mock container data
 type mockContainerService struct {
@@ -164,6 +166,10 @@ func (s *mockContainerService) Logs(ctx context.Context, id string, opts LogOpti
 2024-01-15T10:30:15Z GET /api/users 200 25ms
 `
 	return io.NopCloser(strings.NewReader(logs)), nil
+}
+
+func (s *mockContainerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
+	return ContainerFileTree{Files: []string{}, Tree: tree.New()}, nil
 }
 
 // mockImageService provides mock image data

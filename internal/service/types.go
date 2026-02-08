@@ -1,6 +1,10 @@
 package service
 
-import "time"
+import (
+	"time"
+
+	"github.com/charmbracelet/lipgloss/tree"
+)
 
 // Container represents a Docker container
 type Container struct {
@@ -12,6 +16,11 @@ type Container struct {
 	Created time.Time
 	Ports   []PortMapping
 	Mounts  []Mount
+}
+
+type ContainerFileTree struct {
+	Files []string
+	Tree  *tree.Tree
 }
 
 type ContainerState string
