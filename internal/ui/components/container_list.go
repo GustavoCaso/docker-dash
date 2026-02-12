@@ -37,11 +37,6 @@ var containerDetailsKey = key.NewBinding(
 	key.WithHelp("d", "details"),
 )
 
-var containerFocusKey = key.NewBinding(
-	key.WithKeys("enter"),
-	key.WithHelp("enter", "switch focus"),
-)
-
 var containerRefreshKey = key.NewBinding(
 	key.WithKeys("r"),
 	key.WithHelp("r", "refresh"),
@@ -74,7 +69,7 @@ var treeKey = key.NewBinding(
 
 // KeyBindings returns the key bindings for the current state
 func (c *ContainerList) KeyBindings() []key.Binding {
-	return []key.Binding{containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, containerFocusKey, treeKey}
+	return []key.Binding{mainNavKey, secondaryNavKey, containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, treeKey}
 }
 
 // ContainerItem implements list.Item interface
@@ -99,7 +94,6 @@ type ContainerList struct {
 	service       service.ContainerService
 	width, height int
 	lastSelected  int
-	focused       focusedPane
 	showDetails   bool
 	showLogs      bool
 	showFileTree  bool
@@ -143,9 +137,9 @@ func (c *ContainerList) SetSize(width, height int) {
 	c.height = height
 
 	// Account for padding and borders
-	listX, listY := listFocusedStyle.GetFrameSize()
+	listX, listY := listStyle.GetFrameSize()
 
-	if c.showDetails {
+	if c.showDetails || c.showLogs || c.showFileTree {
 		// Split view: 40% list, 60% details
 		listWidth := int(float64(width) * 0.4)
 		detailWidth := width - listWidth
@@ -210,82 +204,65 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	// Handle focus switching and actions
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
-		case "enter":
-			if c.focused == focusList {
-				c.focused = focusViewport
-			} else {
-				c.focused = focusList
-			}
-			return nil
 		case "d":
-			if c.focused == focusList {
-				c.showDetails = !c.showDetails
-				c.SetSize(c.width, c.height) // Recalculate layout
-				c.updateDetails()
-				return nil
-			}
+			c.showDetails = !c.showDetails
+			c.showLogs = false
+			c.showFileTree = false
+			c.SetSize(c.width, c.height) // Recalculate layout
+			c.updateDetails()
+			return nil
 		case "r":
 			c.loading = true
 			return tea.Batch(c.spinner.Tick, c.updateContainersCmd())
 		case "l":
 			c.showLogs = !c.showLogs
-			if c.focused == focusList {
-				c.showDetails = !c.showDetails
-				c.SetSize(c.width, c.height) // Recalculate layout
-				c.updateDetails()
-				return nil
-			}
-
+			c.showDetails = false
+			c.showFileTree = false
+			c.SetSize(c.width, c.height) // Recalculate layout
+			c.updateDetails()
+			return nil
 		case "t":
 			c.showFileTree = !c.showFileTree
-			if c.focused == focusList {
-				c.showDetails = !c.showDetails
-				c.SetSize(c.width, c.height) // Recalculate layout
-				c.updateDetails()
-				return nil
-			}
+			c.showDetails = false
+			c.showLogs = false
+			c.SetSize(c.width, c.height) // Recalculate layout
+			c.updateDetails()
+			return nil
 		case "D":
 			return c.deleteContainerCmd()
 		case "s":
 			return c.toggleContainerCmd()
 		case "R":
 			return c.restartContainerCmd()
+		case "up", "down":
+			var listCmd tea.Cmd
+			c.list, listCmd = c.list.Update(msg)
+			if c.list.Index() != c.lastSelected {
+				c.lastSelected = c.list.Index()
+				c.updateDetails()
+			}
+			return listCmd
+		case "j", "k":
+			var vpCmd tea.Cmd
+			c.viewport, vpCmd = c.viewport.Update(msg)
+			return vpCmd
 		}
 	}
 
-	// Only send key messages to the focused pane
-	switch c.focused {
-	case focusList:
-		var listCmd tea.Cmd
-		c.list, listCmd = c.list.Update(msg)
-		cmds = append(cmds, listCmd)
+	// Send the remaining of msg to both panels
+	var listCmd tea.Cmd
+	c.list, listCmd = c.list.Update(msg)
+	cmds = append(cmds, listCmd)
 
-		// Update details if selection changed
-		if c.list.Index() != c.lastSelected {
-			c.lastSelected = c.list.Index()
-			c.updateDetails()
-		}
-	case focusViewport:
-		var vpCmd tea.Cmd
-		c.viewport, vpCmd = c.viewport.Update(msg)
-		cmds = append(cmds, vpCmd)
-	}
+	var vpCmd tea.Cmd
+	c.viewport, vpCmd = c.viewport.Update(msg)
+	cmds = append(cmds, vpCmd)
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the list
 func (c *ContainerList) View() string {
-	// Choose styles based on focus
-	var currentListStyle, currentDetailStyle lipgloss.Style
-	if c.focused == focusList {
-		currentListStyle = listFocusedStyle
-		currentDetailStyle = listUnfocusedStyle
-	} else {
-		currentListStyle = listUnfocusedStyle
-		currentDetailStyle = listFocusedStyle
-	}
-
 	listContent := c.list.View()
 
 	// Overlay spinner in bottom right corner when loading
@@ -294,16 +271,16 @@ func (c *ContainerList) View() string {
 		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, c.list.Width())
 	}
 
-	listView := currentListStyle.
+	listView := listStyle.
 		Width(c.list.Width()).
 		Render(listContent)
 
 	// Only show viewport when details are toggled on
-	if !c.showDetails {
+	if !c.showDetails && !c.showLogs && !c.showFileTree {
 		return listView
 	}
 
-	detailView := currentDetailStyle.
+	detailView := listStyle.
 		Width(c.viewport.Width).
 		Render(c.viewport.View())
 

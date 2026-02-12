@@ -36,9 +36,7 @@ type ImageRemovedMsg struct {
 }
 
 var (
-	listStyle          = lipgloss.NewStyle()
-	listFocusedStyle   = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("205"))
-	listUnfocusedStyle = listStyle.Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240"))
+	listStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
 )
 
 // Key bindings for image list actions
@@ -47,20 +45,30 @@ var layersKey = key.NewBinding(
 	key.WithHelp("l", "layers"),
 )
 
-var focusKey = key.NewBinding(
-	key.WithKeys("enter"),
-	key.WithHelp("enter", "switch focus"),
-)
-
 var refreshKey = key.NewBinding(
 	key.WithKeys("r"),
 	key.WithHelp("r", "refresh"),
+)
+
+var mainNavKey = key.NewBinding(
+	key.WithKeys("up", "down"),
+	key.WithHelp("up/down", "navigate main view"),
+)
+
+var secondaryNavKey = key.NewBinding(
+	key.WithKeys("k", "k"),
+	key.WithHelp("j/k", "navigate secondary view"),
 )
 
 var deleteKey = key.NewBinding(
 	key.WithKeys("d"),
 	key.WithHelp("d", "delete"),
 )
+
+// KeyBindings returns the key bindings for the current state
+func (i *ImageList) KeyBindings() []key.Binding {
+	return []key.Binding{mainNavKey, secondaryNavKey, layersKey, refreshKey, deleteKey}
+}
 
 // ImageItem implements list.Item interface
 type ImageItem struct {
@@ -81,7 +89,6 @@ type ImageList struct {
 	service       service.ImageService
 	width, height int
 	lastSelected  int
-	focused       focusedPane
 	showLayers    bool
 	loading       bool
 	spinner       spinner.Model
@@ -123,7 +130,7 @@ func (i *ImageList) SetSize(width, height int) {
 	i.height = height
 
 	// Account for padding and borders
-	listX, listY := listFocusedStyle.GetFrameSize()
+	listX, listY := listStyle.GetFrameSize()
 
 	if i.showLayers {
 		// Split view: 40% list, 60% details
@@ -179,66 +186,45 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 	// Handle focus switching and actions
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
-		case "enter":
-			if i.focused == focusList {
-				i.focused = focusViewport
-			} else {
-				i.focused = focusList
-			}
-			return nil
 		case "l":
-			if i.focused == focusList {
-				i.showLayers = !i.showLayers
-				i.SetSize(i.width, i.height) // Recalculate layout
-				i.updateDetails()
-				return nil
-			}
+			i.showLayers = !i.showLayers
+			i.SetSize(i.width, i.height) // Recalculate layout
+			i.updateDetails()
+			return nil
 		case "r":
 			i.loading = true
 			return tea.Batch(i.spinner.Tick, i.updateImagesCmd())
 		case "d":
 			return i.deleteImageCmd()
+		case "up", "down":
+			var listCmd tea.Cmd
+			i.list, listCmd = i.list.Update(msg)
+			if i.list.Index() != i.lastSelected {
+				i.lastSelected = i.list.Index()
+				i.updateDetails()
+			}
+			return listCmd
+		case "j", "k":
+			var vpCmd tea.Cmd
+			i.viewport, vpCmd = i.viewport.Update(msg)
+			return vpCmd
 		}
 	}
 
-	// Only send key messages to the focused pane
-	switch i.focused {
-	case focusList:
-		var listCmd tea.Cmd
-		i.list, listCmd = i.list.Update(msg)
-		cmds = append(cmds, listCmd)
+	// Send the remaining of msg to both panels
+	var listCmd tea.Cmd
+	i.list, listCmd = i.list.Update(msg)
+	cmds = append(cmds, listCmd)
 
-		// Update details if selection changed
-		if i.list.Index() != i.lastSelected {
-			i.lastSelected = i.list.Index()
-			i.updateDetails()
-		}
-	case focusViewport:
-		var vpCmd tea.Cmd
-		i.viewport, vpCmd = i.viewport.Update(msg)
-		cmds = append(cmds, vpCmd)
-	}
+	var vpCmd tea.Cmd
+	i.viewport, vpCmd = i.viewport.Update(msg)
+	cmds = append(cmds, vpCmd)
 
 	return tea.Batch(cmds...)
 }
 
-// KeyBindings returns the key bindings for the current state
-func (i *ImageList) KeyBindings() []key.Binding {
-	return []key.Binding{layersKey, focusKey, refreshKey, deleteKey}
-}
-
 // View renders the list
 func (i *ImageList) View() string {
-	// Choose styles based on focus
-	var currentListStyle, currentDetailStyle lipgloss.Style
-	if i.focused == focusList {
-		currentListStyle = listFocusedStyle
-		currentDetailStyle = listUnfocusedStyle
-	} else {
-		currentListStyle = listUnfocusedStyle
-		currentDetailStyle = listFocusedStyle
-	}
-
 	listContent := i.list.View()
 
 	// Overlay spinner in bottom right corner when loading
@@ -247,16 +233,16 @@ func (i *ImageList) View() string {
 		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, i.list.Width())
 	}
 
-	listView := currentListStyle.
+	listView := listStyle.
 		Width(i.list.Width()).
 		Render(listContent)
 
-	// Only show viewport when layers are toggled on
+	// Only show list when layers is not enabled
 	if !i.showLayers {
 		return listView
 	}
 
-	detailView := currentDetailStyle.
+	detailView := listStyle.
 		Width(i.viewport.Width).
 		Render(i.viewport.View())
 
