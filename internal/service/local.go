@@ -164,6 +164,32 @@ func (s *localContainerService) Logs(ctx context.Context, id string, opts LogOpt
 	})
 }
 
+func (s *localContainerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
+	execConfig := container.ExecOptions{
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty:          false,
+		Cmd:          []string{"/bin/sh"},
+	}
+
+	execResp, err := s.cli.ContainerExecCreate(ctx, id, execConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	attachResp, err := s.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecStartOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return NewExecSession(
+		io.NopCloser(attachResp.Reader),
+		attachResp.Conn,
+		func() { attachResp.Close() },
+	), nil
+}
+
 func (s *localContainerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
 	reader, err := s.cli.ContainerExport(ctx, "51bc63fdf4eb47ec2699a7affd382b487d065ea6fbf5ccfc3106e9b4f2ee64f4")
 	if err != nil {

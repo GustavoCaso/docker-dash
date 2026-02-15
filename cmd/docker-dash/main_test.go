@@ -21,6 +21,37 @@ func TestFullOutput(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestExecPanel(t *testing.T) {
+	m := initialModel(service.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+
+	// Wait for initial render
+	waitForString(t, tm, "Docker")
+
+	// Navigate sidebar down to switch to Containers view (default is Images)
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Wait for Containers view to render
+	waitForString(t, tm, "nginx-proxy")
+
+	// Tab to focus the container list
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+
+	// Navigate to first container (should be running)
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Press 'e' to open exec panel
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+
+	// Wait for the exec input prompt to appear
+	waitForString(t, tm, "$")
+
+	// Close exec panel and quit
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
 	teatest.WaitFor(
 		t,

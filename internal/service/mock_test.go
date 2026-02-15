@@ -58,3 +58,44 @@ func TestMockClient_VolumeList(t *testing.T) {
 		t.Error("List() returned empty, want sample volumes")
 	}
 }
+
+func TestMockClient_ContainerExec(t *testing.T) {
+	client := service.NewMockClient()
+	defer client.Close()
+
+	containers, err := client.Containers().List(context.Background())
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Use the first running container
+	session, err := client.Containers().Exec(context.Background(), containers[0].ID)
+	if err != nil {
+		t.Fatalf("Exec() error = %v", err)
+	}
+	defer session.Close()
+
+	// Send a command in a goroutine (io.Pipe is synchronous, so write blocks until read)
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := session.Writer.Write([]byte("echo hello\n"))
+		errCh <- err
+	}()
+
+	// Read output
+	buf := make([]byte, 1024)
+	n, err := session.Reader.Read(buf)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+
+	// Check write succeeded
+	if writeErr := <-errCh; writeErr != nil {
+		t.Fatalf("Write() error = %v", writeErr)
+	}
+
+	output := string(buf[:n])
+	if output == "" {
+		t.Error("Read() returned empty output, want mock shell output")
+	}
+}

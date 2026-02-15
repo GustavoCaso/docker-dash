@@ -1,6 +1,7 @@
 package service
 
 import (
+	"io"
 	"time"
 
 	"github.com/charmbracelet/lipgloss/tree"
@@ -88,4 +89,21 @@ type LogOptions struct {
 	Follow     bool
 	Tail       string
 	Timestamps bool
+}
+
+// ExecSession represents an interactive exec session inside a container
+type ExecSession struct {
+	Reader io.ReadCloser
+	Writer io.WriteCloser
+	closer func()
+}
+
+func NewExecSession(reader io.ReadCloser, writer io.WriteCloser, closer func()) *ExecSession {
+	return &ExecSession{Reader: reader, Writer: writer, closer: closer}
+}
+
+func (e *ExecSession) Close() {
+	if e.closer != nil {
+		e.closer()
+	}
 }

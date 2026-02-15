@@ -52,12 +52,12 @@ var refreshKey = key.NewBinding(
 
 var mainNavKey = key.NewBinding(
 	key.WithKeys("up", "down"),
-	key.WithHelp("up/down", "navigate main view"),
+	key.WithHelp("up/down", "navigate main panel"),
 )
 
 var secondaryNavKey = key.NewBinding(
 	key.WithKeys("k", "k"),
-	key.WithHelp("j/k", "navigate secondary view"),
+	key.WithHelp("j/k", "navigate right panel"),
 )
 
 var deleteKey = key.NewBinding(

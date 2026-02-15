@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -37,6 +38,18 @@ type ContainerActionMsg struct {
 	Idx    int
 	Error  error
 }
+
+// execOutputMsg is sent when exec output is received from the background reader
+type execOutputMsg struct {
+	output string
+	err    error
+}
+
+type execSessionStartedMsg struct {
+	session *service.ExecSession
+}
+
+type execCloseMsg struct{}
 
 // Key bindings for container list actions
 var containerDetailsKey = key.NewBinding(
@@ -74,9 +87,14 @@ var treeKey = key.NewBinding(
 	key.WithHelp("t", "files"),
 )
 
+var execKey = key.NewBinding(
+	key.WithKeys("e"),
+	key.WithHelp("e", "exec"),
+)
+
 // KeyBindings returns the key bindings for the current state
 func (c *ContainerList) KeyBindings() []key.Binding {
-	return []key.Binding{mainNavKey, secondaryNavKey, containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, treeKey}
+	return []key.Binding{mainNavKey, secondaryNavKey, containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, treeKey, execKey}
 }
 
 // ContainerItem implements list.Item interface
@@ -96,16 +114,22 @@ func (c ContainerItem) FilterValue() string { return c.container.Name }
 
 // ContainerList wraps bubbles/list for displaying containers
 type ContainerList struct {
-	list          list.Model
-	viewport      viewport.Model
-	service       service.ContainerService
-	width, height int
-	lastSelected  int
-	showDetails   bool
-	showLogs      bool
-	showFileTree  bool
-	loading       bool
-	spinner       spinner.Model
+	list                    list.Model
+	viewport                viewport.Model
+	service                 service.ContainerService
+	width, height           int
+	lastSelected            int
+	showDetails             bool
+	showLogs                bool
+	showFileTree            bool
+	loading                 bool
+	spinner                 spinner.Model
+	showExec                bool
+	execSession             *service.ExecSession
+	execInput               textinput.Model
+	execHistory             []string
+	execHistoryCurrentIndex int
+	execOutput              string
 }
 
 // NewContainerList creates a new container list
@@ -126,12 +150,17 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
+	ti := textinput.New()
+	ti.Prompt = "$ "
+
 	cl := &ContainerList{
 		list:         l,
 		viewport:     vp,
 		lastSelected: -1,
 		service:      svc,
 		spinner:      sp,
+		execInput:    ti,
+		execHistory:  []string{},
 	}
 
 	return cl
@@ -145,14 +174,18 @@ func (c *ContainerList) SetSize(width, height int) {
 	// Account for padding and borders
 	listX, listY := listStyle.GetFrameSize()
 
-	if c.showDetails || c.showLogs || c.showFileTree {
+	if c.showDetails || c.showLogs || c.showFileTree || c.showExec {
 		// Split view: 40% list, 60% details
 		listWidth := int(float64(width) * 0.4)
 		detailWidth := width - listWidth
 
 		c.list.SetSize(listWidth-listX, height-listY)
 		c.viewport.Width = detailWidth - listX
-		c.viewport.Height = height - listY
+		if c.showExec {
+			c.viewport.Height = height - listY - 1
+		} else {
+			c.viewport.Height = height - listY
+		}
 	} else {
 		// Full width list when viewport is hidden
 		c.list.SetSize(width-listX, height-listY)
@@ -213,8 +246,95 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		})...)
 	}
 
+	if startMsg, ok := msg.(execSessionStartedMsg); ok {
+		c.execSession = startMsg.session
+		return c.readExecOutput()
+	}
+
+	if outputMsg, ok := msg.(execOutputMsg); ok {
+		if outputMsg.err != nil {
+			if c.execSession == nil {
+				return nil // session was closed manually, ignore
+			}
+			c.closeExec()
+			return func() tea.Msg {
+				return message.ShowBannerMsg{Message: fmt.Sprintf("Exec session error. Err: %s", outputMsg.err), IsError: true}
+			}
+		}
+		c.execOutput += outputMsg.output
+		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.execOutput))
+		c.viewport.GotoBottom()
+		return c.readExecOutput()
+	}
+
+	if _, ok := msg.(execCloseMsg); ok {
+		c.closeExec()
+		c.SetSize(c.width, c.height)
+		return func() tea.Msg {
+			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
+		}
+	}
+
 	// Handle focus switching and actions
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		// When exec is active, intercept all keys for the text input
+		if c.showExec {
+			switch keyMsg.String() {
+			case "esc":
+				return c.closeExecSessionMsg()
+			case "enter":
+				if c.execSession == nil {
+					return nil
+				}
+				cmd := c.execInput.Value()
+				if cmd == "" {
+					return nil
+				}
+				c.execHistory = append(c.execHistory, cmd)
+				c.execHistoryCurrentIndex = len(c.execHistory) // sentinel: not browsing
+				c.execInput.Reset()
+				_, err := c.execSession.Writer.Write([]byte(cmd + "\n"))
+				if err != nil {
+					c.closeExec()
+					return func() tea.Msg {
+						return message.ShowBannerMsg{Message: "Exec write failed", IsError: true}
+					}
+				}
+				return nil
+			case "up":
+				if len(c.execHistory) == 0 {
+					return nil
+				}
+				if c.execHistoryCurrentIndex > 0 {
+					c.execHistoryCurrentIndex--
+				} else if c.execHistoryCurrentIndex == len(c.execHistory) {
+					// Start browsing from the most recent entry
+					c.execHistoryCurrentIndex = len(c.execHistory) - 1
+				} else {
+					// Already at oldest entry
+					return nil
+				}
+				c.execInput.SetValue(c.execHistory[c.execHistoryCurrentIndex])
+				return nil
+			case "down":
+				if len(c.execHistory) == 0 || c.execHistoryCurrentIndex == len(c.execHistory) {
+					return nil
+				}
+				c.execHistoryCurrentIndex++
+				if c.execHistoryCurrentIndex == len(c.execHistory) {
+					// Past newest entry — clear input
+					c.execInput.Reset()
+				} else {
+					c.execInput.SetValue(c.execHistory[c.execHistoryCurrentIndex])
+				}
+				return nil
+			default:
+				var inputCmd tea.Cmd
+				c.execInput, inputCmd = c.execInput.Update(msg)
+				return inputCmd
+			}
+		}
+
 		switch keyMsg.String() {
 		case "d":
 			c.showDetails = !c.showDetails
@@ -240,6 +360,25 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			}
 			c.SetSize(c.width, c.height) // Recalculate layout
 			return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation())
+		case "e":
+			selected := c.list.SelectedItem()
+			if selected == nil {
+				return nil
+			}
+			container := selected.(ContainerItem).container
+			if container.State != service.StateRunning {
+				return func() tea.Msg {
+					return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
+				}
+			}
+			c.showExec = true
+			c.showDetails = false
+			c.showLogs = false
+			c.showFileTree = false
+			c.execOutput = ""
+			c.execInput.Focus()
+			c.SetSize(c.width, c.height)
+			return tea.Batch(textinput.Blink, c.startExecSession(container.ID))
 		case "D":
 			return c.deleteContainerCmd()
 		case "s":
@@ -269,6 +408,10 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	c.viewport, vpCmd = c.viewport.Update(msg)
 	cmds = append(cmds, vpCmd)
 
+	var tiCmd tea.Cmd
+	c.execInput, tiCmd = c.execInput.Update(msg)
+	cmds = append(cmds, tiCmd)
+
 	return tea.Batch(cmds...)
 }
 
@@ -287,15 +430,24 @@ func (c *ContainerList) View() string {
 		Render(listContent)
 
 	// Only show viewport when details are toggled on
-	if !c.showDetails && !c.showLogs && !c.showFileTree {
+	if !c.showDetails && !c.showLogs && !c.showFileTree && !c.showExec {
 		return listView
 	}
 
 	c.updateDetails()
 
+	var detailContent string
+	if c.showExec {
+		vpView := c.viewport.View()
+		inputView := c.execInput.View()
+		detailContent = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
+	} else {
+		detailContent = c.viewport.View()
+	}
+
 	detailView := listStyle.
 		Width(c.viewport.Width).
-		Render(c.viewport.View())
+		Render(detailContent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
@@ -419,6 +571,10 @@ func (c *ContainerList) updateDetails() {
 		return
 	}
 
+	if c.showExec {
+		return
+	}
+
 	if c.showLogs {
 		c.logsDetails()
 		return
@@ -485,4 +641,50 @@ func (c *ContainerList) logsDetails() {
 	}
 
 	c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(buf.String()))
+}
+
+func (c *ContainerList) startExecSession(containerID string) tea.Cmd {
+	svc := c.service
+	return func() tea.Msg {
+		ctx := context.Background()
+		session, err := svc.Exec(ctx, containerID)
+		if err != nil {
+			return execOutputMsg{err: err}
+		}
+		return execSessionStartedMsg{session: session}
+	}
+}
+
+func (c *ContainerList) closeExec() {
+	c.showExec = false
+	c.execInput.Blur()
+	if c.execSession != nil {
+		c.execSession.Close()
+		c.execSession = nil
+	}
+	c.viewport.SetContent("")
+	c.execHistoryCurrentIndex = 0
+	c.execHistory = []string{}
+	c.execOutput = ""
+}
+
+func (c *ContainerList) readExecOutput() tea.Cmd {
+	session := c.execSession
+	if session == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		buf := make([]byte, 4096)
+		n, err := session.Reader.Read(buf)
+		if err != nil {
+			return execOutputMsg{err: err}
+		}
+		return execOutputMsg{output: string(buf[:n])}
+	}
+}
+
+func (c *ContainerList) closeExecSessionMsg() tea.Cmd {
+	return func() tea.Msg {
+		return execCloseMsg{}
+	}
 }

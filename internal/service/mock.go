@@ -168,6 +168,47 @@ func (s *mockContainerService) Logs(ctx context.Context, id string, opts LogOpti
 	return io.NopCloser(strings.NewReader(logs)), nil
 }
 
+func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
+	for _, c := range s.containers {
+		if c.ID == id || c.Name == id {
+			if c.State != StateRunning {
+				return nil, fmt.Errorf("container %s is not running", id)
+			}
+
+			pr, pw := io.Pipe()
+
+			return NewExecSession(
+				pr,
+				&mockExecWriter{pw: pw},
+				func() {
+					pw.Close()
+					pr.Close()
+				},
+			), nil
+		}
+	}
+	return nil, fmt.Errorf("container not found: %s", id)
+}
+
+// mockExecWriter simulates shell output by echoing back commands with a fake prompt
+type mockExecWriter struct {
+	pw *io.PipeWriter
+}
+
+func (w *mockExecWriter) Write(p []byte) (int, error) {
+	cmd := strings.TrimSpace(string(p))
+	output := fmt.Sprintf("$ %s\nmock output for: %s\n", cmd, cmd)
+	_, err := w.pw.Write([]byte(output))
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+func (w *mockExecWriter) Close() error {
+	return w.pw.Close()
+}
+
 func (s *mockContainerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
 	return ContainerFileTree{Files: []string{}, Tree: tree.New()}, nil
 }
