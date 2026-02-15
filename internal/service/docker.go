@@ -17,6 +17,7 @@ type DockerClient interface {
 // ContainerService manages Docker containers
 type ContainerService interface {
 	List(ctx context.Context) ([]Container, error)
+	Run(ctx context.Context, image Image) (string, error)
 	Get(ctx context.Context, id string) (*Container, error)
 	Start(ctx context.Context, id string) error
 	Stop(ctx context.Context, id string) error
@@ -30,7 +31,7 @@ type ContainerService interface {
 // ImageService manages Docker images
 type ImageService interface {
 	List(ctx context.Context) ([]Image, error)
-	Get(ctx context.Context, id string) (*Image, error)
+	Get(ctx context.Context, id string) (Image, error)
 	Remove(ctx context.Context, id string, force bool) error
 }
 

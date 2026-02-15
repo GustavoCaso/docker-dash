@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"context"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 )
 
 // LocalDockerClient connects to the local Docker daemon
@@ -112,6 +114,43 @@ func (s *localContainerService) List(ctx context.Context) ([]Container, error) {
 	}
 
 	return result, nil
+}
+
+func (s *localContainerService) Run(ctx context.Context, image Image) (string, error) {
+	ports := nat.PortSet{}
+
+	for port := range image.Config.ExposedPorts {
+		natPort, err := nat.NewPort(nat.SplitProtoPort(port))
+		if err != nil {
+			return "", err
+		}
+		ports[natPort] = struct{}{}
+	}
+
+	config := &container.Config{
+		User:         image.Config.User,
+		WorkingDir:   image.Config.WorkingDir,
+		Labels:       image.Config.Labels,
+		Env:          image.Config.Env,
+		Cmd:          image.Config.Cmd,
+		Entrypoint:   image.Config.Entrypoint,
+		Image:        image.Name(),
+		Shell:        image.Config.Shell,
+		OnBuild:      image.Config.OnBuild,
+		Volumes:      image.Config.Volumes,
+		ExposedPorts: ports,
+		Healthcheck:  image.Config.Healthcheck,
+	}
+
+	containerResponse, err := s.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
+	if err != nil {
+		return "", err
+	}
+	err = s.Start(ctx, containerResponse.ID)
+	if err != nil {
+		return "", err
+	}
+	return containerResponse.ID, nil
 }
 
 func (s *localContainerService) Get(ctx context.Context, id string) (*Container, error) {
@@ -268,29 +307,13 @@ func (s *localImageService) List(ctx context.Context) ([]Image, error) {
 
 	result := make([]Image, len(images))
 	for i, img := range images {
-		repo := "<none>"
-		tag := "<none>"
-		if len(img.RepoTags) > 0 {
-			parts := strings.SplitN(img.RepoTags[0], ":", 2)
-			repo = parts[0]
-			if len(parts) > 1 {
-				tag = parts[1]
-			}
+		imageInspect, err := s.Get(ctx, img.ID)
+
+		if err != nil {
+			return result, err
 		}
 
-		// Fetch layer history for this image
-		layers := s.fetchLayers(ctx, img.ID)
-
-		result[i] = Image{
-			ID:         img.ID,
-			Repo:       repo,
-			Tag:        tag,
-			Size:       img.Size,
-			Created:    timeFromUnix(img.Created),
-			Dangling:   len(img.RepoTags) == 0 || img.RepoTags[0] == "<none>:<none>",
-			Layers:     layers,
-			Containers: img.Containers,
-		}
+		result[i] = imageInspect
 	}
 
 	return result, nil
@@ -312,18 +335,18 @@ func (s *localImageService) fetchLayers(ctx context.Context, imageID string) []L
 			Created: timeFromUnix(h.Created),
 		})
 	}
-
+	slices.Reverse(layers)
 	return layers
 }
 
-func (s *localImageService) Get(ctx context.Context, id string) (*Image, error) {
-	img, _, err := s.cli.ImageInspectWithRaw(ctx, id)
+func (s *localImageService) Get(ctx context.Context, id string) (Image, error) {
+	img, err := s.cli.ImageInspect(ctx, id, client.ImageInspectWithManifests(true))
 	if err != nil {
-		return nil, err
+		return Image{}, err
 	}
 
-	repo := "<none>"
-	tag := "<none>"
+	repo := none
+	tag := none
 	if len(img.RepoTags) > 0 {
 		parts := strings.SplitN(img.RepoTags[0], ":", 2)
 		repo = parts[0]
@@ -332,11 +355,29 @@ func (s *localImageService) Get(ctx context.Context, id string) (*Image, error) 
 		}
 	}
 
-	return &Image{
-		ID:   img.ID,
-		Repo: repo,
-		Tag:  tag,
-		Size: img.Size,
+	created, err := time.Parse(time.RFC3339Nano, img.Created)
+	if err != nil {
+		return Image{}, err
+	}
+
+	// Fetch layer history for this image
+	layers := s.fetchLayers(ctx, img.ID)
+
+	containers := 0
+	for _, manifest := range img.Manifests {
+		containers += len(manifest.ImageData.Containers)
+	}
+
+	return Image{
+		ID:         img.ID,
+		Repo:       repo,
+		Tag:        tag,
+		Size:       img.Size,
+		Created:    created,
+		Dangling:   len(img.RepoTags) == 0 || repo == none && tag == none,
+		Layers:     layers,
+		Containers: containers,
+		Config:     img.Config,
 	}, nil
 }
 

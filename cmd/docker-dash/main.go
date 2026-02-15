@@ -80,7 +80,7 @@ func initialModel(client service.DockerClient) model {
 		client:        client,
 		sidebar:       components.NewSidebar(),
 		containerList: components.NewContainerList(containers, client.Containers()),
-		imageList:     components.NewImageList(images, client.Images()),
+		imageList:     components.NewImageList(images, client),
 		statusBar:     components.NewStatusBar(),
 		focus:         focusSidebar,
 	}

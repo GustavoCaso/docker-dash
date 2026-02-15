@@ -102,6 +102,10 @@ func (s *mockContainerService) List(ctx context.Context) ([]Container, error) {
 	return s.containers, nil
 }
 
+func (s *mockContainerService) Run(ctx context.Context, image Image) (string, error) {
+	return "", nil
+}
+
 func (s *mockContainerService) Get(ctx context.Context, id string) (*Container, error) {
 	for _, c := range s.containers {
 		if c.ID == id || c.Name == id {
@@ -266,13 +270,13 @@ func (s *mockImageService) List(ctx context.Context) ([]Image, error) {
 	return s.images, nil
 }
 
-func (s *mockImageService) Get(ctx context.Context, id string) (*Image, error) {
+func (s *mockImageService) Get(ctx context.Context, id string) (Image, error) {
 	for _, img := range s.images {
 		if img.ID == id {
-			return &img, nil
+			return img, nil
 		}
 	}
-	return nil, fmt.Errorf("image not found: %s", id)
+	return Image{}, fmt.Errorf("image not found: %s", id)
 }
 
 func (s *mockImageService) Remove(ctx context.Context, id string, force bool) error {

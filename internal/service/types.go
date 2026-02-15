@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss/tree"
+	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 )
 
 // Container represents a Docker container
@@ -53,6 +54,8 @@ type Layer struct {
 	Created time.Time // When the layer was created
 }
 
+const none = "<none>"
+
 // Image represents a Docker image
 type Image struct {
 	ID         string
@@ -61,9 +64,18 @@ type Image struct {
 	Size       int64
 	Created    time.Time
 	Dangling   bool
-	Containers int64
+	Containers int
 	UsedBy     []string // Container IDs using this image
 	Layers     []Layer  // Image layers from history
+	Config     *dockerspec.DockerOCIImageConfig
+}
+
+func (i Image) Name() string {
+	if i.Repo != none && i.Tag != none {
+		return i.Repo + ":" + i.Tag
+	}
+
+	return i.ID
 }
 
 // Volume represents a Docker volume

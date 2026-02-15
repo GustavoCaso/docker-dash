@@ -28,6 +28,12 @@ type imagesLoadedMsg struct {
 	items []list.Item
 }
 
+// containerRunMsg is sent when a container is created
+type containerRunMsg struct {
+	containerID string
+	error       error
+}
+
 // ImageRemovedMsg is sent when an image deletion completes
 type ImageRemovedMsg struct {
 	ID    string
@@ -65,9 +71,14 @@ var deleteKey = key.NewBinding(
 	key.WithHelp("d", "delete"),
 )
 
+var runKey = key.NewBinding(
+	key.WithKeys("R"),
+	key.WithHelp("R", "run container"),
+)
+
 // KeyBindings returns the key bindings for the current state
 func (i *ImageList) KeyBindings() []key.Binding {
-	return []key.Binding{mainNavKey, secondaryNavKey, layersKey, refreshKey, deleteKey}
+	return []key.Binding{mainNavKey, secondaryNavKey, layersKey, refreshKey, deleteKey, runKey}
 }
 
 // ImageItem implements list.Item interface
@@ -84,18 +95,19 @@ func (i ImageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 
 // ImageList wraps bubbles/list
 type ImageList struct {
-	list          list.Model
-	viewport      viewport.Model
-	service       service.ImageService
-	width, height int
-	lastSelected  int
-	showLayers    bool
-	loading       bool
-	spinner       spinner.Model
+	list             list.Model
+	viewport         viewport.Model
+	imageService     service.ImageService
+	containerService service.ContainerService
+	width, height    int
+	lastSelected     int
+	showLayers       bool
+	loading          bool
+	spinner          spinner.Model
 }
 
 // NewImageList creates a new image list
-func NewImageList(images []service.Image, service service.ImageService) *ImageList {
+func NewImageList(images []service.Image, client service.DockerClient) *ImageList {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
 		items[i] = ImageItem{image: img}
@@ -113,11 +125,12 @@ func NewImageList(images []service.Image, service service.ImageService) *ImageLi
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	il := &ImageList{
-		list:         l,
-		viewport:     vp,
-		lastSelected: -1,
-		service:      service,
-		spinner:      sp,
+		list:             l,
+		viewport:         vp,
+		lastSelected:     -1,
+		imageService:     client.Images(),
+		containerService: client.Containers(),
+		spinner:          sp,
 	}
 	il.updateDetails()
 
@@ -183,6 +196,25 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
+	if containerRunMsg, ok := msg.(containerRunMsg); ok {
+		i.loading = false
+		if containerRunMsg.error != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: containerRunMsg.error.Error(),
+					IsError: true,
+				}
+			}
+		}
+
+		return func() tea.Msg {
+			return message.ShowBannerMsg{
+				Message: fmt.Sprintf("Container %s created", shortID(containerRunMsg.containerID)),
+				IsError: false,
+			}
+		}
+	}
+
 	// Handle focus switching and actions
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
@@ -195,6 +227,8 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(i.spinner.Tick, i.updateImagesCmd())
 		case "d":
 			return i.deleteImageCmd()
+		case "R":
+			return i.createContainerCmdAndRun()
 		case "up", "down":
 			var listCmd tea.Cmd
 			i.list, listCmd = i.list.Update(msg)
@@ -250,7 +284,7 @@ func (i *ImageList) View() string {
 }
 
 func (i *ImageList) deleteImageCmd() tea.Cmd {
-	svc := i.service
+	svc := i.imageService
 	items := i.list.Items()
 	idx := i.lastSelected
 	item := items[idx]
@@ -272,7 +306,7 @@ func (i *ImageList) deleteImageCmd() tea.Cmd {
 }
 
 func (i *ImageList) updateImagesCmd() tea.Cmd {
-	svc := i.service
+	svc := i.imageService
 	return func() tea.Msg {
 		ctx := context.Background()
 		images, _ := svc.List(ctx)
@@ -281,6 +315,28 @@ func (i *ImageList) updateImagesCmd() tea.Cmd {
 			items[idx] = ImageItem{image: img}
 		}
 		return imagesLoadedMsg{items: items}
+	}
+}
+
+func (i *ImageList) createContainerCmdAndRun() tea.Cmd {
+	svc := i.containerService
+	items := i.list.Items()
+	idx := i.lastSelected
+	item := items[idx]
+	if item == nil {
+		return nil
+	}
+
+	dockerImage, ok := item.(ImageItem)
+	if !ok {
+		return nil
+	}
+	i.loading = true
+	return func() tea.Msg {
+		ctx := context.Background()
+		containerID, err := svc.Run(ctx, dockerImage.image)
+
+		return containerRunMsg{containerID: containerID, error: err}
 	}
 }
 
