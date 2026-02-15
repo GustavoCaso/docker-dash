@@ -20,7 +20,14 @@ import (
 
 // containersLoadedMsg is sent when containers have been loaded asynchronously
 type containersLoadedMsg struct {
+	error error
 	items []list.Item
+}
+
+// containersTreeLoadedMsg is sent when containers have been loaded asynchronously
+type containersTreeLoadedMsg struct {
+	error    error
+	fileTree service.ContainerFileTree
 }
 
 // ContainerActionMsg is sent when a container action completes
@@ -126,7 +133,6 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 		service:      svc,
 		spinner:      sp,
 	}
-	cl.updateDetails()
 
 	return cl
 }
@@ -172,6 +178,12 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(cmds...)
 	}
 
+	if loadedMsg, ok := msg.(containersTreeLoadedMsg); ok {
+		c.loading = false
+		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(loadedMsg.fileTree.Tree.String()))
+		return nil
+	}
+
 	// Handle container action message
 	if actionMsg, ok := msg.(ContainerActionMsg); ok {
 		if actionMsg.Error != nil {
@@ -209,7 +221,6 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			c.showLogs = false
 			c.showFileTree = false
 			c.SetSize(c.width, c.height) // Recalculate layout
-			c.updateDetails()
 			return nil
 		case "r":
 			c.loading = true
@@ -219,15 +230,16 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			c.showDetails = false
 			c.showFileTree = false
 			c.SetSize(c.width, c.height) // Recalculate layout
-			c.updateDetails()
 			return nil
 		case "t":
 			c.showFileTree = !c.showFileTree
-			c.showDetails = false
-			c.showLogs = false
+			if c.showFileTree {
+				c.loading = true
+				c.showDetails = false
+				c.showLogs = false
+			}
 			c.SetSize(c.width, c.height) // Recalculate layout
-			c.updateDetails()
-			return nil
+			return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation())
 		case "D":
 			return c.deleteContainerCmd()
 		case "s":
@@ -239,7 +251,6 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			c.list, listCmd = c.list.Update(msg)
 			if c.list.Index() != c.lastSelected {
 				c.lastSelected = c.list.Index()
-				c.updateDetails()
 			}
 			return listCmd
 		case "j", "k":
@@ -279,6 +290,8 @@ func (c *ContainerList) View() string {
 	if !c.showDetails && !c.showLogs && !c.showFileTree {
 		return listView
 	}
+
+	c.updateDetails()
 
 	detailView := listStyle.
 		Width(c.viewport.Width).
@@ -363,12 +376,32 @@ func (c *ContainerList) updateContainersCmd() tea.Cmd {
 	svc := c.service
 	return func() tea.Msg {
 		ctx := context.Background()
-		containers, _ := svc.List(ctx)
+		containers, err := svc.List(ctx)
+		if err != nil {
+			return containersLoadedMsg{error: err}
+		}
 		items := make([]list.Item, len(containers))
 		for idx, container := range containers {
 			items[idx] = ContainerItem{container: container}
 		}
 		return containersLoadedMsg{items: items}
+	}
+}
+
+func (c *ContainerList) fetchFileTreeInformation() tea.Cmd {
+	return func() tea.Msg {
+		selected := c.list.SelectedItem()
+		if selected == nil {
+			return containersTreeLoadedMsg{error: fmt.Errorf("no container selected")}
+		}
+
+		ctx := context.Background()
+		container := selected.(ContainerItem).container
+		fileTree, err := c.service.FileTree(ctx, container.ID)
+		if err != nil {
+			return containersTreeLoadedMsg{error: fmt.Errorf("Error getting the file tree: %s", err.Error())}
+		}
+		return containersTreeLoadedMsg{fileTree: fileTree}
 	}
 }
 
@@ -383,7 +416,6 @@ func (c *ContainerList) updateDetails() {
 	container := selected.(ContainerItem).container
 
 	if c.showFileTree {
-		c.fileTreeDetails()
 		return
 	}
 
@@ -429,24 +461,6 @@ func (c *ContainerList) updateDetails() {
 
 	c.viewport.SetContent(content.String())
 	c.viewport.GotoTop()
-}
-
-func (c *ContainerList) fileTreeDetails() {
-	selected := c.list.SelectedItem()
-	if selected == nil {
-		c.viewport.SetContent("No container selected")
-		return
-	}
-
-	container := selected.(ContainerItem).container
-	ctx := context.Background()
-	fileTree, err := c.service.FileTree(ctx, container.ID)
-	if err != nil {
-		c.viewport.SetContent(fmt.Sprintf("Error getting the file tree: %s", err.Error()))
-		return
-	}
-
-	c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(fileTree.Tree.String()))
 }
 
 func (c *ContainerList) logsDetails() {

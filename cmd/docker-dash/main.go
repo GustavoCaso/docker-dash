@@ -136,13 +136,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = focusSidebar
 			}
 			return m, nil
-		case "up", "k":
+		case "up":
 			// Navigate sidebar when focused
 			if m.focus == focusSidebar {
 				m.sidebar.MoveUp()
 				return m, nil
 			}
-		case "down", "j":
+		case "down":
 			// Navigate sidebar when focused
 			if m.focus == focusSidebar {
 				m.sidebar.MoveDown()

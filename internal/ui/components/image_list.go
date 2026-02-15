@@ -189,7 +189,6 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		case "l":
 			i.showLayers = !i.showLayers
 			i.SetSize(i.width, i.height) // Recalculate layout
-			i.updateDetails()
 			return nil
 		case "r":
 			i.loading = true
@@ -201,7 +200,6 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 			i.list, listCmd = i.list.Update(msg)
 			if i.list.Index() != i.lastSelected {
 				i.lastSelected = i.list.Index()
-				i.updateDetails()
 			}
 			return listCmd
 		case "j", "k":
@@ -241,6 +239,8 @@ func (i *ImageList) View() string {
 	if !i.showLayers {
 		return listView
 	}
+
+	i.updateDetails()
 
 	detailView := listStyle.
 		Width(i.viewport.Width).
@@ -313,7 +313,6 @@ func (i *ImageList) updateDetails() {
 	}
 
 	i.viewport.SetContent(content.String())
-	i.viewport.GotoTop()
 }
 
 // shortID returns first 12 characters of an ID
