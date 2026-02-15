@@ -362,12 +362,17 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		case "t":
 			c.showFileTree = !c.showFileTree
 			if c.showFileTree {
+				selected := c.list.SelectedItem()
+				if selected == nil {
+					return nil
+				}
+				container := selected.(ContainerItem).container
 				c.loading = true
 				c.showDetails = false
 				c.showLogs = false
 				c.SetSize(c.width, c.height) // Recalculate layout
 				c.viewport.SetContent("")
-				return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation())
+				return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation(container.ID))
 			}
 			c.SetSize(c.width, c.height) // Recalculate layout
 			return nil
@@ -551,16 +556,10 @@ func (c *ContainerList) updateContainersCmd() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) fetchFileTreeInformation() tea.Cmd {
+func (c *ContainerList) fetchFileTreeInformation(containerID string) tea.Cmd {
 	return func() tea.Msg {
-		selected := c.list.SelectedItem()
-		if selected == nil {
-			return containersTreeLoadedMsg{error: fmt.Errorf("no container selected")}
-		}
-
 		ctx := context.Background()
-		container := selected.(ContainerItem).container
-		fileTree, err := c.service.FileTree(ctx, container.ID)
+		fileTree, err := c.service.FileTree(ctx, containerID)
 		if err != nil {
 			return containersTreeLoadedMsg{error: fmt.Errorf("Error getting the file tree: %s", err.Error())}
 		}
