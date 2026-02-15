@@ -191,7 +191,7 @@ func (s *localContainerService) Exec(ctx context.Context, id string) (*ExecSessi
 }
 
 func (s *localContainerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
-	reader, err := s.cli.ContainerExport(ctx, "51bc63fdf4eb47ec2699a7affd382b487d065ea6fbf5ccfc3106e9b4f2ee64f4")
+	reader, err := s.cli.ContainerExport(ctx, id)
 	if err != nil {
 		return ContainerFileTree{}, err
 	}

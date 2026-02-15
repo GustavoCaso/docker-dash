@@ -108,7 +108,7 @@ func (c ContainerItem) Description() string {
 	stateIcon := theme.StatusIcon(string(c.container.State))
 	stateStyle := theme.StatusStyle(string(c.container.State))
 	state := stateStyle.Render(stateIcon + " " + string(c.container.State))
-	return state + " " + c.container.Image + " " + c.ID()
+	return state + " " + c.container.Image + " " + shortID(c.ID())
 }
 func (c ContainerItem) FilterValue() string { return c.container.Name }
 
@@ -213,6 +213,14 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 
 	if loadedMsg, ok := msg.(containersTreeLoadedMsg); ok {
 		c.loading = false
+		if loadedMsg.error != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: loadedMsg.error.Error(),
+					IsError: true,
+				}
+			}
+		}
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(loadedMsg.fileTree.Tree.String()))
 		return nil
 	}
@@ -357,9 +365,12 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				c.loading = true
 				c.showDetails = false
 				c.showLogs = false
+				c.SetSize(c.width, c.height) // Recalculate layout
+				c.viewport.SetContent("")
+				return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation())
 			}
 			c.SetSize(c.width, c.height) // Recalculate layout
-			return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation())
+			return nil
 		case "e":
 			selected := c.list.SelectedItem()
 			if selected == nil {
