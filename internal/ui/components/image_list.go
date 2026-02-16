@@ -207,12 +207,24 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 			}
 		}
 
-		return func() tea.Msg {
+		banner := func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Container %s created", shortID(containerRunMsg.containerID)),
 				IsError: false,
 			}
 		}
+
+		refreshComponents := func() tea.Msg {
+			return message.BubbleUpMsg{
+				KeyMsg: tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune{'r'},
+				},
+				OnlyActive: false,
+			}
+		}
+
+		return tea.Batch(banner, refreshComponents)
 	}
 
 	// Handle focus switching and actions

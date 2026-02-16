@@ -119,6 +119,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return clearBannerMsg{}
 		})
 
+	case message.BubbleUpMsg:
+		if msg.OnlyActive {
+			return m.forwardMessageToActive(msg.KeyMsg)
+		}
+
+		return m.forwardMessageToAll(msg.KeyMsg)
 	case clearBannerMsg:
 		m.bannerMsg = ""
 		m.bannerKind = bannerNone
@@ -151,17 +157,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Forward messages to focused component
-	var cmd tea.Cmd
-	if m.focus == focusList {
-		switch m.sidebar.ActiveView() {
-		case components.ViewContainers:
-			cmd = m.containerList.Update(msg)
-		case components.ViewImages:
-			cmd = m.imageList.Update(msg)
-		}
+	// Forward key messages to focused component only
+	if _, ok := msg.(tea.KeyMsg); ok {
+		return m.forwardMessageToActive(msg)
 	}
-	return m, cmd
+
+	// Forward other messages (async results, spinner ticks, etc.) to all components
+	// so each component receives its own internal messages regardless of active view
+	return m.forwardMessageToAll(msg)
 }
 
 func (m model) View() string {
@@ -209,6 +212,27 @@ func (m model) View() string {
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())
+}
+
+func (m model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if m.focus == focusList {
+		switch m.sidebar.ActiveView() {
+		case components.ViewContainers:
+			cmd = m.containerList.Update(msg)
+		case components.ViewImages:
+			cmd = m.imageList.Update(msg)
+		}
+	}
+	return m, cmd
+}
+
+func (m model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmds := []tea.Cmd{
+		m.containerList.Update(msg),
+		m.imageList.Update(msg),
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func main() {
