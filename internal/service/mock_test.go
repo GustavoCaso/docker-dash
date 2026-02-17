@@ -59,6 +59,113 @@ func TestMockClient_VolumeList(t *testing.T) {
 	}
 }
 
+func TestMockClient_VolumeFileTree(t *testing.T) {
+	client := service.NewMockClient()
+	defer client.Close()
+
+	volumes, err := client.Volumes().List(context.Background())
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+
+	// Every volume should be browsable, regardless of UsedCount
+	for _, vol := range volumes {
+		t.Run(vol.Name, func(t *testing.T) {
+			ft, err := client.Volumes().FileTree(context.Background(), vol.Name)
+			if err != nil {
+				t.Fatalf("FileTree(%s) error = %v", vol.Name, err)
+			}
+
+			if ft.Tree == nil {
+				t.Error("FileTree() returned nil tree")
+			}
+
+			if len(ft.Files) == 0 {
+				t.Error("FileTree() returned empty files")
+			}
+
+			// Tree should render without error
+			treeStr := ft.Tree.String()
+			if treeStr == "" {
+				t.Error("Tree.String() returned empty")
+			}
+		})
+	}
+}
+
+func TestMockClient_VolumeFileTree_PostgresData(t *testing.T) {
+	client := service.NewMockClient()
+	defer client.Close()
+
+	ft, err := client.Volumes().FileTree(context.Background(), "postgres_data")
+	if err != nil {
+		t.Fatalf("FileTree() error = %v", err)
+	}
+
+	fileSet := make(map[string]bool)
+	for _, f := range ft.Files {
+		fileSet[f] = true
+	}
+
+	expected := []string{"pgdata/PG_VERSION", "pgdata/postgresql.conf", "pgdata/base/1"}
+	for _, f := range expected {
+		if !fileSet[f] {
+			t.Errorf("expected file %q in tree, got files: %v", f, ft.Files)
+		}
+	}
+}
+
+func TestMockClient_VolumeFileTree_NginxConfig(t *testing.T) {
+	client := service.NewMockClient()
+	defer client.Close()
+
+	ft, err := client.Volumes().FileTree(context.Background(), "nginx_config")
+	if err != nil {
+		t.Fatalf("FileTree() error = %v", err)
+	}
+
+	fileSet := make(map[string]bool)
+	for _, f := range ft.Files {
+		fileSet[f] = true
+	}
+
+	expected := []string{"nginx.conf", "conf.d/default.conf"}
+	for _, f := range expected {
+		if !fileSet[f] {
+			t.Errorf("expected file %q in tree, got files: %v", f, ft.Files)
+		}
+	}
+}
+
+func TestMockClient_VolumeFileTree_UnusedVolume(t *testing.T) {
+	client := service.NewMockClient()
+	defer client.Close()
+
+	// app_data has UsedCount=0 — should still be browsable
+	ft, err := client.Volumes().FileTree(context.Background(), "app_data")
+	if err != nil {
+		t.Fatalf("FileTree() unexpected error for unused volume: %v", err)
+	}
+
+	if ft.Tree == nil {
+		t.Error("FileTree() returned nil tree")
+	}
+
+	if len(ft.Files) == 0 {
+		t.Error("FileTree() returned empty files for unused volume")
+	}
+}
+
+func TestMockClient_VolumeFileTree_NotFound(t *testing.T) {
+	client := service.NewMockClient()
+	defer client.Close()
+
+	_, err := client.Volumes().FileTree(context.Background(), "nonexistent_volume")
+	if err == nil {
+		t.Error("FileTree() expected error for nonexistent volume, got nil")
+	}
+}
+
 func TestMockClient_ContainerExec(t *testing.T) {
 	client := service.NewMockClient()
 	defer client.Close()

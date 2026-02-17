@@ -3,16 +3,17 @@ package service
 import (
 	"archive/tar"
 	"context"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss/tree"
+	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -392,45 +393,137 @@ type localVolumeService struct {
 }
 
 func (s *localVolumeService) List(ctx context.Context) ([]Volume, error) {
-	resp, err := s.cli.VolumeList(ctx, volume.ListOptions{})
+	du, err := s.cli.DiskUsage(ctx, dockertypes.DiskUsageOptions{
+		Types: []dockertypes.DiskUsageObject{dockertypes.VolumeObject},
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]Volume, len(resp.Volumes))
-	for i, v := range resp.Volumes {
+	result := make([]Volume, len(du.Volumes))
+	for i, v := range du.Volumes {
+		size := int64(0)
+		usedCount := 0
+
+		if v.UsageData != nil {
+			size = v.UsageData.Size
+			usedCount = int(v.UsageData.RefCount)
+		}
+
 		result[i] = Volume{
 			Name:      v.Name,
 			Driver:    v.Driver,
 			MountPath: v.Mountpoint,
-			// Note: Size requires disk usage API call, skipping for now
+			Size:      size,
+			UsedCount: usedCount,
 		}
 	}
 
 	return result, nil
 }
 
-func (s *localVolumeService) Get(ctx context.Context, name string) (*Volume, error) {
-	v, err := s.cli.VolumeInspect(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Volume{
-		Name:      v.Name,
-		Driver:    v.Driver,
-		MountPath: v.Mountpoint,
-	}, nil
-}
-
 func (s *localVolumeService) Remove(ctx context.Context, name string, force bool) error {
 	return s.cli.VolumeRemove(ctx, name, force)
 }
 
-func (s *localVolumeService) Browse(ctx context.Context, name string, path string) ([]FileEntry, error) {
-	// Volume browsing requires running a container to access the volume
-	// For now, return empty - this is a complex feature
-	return nil, nil
+func (s *localVolumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
+	// Try to find a running container that mounts this volume
+	containerID, mountPoint, err := s.findRunningContainerForVolume(ctx, name)
+	if err != nil {
+		return VolumeFileTree{}, err
+	}
+
+	if containerID != "" {
+		return s.copyFileTree(ctx, containerID, mountPoint)
+	}
+
+	// No running container — spin up a temporary one to browse the volume
+	return s.fileTreeViaTempContainer(ctx, name)
+}
+
+// findRunningContainerForVolume returns the ID and mount point of a running
+// container that uses the given volume, or empty strings if none found.
+func (s *localVolumeService) findRunningContainerForVolume(ctx context.Context, name string) (string, string, error) {
+	usedBy, err := s.getVolumeUsage(ctx, name)
+	if err != nil {
+		return "", "", err
+	}
+
+	for _, cID := range usedBy {
+		inspect, err := s.cli.ContainerInspect(ctx, cID)
+		if err != nil || !inspect.State.Running {
+			continue
+		}
+		for _, m := range inspect.Mounts {
+			if m.Name == name {
+				return cID, m.Destination, nil
+			}
+		}
+	}
+
+	return "", "", nil
+}
+
+// copyFileTree reads a tar archive from a container path and builds a file tree.
+func (s *localVolumeService) copyFileTree(ctx context.Context, containerID, path string) (VolumeFileTree, error) {
+	reader, _, err := s.cli.CopyFromContainer(ctx, containerID, path)
+	if err != nil {
+		return VolumeFileTree{}, fmt.Errorf("copy from container failed: %w", err)
+	}
+	defer reader.Close()
+
+	cft := buildContainerFileTree(reader)
+	return VolumeFileTree{Files: cft.Files, Tree: cft.Tree}, nil
+}
+
+const (
+	volumeMountPath = "/mnt/volume"
+	alpineImage     = "alpine:latest"
+)
+
+// ensureImage pulls the image if it doesn't exist locally.
+func (s *localVolumeService) ensureImage(ctx context.Context, ref string) error {
+	_, err := s.cli.ImageInspect(ctx, ref)
+	if err == nil {
+		return nil // already exists
+	}
+
+	reader, err := s.cli.ImagePull(ctx, ref, image.PullOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to pull %s: %w", ref, err)
+	}
+	defer reader.Close()
+	// Drain the reader to complete the pull
+	_, err = io.Copy(io.Discard, reader)
+	return err
+}
+
+// fileTreeViaTempContainer creates a temporary alpine container to browse
+// a volume that is not in use by any running container.
+func (s *localVolumeService) fileTreeViaTempContainer(ctx context.Context, volumeName string) (VolumeFileTree, error) {
+	if err := s.ensureImage(ctx, alpineImage); err != nil {
+		return VolumeFileTree{}, err
+	}
+
+	resp, err := s.cli.ContainerCreate(ctx, &container.Config{
+		Image: alpineImage,
+		Cmd:   []string{"true"},
+	}, &container.HostConfig{
+		Binds: []string{volumeName + ":" + volumeMountPath},
+	}, nil, nil, "")
+	if err != nil {
+		return VolumeFileTree{}, fmt.Errorf("failed to create temp container: %w", err)
+	}
+
+	// Always clean up the temporary container
+	defer s.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+
+	ft, err := s.copyFileTree(ctx, resp.ID, volumeMountPath)
+	if err != nil {
+		return VolumeFileTree{}, fmt.Errorf("failed to read volume files: %w", err)
+	}
+
+	return ft, nil
 }
 
 // Helper to get containers using a volume

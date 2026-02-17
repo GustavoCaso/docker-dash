@@ -25,6 +25,7 @@ const (
 
 // imagesLoadedMsg is sent when images have been loaded asynchronously
 type imagesLoadedMsg struct {
+	error error
 	items []list.Item
 }
 
@@ -100,7 +101,6 @@ type ImageList struct {
 	imageService     service.ImageService
 	containerService service.ContainerService
 	width, height    int
-	lastSelected     int
 	showLayers       bool
 	loading          bool
 	spinner          spinner.Model
@@ -127,7 +127,6 @@ func NewImageList(images []service.Image, client service.DockerClient) *ImageLis
 	il := &ImageList{
 		list:             l,
 		viewport:         vp,
-		lastSelected:     -1,
 		imageService:     client.Images(),
 		containerService: client.Containers(),
 		spinner:          sp,
@@ -173,6 +172,14 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 	// Handle images loaded message
 	if loadedMsg, ok := msg.(imagesLoadedMsg); ok {
 		i.loading = false
+		if loadedMsg.error != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Error loading images: %s", loadedMsg.error.Error()),
+					IsError: true,
+				}
+			}
+		}
 		cmd := i.list.SetItems(loadedMsg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
@@ -244,9 +251,6 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		case "up", "down":
 			var listCmd tea.Cmd
 			i.list, listCmd = i.list.Update(msg)
-			if i.list.Index() != i.lastSelected {
-				i.lastSelected = i.list.Index()
-			}
 			return listCmd
 		case "j", "k":
 			var vpCmd tea.Cmd
@@ -298,13 +302,12 @@ func (i *ImageList) View() string {
 func (i *ImageList) deleteImageCmd() tea.Cmd {
 	svc := i.imageService
 	items := i.list.Items()
-	idx := i.lastSelected
-	item := items[idx]
-	if item == nil {
+	idx := i.list.Index()
+	if idx < 0 || idx >= len(items) {
 		return nil
 	}
 
-	dockerImage, ok := item.(ImageItem)
+	dockerImage, ok := items[idx].(ImageItem)
 	if !ok {
 		return nil
 	}
@@ -321,7 +324,10 @@ func (i *ImageList) updateImagesCmd() tea.Cmd {
 	svc := i.imageService
 	return func() tea.Msg {
 		ctx := context.Background()
-		images, _ := svc.List(ctx)
+		images, err := svc.List(ctx)
+		if err != nil {
+			return imagesLoadedMsg{error: err}
+		}
 		items := make([]list.Item, len(images))
 		for idx, img := range images {
 			items[idx] = ImageItem{image: img}
@@ -333,13 +339,12 @@ func (i *ImageList) updateImagesCmd() tea.Cmd {
 func (i *ImageList) createContainerCmdAndRun() tea.Cmd {
 	svc := i.containerService
 	items := i.list.Items()
-	idx := i.lastSelected
-	item := items[idx]
-	if item == nil {
+	idx := i.list.Index()
+	if idx < 0 || idx >= len(items) {
 		return nil
 	}
 
-	dockerImage, ok := item.(ImageItem)
+	dockerImage, ok := items[idx].(ImageItem)
 	if !ok {
 		return nil
 	}

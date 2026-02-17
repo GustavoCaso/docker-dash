@@ -13,6 +13,7 @@ type View int
 const (
 	ViewContainers View = iota
 	ViewImages
+	ViewVolumes
 )
 
 func (v View) String() string {
@@ -21,6 +22,8 @@ func (v View) String() string {
 		return "Containers"
 	case ViewImages:
 		return "Images"
+	case ViewVolumes:
+		return "Volumes"
 	default:
 		return "Unknown"
 	}
@@ -47,6 +50,7 @@ func NewSidebar() *Sidebar {
 		items: []sidebarItem{
 			{icon: theme.IconImage, label: "Images", view: ViewImages},
 			{icon: theme.IconContainer, label: "Containers", view: ViewContainers},
+			{icon: theme.IconVolume, label: "Volumes", view: ViewVolumes},
 		},
 		activeIndex: 0,
 		focused:     false,

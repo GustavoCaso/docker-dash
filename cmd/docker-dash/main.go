@@ -49,6 +49,7 @@ type model struct {
 	sidebar       *components.Sidebar
 	containerList *components.ContainerList
 	imageList     *components.ImageList
+	volumeList    *components.VolumeList
 	statusBar     *components.StatusBar
 	focus         focus
 	width         int
@@ -75,12 +76,14 @@ func initialModel(client service.DockerClient) model {
 	ctx := context.Background()
 	containers, _ := client.Containers().List(ctx)
 	images, _ := client.Images().List(ctx)
+	volumes, _ := client.Volumes().List(ctx)
 
 	return model{
 		client:        client,
 		sidebar:       components.NewSidebar(),
 		containerList: components.NewContainerList(containers, client.Containers()),
 		imageList:     components.NewImageList(images, client),
+		volumeList:    components.NewVolumeList(volumes, client.Volumes()),
 		statusBar:     components.NewStatusBar(),
 		focus:         focusSidebar,
 	}
@@ -106,6 +109,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sidebar.SetSize(sidebarWidth, contentHeight)
 		m.containerList.SetSize(listWidth, contentHeight)
 		m.imageList.SetSize(listWidth, contentHeight)
+		m.volumeList.SetSize(listWidth, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
 	case message.ShowBannerMsg:
@@ -186,6 +190,9 @@ func (m model) View() string {
 	case components.ViewImages:
 		listView = m.imageList.View()
 		listBindings = m.imageList.KeyBindings()
+	case components.ViewVolumes:
+		listView = m.volumeList.View()
+		listBindings = m.volumeList.KeyBindings()
 	}
 
 	// Set status bar bindings based on focused component
@@ -222,6 +229,8 @@ func (m model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.containerList.Update(msg)
 		case components.ViewImages:
 			cmd = m.imageList.Update(msg)
+		case components.ViewVolumes:
+			cmd = m.volumeList.Update(msg)
 		}
 	}
 	return m, cmd
@@ -231,6 +240,7 @@ func (m model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := []tea.Cmd{
 		m.containerList.Update(msg),
 		m.imageList.Update(msg),
+		m.volumeList.Update(msg),
 	}
 	return m, tea.Batch(cmds...)
 }

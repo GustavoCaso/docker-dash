@@ -307,7 +307,7 @@ func newMockVolumeService() *mockVolumeService {
 				MountPath: "/var/lib/docker/volumes/postgres_data/_data",
 				Size:      256 * 1024 * 1024, // 256 MB
 				Created:   now.Add(-24 * time.Hour),
-				UsedBy:    []string{"ghi789jkl012"},
+				UsedCount: 1,
 			},
 			{
 				Name:      "app_data",
@@ -315,7 +315,7 @@ func newMockVolumeService() *mockVolumeService {
 				MountPath: "/var/lib/docker/volumes/app_data/_data",
 				Size:      64 * 1024 * 1024, // 64 MB
 				Created:   now.Add(-48 * time.Hour),
-				UsedBy:    []string{},
+				UsedCount: 0,
 			},
 			{
 				Name:      "nginx_config",
@@ -323,7 +323,7 @@ func newMockVolumeService() *mockVolumeService {
 				MountPath: "/var/lib/docker/volumes/nginx_config/_data",
 				Size:      1024 * 1024, // 1 MB
 				Created:   now.Add(-72 * time.Hour),
-				UsedBy:    []string{"abc123def456"},
+				UsedCount: 1,
 			},
 		},
 	}
@@ -333,20 +333,11 @@ func (s *mockVolumeService) List(ctx context.Context) ([]Volume, error) {
 	return s.volumes, nil
 }
 
-func (s *mockVolumeService) Get(ctx context.Context, name string) (*Volume, error) {
-	for _, v := range s.volumes {
-		if v.Name == name {
-			return &v, nil
-		}
-	}
-	return nil, fmt.Errorf("volume not found: %s", name)
-}
-
 func (s *mockVolumeService) Remove(ctx context.Context, name string, force bool) error {
 	for i, v := range s.volumes {
 		if v.Name == name {
-			if len(v.UsedBy) > 0 && !force {
-				return fmt.Errorf("volume is in use by %d container(s)", len(v.UsedBy))
+			if v.UsedCount > 0 && !force {
+				return fmt.Errorf("volume is in use by %d container(s)", v.UsedCount)
 			}
 			s.volumes = append(s.volumes[:i], s.volumes[i+1:]...)
 			return nil
@@ -355,12 +346,37 @@ func (s *mockVolumeService) Remove(ctx context.Context, name string, force bool)
 	return fmt.Errorf("volume not found: %s", name)
 }
 
-func (s *mockVolumeService) Browse(ctx context.Context, name string, path string) ([]FileEntry, error) {
-	// Return mock file entries
-	return []FileEntry{
-		{Name: "config", IsDir: true, Size: 4096, Mode: "drwxr-xr-x"},
-		{Name: "data", IsDir: true, Size: 4096, Mode: "drwxr-xr-x"},
-		{Name: "app.log", IsDir: false, Size: 1024, Mode: "-rw-r--r--"},
-		{Name: "settings.json", IsDir: false, Size: 256, Mode: "-rw-r--r--"},
-	}, nil
+func (s *mockVolumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
+	for _, v := range s.volumes {
+		if v.Name == name {
+			t := tree.Root(name)
+			files := []string{}
+
+			switch name {
+			case "postgres_data":
+				pgdata := tree.Root("pgdata")
+				pgdata.Child("PG_VERSION")
+				pgdata.Child("postgresql.conf")
+				pgdata.Child("pg_hba.conf")
+				baseDir := tree.Root("base")
+				baseDir.Child("1")
+				baseDir.Child("13067")
+				pgdata.Child(baseDir)
+				t.Child(pgdata)
+				files = []string{"pgdata/", "pgdata/PG_VERSION", "pgdata/postgresql.conf", "pgdata/pg_hba.conf", "pgdata/base/", "pgdata/base/1", "pgdata/base/13067"}
+			case "nginx_config":
+				t.Child("nginx.conf")
+				confD := tree.Root("conf.d")
+				confD.Child("default.conf")
+				t.Child(confD)
+				files = []string{"nginx.conf", "conf.d/", "conf.d/default.conf"}
+			default:
+				t.Child("data.bin")
+				files = []string{"data.bin"}
+			}
+
+			return VolumeFileTree{Files: files, Tree: t}, nil
+		}
+	}
+	return VolumeFileTree{}, fmt.Errorf("volume not found: %s", name)
 }

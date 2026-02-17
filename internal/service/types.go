@@ -25,6 +25,11 @@ type ContainerFileTree struct {
 	Tree  *tree.Tree
 }
 
+type VolumeFileTree struct {
+	Files []string
+	Tree  *tree.Tree
+}
+
 type ContainerState string
 
 const (
@@ -85,15 +90,7 @@ type Volume struct {
 	MountPath string
 	Size      int64
 	Created   time.Time
-	UsedBy    []string // Container IDs using this volume
-}
-
-// FileEntry represents a file in a volume
-type FileEntry struct {
-	Name  string
-	IsDir bool
-	Size  int64
-	Mode  string
+	UsedCount int
 }
 
 // LogOptions configures log streaming

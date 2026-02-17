@@ -35,7 +35,7 @@ const (
 	IconDocker    = "\uf308" // Docker whale icon
 	IconContainer = "\uf4b7" // Container/cube icon
 	IconImage     = "\ue7ba" // Layers/image icon
-	IconVolume    = "\uf7c2" // Database/volume icon
+	IconVolume    = "\uf0a0" // Hard drive/volume icon
 	IconNetwork   = "\uf6ff" // Network icon
 
 	// Status icons

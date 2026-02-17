@@ -52,6 +52,26 @@ func TestExecPanel(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestVolumesView(t *testing.T) {
+	m := initialModel(service.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+
+	// Wait for initial render
+	waitForString(t, tm, "Docker")
+
+	// Navigate sidebar down twice to switch to Volumes view
+	// (Images -> Containers -> Volumes)
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Wait for Volumes view to render
+	waitForString(t, tm, "postgres_data")
+
+	// Quit
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
 	teatest.WaitFor(
 		t,

@@ -38,7 +38,6 @@ type ImageService interface {
 // VolumeService manages Docker volumes
 type VolumeService interface {
 	List(ctx context.Context) ([]Volume, error)
-	Get(ctx context.Context, name string) (*Volume, error)
 	Remove(ctx context.Context, name string, force bool) error
-	Browse(ctx context.Context, name string, path string) ([]FileEntry, error)
+	FileTree(ctx context.Context, name string) (VolumeFileTree, error)
 }

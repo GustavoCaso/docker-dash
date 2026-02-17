@@ -31,6 +31,12 @@ func TestSidebarNavigation(t *testing.T) {
 		t.Errorf("expected ViewContainers after MoveDown, got %v", s.ActiveView())
 	}
 
+	// MoveDown again -> ViewVolumes
+	s.MoveDown()
+	if s.ActiveView() != ViewVolumes {
+		t.Errorf("expected ViewVolumes after second MoveDown, got %v", s.ActiveView())
+	}
+
 	// MoveDown again -> wraps to ViewImages
 	s.MoveDown()
 	if s.ActiveView() != ViewImages {
@@ -41,16 +47,22 @@ func TestSidebarNavigation(t *testing.T) {
 func TestSidebarNavigationUp(t *testing.T) {
 	s := NewSidebar()
 
-	// MoveUp from index 0 -> wraps to ViewContainers (last item)
+	// MoveUp from index 0 -> wraps to ViewVolumes (last item)
+	s.MoveUp()
+	if s.ActiveView() != ViewVolumes {
+		t.Errorf("expected ViewVolumes after MoveUp from start, got %v", s.ActiveView())
+	}
+
+	// MoveUp again -> ViewContainers
 	s.MoveUp()
 	if s.ActiveView() != ViewContainers {
-		t.Errorf("expected ViewContainers after MoveUp from start, got %v", s.ActiveView())
+		t.Errorf("expected ViewContainers after second MoveUp, got %v", s.ActiveView())
 	}
 
 	// MoveUp again -> ViewImages
 	s.MoveUp()
 	if s.ActiveView() != ViewImages {
-		t.Errorf("expected ViewImages after second MoveUp, got %v", s.ActiveView())
+		t.Errorf("expected ViewImages after third MoveUp, got %v", s.ActiveView())
 	}
 }
 
@@ -74,7 +86,7 @@ func TestSidebarViewRendering(t *testing.T) {
 
 	output := s.View()
 
-	for _, expected := range []string{"Docker", "Images", "Containers"} {
+	for _, expected := range []string{"Docker", "Images", "Containers", "Volumes"} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("expected View() output to contain %q", expected)
 		}
@@ -88,6 +100,7 @@ func TestViewString(t *testing.T) {
 	}{
 		{ViewContainers, "Containers"},
 		{ViewImages, "Images"},
+		{ViewVolumes, "Volumes"},
 		{View(99), "Unknown"},
 	}
 

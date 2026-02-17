@@ -118,7 +118,6 @@ type ContainerList struct {
 	viewport                viewport.Model
 	service                 service.ContainerService
 	width, height           int
-	lastSelected            int
 	showDetails             bool
 	showLogs                bool
 	showFileTree            bool
@@ -156,7 +155,6 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	cl := &ContainerList{
 		list:         l,
 		viewport:     vp,
-		lastSelected: -1,
 		service:      svc,
 		spinner:      sp,
 		execInput:    ti,
@@ -404,9 +402,6 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		case "up", "down":
 			var listCmd tea.Cmd
 			c.list, listCmd = c.list.Update(msg)
-			if c.list.Index() != c.lastSelected {
-				c.lastSelected = c.list.Index()
-			}
 			return listCmd
 		case "j", "k":
 			var vpCmd tea.Cmd
@@ -471,13 +466,12 @@ func (c *ContainerList) View() string {
 func (c *ContainerList) deleteContainerCmd() tea.Cmd {
 	svc := c.service
 	items := c.list.Items()
-	idx := c.lastSelected
+	idx := c.list.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
 
-	item := items[idx]
-	containerItem, ok := item.(ContainerItem)
+	containerItem, ok := items[idx].(ContainerItem)
 	if !ok {
 		return nil
 	}
@@ -492,13 +486,12 @@ func (c *ContainerList) deleteContainerCmd() tea.Cmd {
 func (c *ContainerList) toggleContainerCmd() tea.Cmd {
 	svc := c.service
 	items := c.list.Items()
-	idx := c.lastSelected
+	idx := c.list.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
 
-	item := items[idx]
-	containerItem, ok := item.(ContainerItem)
+	containerItem, ok := items[idx].(ContainerItem)
 	if !ok {
 		return nil
 	}
@@ -522,13 +515,12 @@ func (c *ContainerList) toggleContainerCmd() tea.Cmd {
 func (c *ContainerList) restartContainerCmd() tea.Cmd {
 	svc := c.service
 	items := c.list.Items()
-	idx := c.lastSelected
+	idx := c.list.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
 
-	item := items[idx]
-	containerItem, ok := item.(ContainerItem)
+	containerItem, ok := items[idx].(ContainerItem)
 	if !ok {
 		return nil
 	}
