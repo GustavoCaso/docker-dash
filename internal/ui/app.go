@@ -54,6 +54,7 @@ type model struct {
 	height        int
 	bannerMsg     string
 	bannerKind    bannerType
+	initErr       string
 }
 
 // Key bindings for sidebar
@@ -72,9 +73,17 @@ var sidebarBindings = []key.Binding{sidebarNavKey, tabKey}
 
 func InitialModel(client service.DockerClient) tea.Model {
 	ctx := context.Background()
-	containers, _ := client.Containers().List(ctx)
-	images, _ := client.Images().List(ctx)
-	volumes, _ := client.Volumes().List(ctx)
+	containers, containersErr := client.Containers().List(ctx)
+	images, imagesErr := client.Images().List(ctx)
+	volumes, volumesErr := client.Volumes().List(ctx)
+
+	var initErr string
+	for _, err := range []error{containersErr, imagesErr, volumesErr} {
+		if err != nil {
+			initErr = "Failed to load data: " + err.Error()
+			break
+		}
+	}
 
 	return model{
 		client:        client,
@@ -84,10 +93,16 @@ func InitialModel(client service.DockerClient) tea.Model {
 		volumeList:    components.NewVolumeList(volumes, client.Volumes()),
 		statusBar:     components.NewStatusBar(),
 		focus:         focusSidebar,
+		initErr:       initErr,
 	}
 }
 
 func (m model) Init() tea.Cmd {
+	if m.initErr != "" {
+		return func() tea.Msg {
+			return message.ShowBannerMsg{Message: m.initErr, IsError: true}
+		}
+	}
 	return nil
 }
 

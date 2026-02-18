@@ -5,11 +5,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/charmbracelet/lipgloss/tree"
+	"github.com/docker/cli/cli/connhelper"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -26,9 +30,60 @@ type LocalDockerClient struct {
 	volumes    *localVolumeService
 }
 
-// NewLocalDockerClient creates a client connected to the local Docker socket
-func NewLocalDockerClient() (*LocalDockerClient, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+// NewDockerClientFromConfig creates a LocalDockerClient using settings from cfg.
+//
+// Connection logic:
+//   - cfg.Host empty → client.FromEnv (reads DOCKER_HOST, etc. from environment)
+//   - cfg.Host is ssh:// AND identity_file set → custom SSH dialer with key file auth
+//   - cfg.Host is ssh:// AND no identity_file → custom SSH dialer with SSH agent auth
+//   - cfg.Host is anything else (tcp://, unix://) → client.WithHost directly
+func NewDockerClientFromConfig(cfg config.DockerConfig) (*LocalDockerClient, error) {
+	opts := []client.Opt{
+		client.WithAPIVersionNegotiation(),
+	}
+
+	switch {
+	case cfg.Host == "":
+		opts = append(opts, client.FromEnv)
+
+	case isSSHHost(cfg.Host) && cfg.IdentityFile != "":
+		keyPath := ExpandTilde(cfg.IdentityFile)
+		user, sshAddr, socketPath, err := parseSSHTarget(cfg.Host)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ssh host %q: %w", cfg.Host, err)
+		}
+		dialer, err := NewSSHDialer(user, sshAddr, keyPath)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, client.WithHost("unix://"+socketPath),
+			client.WithDialContext(dialer))
+
+	case isSSHHost(cfg.Host):
+		helper, err := connhelper.GetConnectionHelper(cfg.Host)
+		if err != nil {
+			return nil, err
+		}
+
+		httpClient := &http.Client{
+			Transport: &http.Transport{
+				DialContext: helper.Dialer,
+			},
+		}
+
+		opts = append(opts,
+			client.WithHTTPClient(httpClient),
+			client.WithHost(helper.Host),
+			client.WithDialContext(helper.Dialer),
+		)
+
+	default:
+		opts = append(opts,
+			client.WithHost(cfg.Host),
+		)
+	}
+
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +92,36 @@ func NewLocalDockerClient() (*LocalDockerClient, error) {
 	c.containers = &localContainerService{cli: cli}
 	c.images = &localImageService{cli: cli}
 	c.volumes = &localVolumeService{cli: cli}
-
 	return c, nil
+}
+
+// isSSHHost reports whether host is an ssh:// URL.
+func isSSHHost(host string) bool {
+	return strings.HasPrefix(host, "ssh://")
+}
+
+// parseSSHTarget parses an ssh://[user@]host[:port][/socket/path] URL and
+// returns (user, "host:port", socketPath, error). Port defaults to 22 and
+// socketPath defaults to /var/run/docker.sock when not specified.
+func parseSSHTarget(rawURL string) (user, sshAddr, socketPath string, err error) {
+	u, parseErr := url.Parse(rawURL)
+	if parseErr != nil {
+		return "", "", "", parseErr
+	}
+	if u.User != nil {
+		user = u.User.Username()
+	}
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "22"
+	}
+	sshAddr = host + ":" + port
+	socketPath = u.Path
+	if socketPath == "" {
+		socketPath = "/var/run/docker.sock"
+	}
+	return user, sshAddr, socketPath, nil
 }
 
 func (c *LocalDockerClient) Containers() ContainerService { return c.containers }
