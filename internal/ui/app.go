@@ -7,6 +7,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -49,6 +50,7 @@ type model struct {
 	imageList     *components.ImageList
 	volumeList    *components.VolumeList
 	statusBar     *components.StatusBar
+	keys          *keys.KeyMap
 	focus         focus
 	width         int
 	height        int
@@ -56,20 +58,6 @@ type model struct {
 	bannerKind    bannerType
 	initErr       string
 }
-
-// Key bindings for sidebar
-var tabKey = key.NewBinding(
-	key.WithKeys("tab", "shift+tab"),
-	key.WithHelp("tab", "change focus"),
-)
-
-var sidebarNavKey = key.NewBinding(
-	key.WithKeys("up", "down"),
-	key.WithHelp("up/down", "navigate"),
-)
-
-// KeyBindings returns the key bindings for sidebar focus
-var sidebarBindings = []key.Binding{sidebarNavKey, tabKey}
 
 func InitialModel(client service.DockerClient) tea.Model {
 	ctx := context.Background()
@@ -87,6 +75,7 @@ func InitialModel(client service.DockerClient) tea.Model {
 
 	return model{
 		client:        client,
+		keys:          keys.Keys,
 		sidebar:       components.NewSidebar(),
 		containerList: components.NewContainerList(containers, client.Containers()),
 		imageList:     components.NewImageList(images, client),
@@ -199,20 +188,20 @@ func (m model) View() string {
 	switch m.sidebar.ActiveView() {
 	case components.ViewContainers:
 		listView = m.containerList.View()
-		listBindings = m.containerList.KeyBindings()
+		listBindings = m.keys.ContainerBindings()
 	case components.ViewImages:
 		listView = m.imageList.View()
-		listBindings = m.imageList.KeyBindings()
+		listBindings = m.keys.ImageBindings()
 	case components.ViewVolumes:
 		listView = m.volumeList.View()
-		listBindings = m.volumeList.KeyBindings()
+		listBindings = m.keys.VolumeBindings()
 	}
 
 	// Set status bar bindings based on focused component
 	if m.focus == focusList {
 		m.statusBar.SetBindings(listBindings)
 	} else {
-		m.statusBar.SetBindings(sidebarBindings)
+		m.statusBar.SetBindings(m.keys.SidebadrBindings())
 	}
 
 	sidebar := m.sidebar.View()

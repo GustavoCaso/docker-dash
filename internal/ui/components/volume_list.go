@@ -7,6 +7,7 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/key"
@@ -35,22 +36,6 @@ type VolumeRemovedMsg struct {
 	Idx   int
 	Error error
 }
-
-// Key bindings for volume list actions
-var volumeTreeKey = key.NewBinding(
-	key.WithKeys("t"),
-	key.WithHelp("t", "files"),
-)
-
-var volumeRefreshKey = key.NewBinding(
-	key.WithKeys("r"),
-	key.WithHelp("r", "refresh"),
-)
-
-var volumeDeleteKey = key.NewBinding(
-	key.WithKeys("d"),
-	key.WithHelp("d", "delete"),
-)
 
 // VolumeItem implements list.Item interface
 type VolumeItem struct {
@@ -109,11 +94,6 @@ func NewVolumeList(volumes []service.Volume, svc service.VolumeService) *VolumeL
 	}
 }
 
-// KeyBindings returns the key bindings for the current state
-func (v *VolumeList) KeyBindings() []key.Binding {
-	return []key.Binding{mainNavKey, secondaryNavKey, volumeTreeKey, volumeRefreshKey, volumeDeleteKey}
-}
-
 // SetSize sets dimensions
 func (v *VolumeList) SetSize(width, height int) {
 	v.width = width
@@ -143,56 +123,51 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, spinnerCmd)
 	}
 
-	if loadedMsg, ok := msg.(volumesLoadedMsg); ok {
+	switch msg := msg.(type) {
+	case volumesLoadedMsg:
 		v.loading = false
-		if loadedMsg.error != nil {
+		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error loading volumes: %s", loadedMsg.error.Error()),
+					Message: fmt.Sprintf("Error loading volumes: %s", msg.error.Error()),
 					IsError: true,
 				}
 			}
 		}
-		cmd := v.list.SetItems(loadedMsg.items)
+		cmd := v.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
-	}
-
-	if loadedMsg, ok := msg.(volumeTreeLoadedMsg); ok {
+	case volumeTreeLoadedMsg:
 		v.loading = false
-		if loadedMsg.error != nil {
+		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: loadedMsg.error.Error(),
+					Message: msg.error.Error(),
 					IsError: true,
 				}
 			}
 		}
-		v.viewport.SetContent(lipgloss.NewStyle().Width(v.viewport.Width).Render(loadedMsg.fileTree.Tree.String()))
+		v.viewport.SetContent(lipgloss.NewStyle().Width(v.viewport.Width).Render(msg.fileTree.Tree.String()))
 		return nil
-	}
-
-	if removeMsg, ok := msg.(VolumeRemovedMsg); ok {
-		if removeMsg.Error != nil {
+	case VolumeRemovedMsg:
+		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error deleting volume: %s", removeMsg.Error.Error()),
+					Message: fmt.Sprintf("Error deleting volume: %s", msg.Error.Error()),
 					IsError: true,
 				}
 			}
 		}
-		v.list.RemoveItem(removeMsg.Idx)
+		v.list.RemoveItem(msg.Idx)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Volume %s deleted", removeMsg.Name),
+				Message: fmt.Sprintf("Volume %s deleted", msg.Name),
 				IsError: false,
 			}
 		}
-	}
-
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		switch keyMsg.String() {
-		case "t":
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, keys.Keys.FileTree):
 			selected := v.list.SelectedItem()
 			if selected == nil {
 				return nil
@@ -207,16 +182,16 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 			}
 			v.SetSize(v.width, v.height)
 			return nil
-		case "r":
+		case key.Matches(msg, keys.Keys.Refresh):
 			v.loading = true
 			return tea.Batch(v.spinner.Tick, v.updateVolumesCmd())
-		case "d":
+		case key.Matches(msg, keys.Keys.Delete):
 			return v.deleteVolumeCmd()
-		case "up", "down":
+		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			v.list, listCmd = v.list.Update(msg)
 			return listCmd
-		case "j", "k":
+		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
 			var vpCmd tea.Cmd
 			v.viewport, vpCmd = v.viewport.Update(msg)
 			return vpCmd

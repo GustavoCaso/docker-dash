@@ -7,6 +7,7 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/key"
@@ -50,52 +51,6 @@ type execSessionStartedMsg struct {
 }
 
 type execCloseMsg struct{}
-
-// Key bindings for container list actions
-var containerDetailsKey = key.NewBinding(
-	key.WithKeys("d"),
-	key.WithHelp("d", "details"),
-)
-
-var containerRefreshKey = key.NewBinding(
-	key.WithKeys("r"),
-	key.WithHelp("r", "refresh"),
-)
-
-var containerDeleteKey = key.NewBinding(
-	key.WithKeys("D"),
-	key.WithHelp("D", "delete"),
-)
-
-var containerStartStopKey = key.NewBinding(
-	key.WithKeys("s"),
-	key.WithHelp("s", "start/stop"),
-)
-
-var containerRestartKey = key.NewBinding(
-	key.WithKeys("R"),
-	key.WithHelp("R", "restart"),
-)
-
-var logsKey = key.NewBinding(
-	key.WithKeys("l"),
-	key.WithHelp("l", "logs"),
-)
-
-var treeKey = key.NewBinding(
-	key.WithKeys("t"),
-	key.WithHelp("t", "files"),
-)
-
-var execKey = key.NewBinding(
-	key.WithKeys("e"),
-	key.WithHelp("e", "exec"),
-)
-
-// KeyBindings returns the key bindings for the current state
-func (c *ContainerList) KeyBindings() []key.Binding {
-	return []key.Binding{mainNavKey, secondaryNavKey, containerDetailsKey, logsKey, containerStartStopKey, containerRestartKey, containerRefreshKey, containerDeleteKey, treeKey, execKey}
-}
 
 // ContainerItem implements list.Item interface
 type ContainerItem struct {
@@ -201,163 +156,96 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, spinnerCmd)
 	}
 
-	// Handle containers loaded message
-	if loadedMsg, ok := msg.(containersLoadedMsg); ok {
+	switch msg := msg.(type) {
+	case containersLoadedMsg:
 		c.loading = false
-		cmd := c.list.SetItems(loadedMsg.items)
+		cmd := c.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
-	}
-
-	if loadedMsg, ok := msg.(containersTreeLoadedMsg); ok {
+	case containersTreeLoadedMsg:
 		c.loading = false
-		if loadedMsg.error != nil {
+		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: loadedMsg.error.Error(),
+					Message: msg.error.Error(),
 					IsError: true,
 				}
 			}
 		}
-		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(loadedMsg.fileTree.Tree.String()))
+		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(msg.fileTree.Tree.String()))
 		return nil
-	}
-
-	// Handle container action message
-	if actionMsg, ok := msg.(ContainerActionMsg); ok {
-		if actionMsg.Error != nil {
+	case ContainerActionMsg:
+		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error %s container: %s", actionMsg.Action, actionMsg.Error.Error()),
+					Message: fmt.Sprintf("Error %s container: %s", msg.Action, msg.Error.Error()),
 					IsError: true,
 				}
 			}
 		}
 
 		// For delete, remove from list
-		if actionMsg.Action == "deleting" {
-			c.list.RemoveItem(actionMsg.Idx)
+		if msg.Action == "deleting" {
+			c.list.RemoveItem(msg.Idx)
 		}
 
 		// Refresh list after start/stop/restart
-		if actionMsg.Action == "starting" || actionMsg.Action == "stopping" || actionMsg.Action == "restarting" {
+		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" {
 			cmds = append(cmds, c.updateContainersCmd())
 		}
 
 		return tea.Batch(append(cmds, func() tea.Msg {
 			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Container %s %s", shortID(actionMsg.ID), actionMsg.Action),
+				Message: fmt.Sprintf("Container %s %s", shortID(msg.ID), msg.Action),
 				IsError: false,
 			}
 		})...)
-	}
-
-	if startMsg, ok := msg.(execSessionStartedMsg); ok {
-		c.execSession = startMsg.session
+	case execSessionStartedMsg:
+		c.execSession = msg.session
 		return c.readExecOutput()
-	}
-
-	if outputMsg, ok := msg.(execOutputMsg); ok {
-		if outputMsg.err != nil {
+	case execOutputMsg:
+		if msg.err != nil {
 			if c.execSession == nil {
 				return nil // session was closed manually, ignore
 			}
 			c.closeExec()
 			return func() tea.Msg {
-				return message.ShowBannerMsg{Message: fmt.Sprintf("Exec session error. Err: %s", outputMsg.err), IsError: true}
+				return message.ShowBannerMsg{Message: fmt.Sprintf("Exec session error. Err: %s", msg.err), IsError: true}
 			}
 		}
-		c.execOutput += outputMsg.output
+		c.execOutput += msg.output
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.execOutput))
 		c.viewport.GotoBottom()
 		return c.readExecOutput()
-	}
-
-	if _, ok := msg.(execCloseMsg); ok {
+	case execCloseMsg:
 		c.closeExec()
 		c.SetSize(c.width, c.height)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
 		}
-	}
-
-	// Handle focus switching and actions
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	case tea.KeyMsg:
 		// When exec is active, intercept all keys for the text input
 		if c.showExec {
-			switch keyMsg.String() {
-			case "esc":
-				return c.closeExecSessionMsg()
-			case "enter":
-				if c.execSession == nil {
-					return nil
-				}
-				cmd := c.execInput.Value()
-				if cmd == "" {
-					return nil
-				}
-				c.execHistory = append(c.execHistory, cmd)
-				c.execHistoryCurrentIndex = len(c.execHistory) // sentinel: not browsing
-				c.execInput.Reset()
-				_, err := c.execSession.Writer.Write([]byte(cmd + "\n"))
-				if err != nil {
-					c.closeExec()
-					return func() tea.Msg {
-						return message.ShowBannerMsg{Message: "Exec write failed", IsError: true}
-					}
-				}
-				return nil
-			case "up":
-				if len(c.execHistory) == 0 {
-					return nil
-				}
-				if c.execHistoryCurrentIndex > 0 {
-					c.execHistoryCurrentIndex--
-				} else if c.execHistoryCurrentIndex == len(c.execHistory) {
-					// Start browsing from the most recent entry
-					c.execHistoryCurrentIndex = len(c.execHistory) - 1
-				} else {
-					// Already at oldest entry
-					return nil
-				}
-				c.execInput.SetValue(c.execHistory[c.execHistoryCurrentIndex])
-				return nil
-			case "down":
-				if len(c.execHistory) == 0 || c.execHistoryCurrentIndex == len(c.execHistory) {
-					return nil
-				}
-				c.execHistoryCurrentIndex++
-				if c.execHistoryCurrentIndex == len(c.execHistory) {
-					// Past newest entry — clear input
-					c.execInput.Reset()
-				} else {
-					c.execInput.SetValue(c.execHistory[c.execHistoryCurrentIndex])
-				}
-				return nil
-			default:
-				var inputCmd tea.Cmd
-				c.execInput, inputCmd = c.execInput.Update(msg)
-				return inputCmd
-			}
+			return c.handleExecInut(msg)
 		}
 
-		switch keyMsg.String() {
-		case "d":
+		switch {
+		case key.Matches(msg, keys.Keys.ContainerInfo):
 			c.showDetails = !c.showDetails
 			c.showLogs = false
 			c.showFileTree = false
-			c.SetSize(c.width, c.height) // Recalculate layout
+			c.SetSize(c.width, c.height)
 			return nil
-		case "r":
+		case key.Matches(msg, keys.Keys.Refresh):
 			c.loading = true
 			return tea.Batch(c.spinner.Tick, c.updateContainersCmd())
-		case "l":
+		case key.Matches(msg, keys.Keys.ContainerLogs):
 			c.showLogs = !c.showLogs
 			c.showDetails = false
 			c.showFileTree = false
-			c.SetSize(c.width, c.height) // Recalculate layout
+			c.SetSize(c.width, c.height)
 			return nil
-		case "t":
+		case key.Matches(msg, keys.Keys.FileTree):
 			c.showFileTree = !c.showFileTree
 			if c.showFileTree {
 				selected := c.list.SelectedItem()
@@ -368,13 +256,13 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				c.loading = true
 				c.showDetails = false
 				c.showLogs = false
-				c.SetSize(c.width, c.height) // Recalculate layout
+				c.SetSize(c.width, c.height)
 				c.viewport.SetContent("")
 				return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation(container.ID))
 			}
-			c.SetSize(c.width, c.height) // Recalculate layout
+			c.SetSize(c.width, c.height)
 			return nil
-		case "e":
+		case key.Matches(msg, keys.Keys.ContainerExec):
 			selected := c.list.SelectedItem()
 			if selected == nil {
 				return nil
@@ -393,17 +281,17 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			c.execInput.Focus()
 			c.SetSize(c.width, c.height)
 			return tea.Batch(textinput.Blink, c.startExecSession(container.ID))
-		case "D":
+		case key.Matches(msg, keys.Keys.ContainerDelete):
 			return c.deleteContainerCmd()
-		case "s":
+		case key.Matches(msg, keys.Keys.ContainerStartStop):
 			return c.toggleContainerCmd()
-		case "R":
+		case key.Matches(msg, keys.Keys.ContainerRestart):
 			return c.restartContainerCmd()
-		case "up", "down":
+		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			c.list, listCmd = c.list.Update(msg)
 			return listCmd
-		case "j", "k":
+		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
 			var vpCmd tea.Cmd
 			c.viewport, vpCmd = c.viewport.Update(msg)
 			return vpCmd
@@ -461,6 +349,63 @@ func (c *ContainerList) View() string {
 		Render(detailContent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
+}
+
+func (c *ContainerList) handleExecInut(msg tea.KeyMsg) tea.Cmd {
+	switch {
+	case key.Matches(msg, keys.Keys.Esc):
+		return c.closeExecSessionMsg()
+	case key.Matches(msg, keys.Keys.Enter):
+		if c.execSession == nil {
+			return nil
+		}
+		cmd := c.execInput.Value()
+		if cmd == "" {
+			return nil
+		}
+		c.execHistory = append(c.execHistory, cmd)
+		c.execHistoryCurrentIndex = len(c.execHistory) // sentinel: not browsing
+		c.execInput.Reset()
+		_, err := c.execSession.Writer.Write([]byte(cmd + "\n"))
+		if err != nil {
+			c.closeExec()
+			return func() tea.Msg {
+				return message.ShowBannerMsg{Message: "Exec write failed", IsError: true}
+			}
+		}
+		return nil
+	case key.Matches(msg, keys.Keys.Up):
+		if len(c.execHistory) == 0 {
+			return nil
+		}
+		if c.execHistoryCurrentIndex > 0 {
+			c.execHistoryCurrentIndex--
+		} else if c.execHistoryCurrentIndex == len(c.execHistory) {
+			// Start browsing from the most recent entry
+			c.execHistoryCurrentIndex = len(c.execHistory) - 1
+		} else {
+			// Already at oldest entry
+			return nil
+		}
+		c.execInput.SetValue(c.execHistory[c.execHistoryCurrentIndex])
+		return nil
+	case key.Matches(msg, keys.Keys.Down):
+		if len(c.execHistory) == 0 || c.execHistoryCurrentIndex == len(c.execHistory) {
+			return nil
+		}
+		c.execHistoryCurrentIndex++
+		if c.execHistoryCurrentIndex == len(c.execHistory) {
+			// Past newest entry — clear input
+			c.execInput.Reset()
+		} else {
+			c.execInput.SetValue(c.execHistory[c.execHistoryCurrentIndex])
+		}
+		return nil
+	default:
+		var inputCmd tea.Cmd
+		c.execInput, inputCmd = c.execInput.Update(msg)
+		return inputCmd
+	}
 }
 
 func (c *ContainerList) deleteContainerCmd() tea.Cmd {

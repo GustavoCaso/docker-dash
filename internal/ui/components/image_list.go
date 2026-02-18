@@ -7,6 +7,7 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -45,42 +46,6 @@ type ImageRemovedMsg struct {
 var (
 	listStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
 )
-
-// Key bindings for image list actions
-var layersKey = key.NewBinding(
-	key.WithKeys("l"),
-	key.WithHelp("l", "layers"),
-)
-
-var refreshKey = key.NewBinding(
-	key.WithKeys("r"),
-	key.WithHelp("r", "refresh"),
-)
-
-var mainNavKey = key.NewBinding(
-	key.WithKeys("up", "down"),
-	key.WithHelp("up/down", "navigate main panel"),
-)
-
-var secondaryNavKey = key.NewBinding(
-	key.WithKeys("k", "k"),
-	key.WithHelp("j/k", "navigate right panel"),
-)
-
-var deleteKey = key.NewBinding(
-	key.WithKeys("d"),
-	key.WithHelp("d", "delete"),
-)
-
-var runKey = key.NewBinding(
-	key.WithKeys("R"),
-	key.WithHelp("R", "run container"),
-)
-
-// KeyBindings returns the key bindings for the current state
-func (i *ImageList) KeyBindings() []key.Binding {
-	return []key.Binding{mainNavKey, secondaryNavKey, layersKey, refreshKey, deleteKey, runKey}
-}
 
 // ImageItem implements list.Item interface
 type ImageItem struct {
@@ -169,46 +134,42 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, spinnerCmd)
 	}
 
-	// Handle images loaded message
-	if loadedMsg, ok := msg.(imagesLoadedMsg); ok {
+	switch msg := msg.(type) {
+	case imagesLoadedMsg:
 		i.loading = false
-		if loadedMsg.error != nil {
+		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error loading images: %s", loadedMsg.error.Error()),
+					Message: fmt.Sprintf("Error loading images: %s", msg.error.Error()),
 					IsError: true,
 				}
 			}
 		}
-		cmd := i.list.SetItems(loadedMsg.items)
+		cmd := i.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
-	}
-
-	if removeMsg, ok := msg.(ImageRemovedMsg); ok {
-		if removeMsg.Error != nil {
+	case ImageRemovedMsg:
+		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error deleting image: %s", removeMsg.Error.Error()),
+					Message: fmt.Sprintf("Error deleting image: %s", msg.Error.Error()),
 					IsError: true,
 				}
 			}
 		}
-		i.list.RemoveItem(removeMsg.Idx)
+		i.list.RemoveItem(msg.Idx)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Image %s deleted", shortID(removeMsg.ID)),
+				Message: fmt.Sprintf("Image %s deleted", shortID(msg.ID)),
 				IsError: false,
 			}
 		}
-	}
-
-	if containerRunMsg, ok := msg.(containerRunMsg); ok {
+	case containerRunMsg:
 		i.loading = false
-		if containerRunMsg.error != nil {
+		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: containerRunMsg.error.Error(),
+					Message: msg.error.Error(),
 					IsError: true,
 				}
 			}
@@ -216,7 +177,7 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 		banner := func() tea.Msg {
 			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Container %s created", shortID(containerRunMsg.containerID)),
+				Message: fmt.Sprintf("Container %s created", shortID(msg.containerID)),
 				IsError: false,
 			}
 		}
@@ -232,27 +193,25 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		}
 
 		return tea.Batch(banner, refreshComponents)
-	}
 
-	// Handle focus switching and actions
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
-		switch keyMsg.String() {
-		case "l":
+	case tea.KeyMsg:
+		switch {
+		case key.Matches(msg, keys.Keys.ImageLayers):
 			i.showLayers = !i.showLayers
 			i.SetSize(i.width, i.height) // Recalculate layout
 			return nil
-		case "r":
+		case key.Matches(msg, keys.Keys.Refresh):
 			i.loading = true
 			return tea.Batch(i.spinner.Tick, i.updateImagesCmd())
-		case "d":
+		case key.Matches(msg, keys.Keys.Delete):
 			return i.deleteImageCmd()
-		case "R":
+		case key.Matches(msg, keys.Keys.CreateAndRunContainer):
 			return i.createContainerCmdAndRun()
-		case "up", "down":
+		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			i.list, listCmd = i.list.Update(msg)
 			return listCmd
-		case "j", "k":
+		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
 			var vpCmd tea.Cmd
 			i.viewport, vpCmd = i.viewport.Update(msg)
 			return vpCmd
