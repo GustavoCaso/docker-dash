@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -45,20 +44,6 @@ func NewDockerClientFromConfig(cfg config.DockerConfig) (*LocalDockerClient, err
 	switch {
 	case cfg.Host == "":
 		opts = append(opts, client.FromEnv)
-
-	case isSSHHost(cfg.Host) && cfg.IdentityFile != "":
-		keyPath := ExpandTilde(cfg.IdentityFile)
-		user, sshAddr, socketPath, err := parseSSHTarget(cfg.Host)
-		if err != nil {
-			return nil, fmt.Errorf("invalid ssh host %q: %w", cfg.Host, err)
-		}
-		dialer, err := NewSSHDialer(user, sshAddr, keyPath)
-		if err != nil {
-			return nil, err
-		}
-		opts = append(opts, client.WithHost("unix://"+socketPath),
-			client.WithDialContext(dialer))
-
 	case isSSHHost(cfg.Host):
 		helper, err := connhelper.GetConnectionHelper(cfg.Host)
 		if err != nil {
@@ -98,30 +83,6 @@ func NewDockerClientFromConfig(cfg config.DockerConfig) (*LocalDockerClient, err
 // isSSHHost reports whether host is an ssh:// URL.
 func isSSHHost(host string) bool {
 	return strings.HasPrefix(host, "ssh://")
-}
-
-// parseSSHTarget parses an ssh://[user@]host[:port][/socket/path] URL and
-// returns (user, "host:port", socketPath, error). Port defaults to 22 and
-// socketPath defaults to /var/run/docker.sock when not specified.
-func parseSSHTarget(rawURL string) (user, sshAddr, socketPath string, err error) {
-	u, parseErr := url.Parse(rawURL)
-	if parseErr != nil {
-		return "", "", "", parseErr
-	}
-	if u.User != nil {
-		user = u.User.Username()
-	}
-	host := u.Hostname()
-	port := u.Port()
-	if port == "" {
-		port = "22"
-	}
-	sshAddr = host + ":" + port
-	socketPath = u.Path
-	if socketPath == "" {
-		socketPath = "/var/run/docker.sock"
-	}
-	return user, sshAddr, socketPath, nil
 }
 
 func (c *LocalDockerClient) Containers() ContainerService { return c.containers }

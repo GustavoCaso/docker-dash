@@ -38,7 +38,6 @@ func TestLoad_ValidConfig(t *testing.T) {
 	_, err = f.WriteString(`
 [docker]
 host = "ssh://pi@raspberrypi.local"
-identity_file = "~/.ssh/id_rsa"
 `)
 	f.Close()
 	if err != nil {
@@ -51,9 +50,6 @@ identity_file = "~/.ssh/id_rsa"
 	}
 	if cfg.Docker.Host != "ssh://pi@raspberrypi.local" {
 		t.Errorf("Docker.Host = %q, want %q", cfg.Docker.Host, "ssh://pi@raspberrypi.local")
-	}
-	if cfg.Docker.IdentityFile != "~/.ssh/id_rsa" {
-		t.Errorf("Docker.IdentityFile = %q, want %q", cfg.Docker.IdentityFile, "~/.ssh/id_rsa")
 	}
 }
 
@@ -94,9 +90,6 @@ func TestLoad_HostOnly(t *testing.T) {
 	}
 	if cfg.Docker.Host != "tcp://192.168.1.10:2375" {
 		t.Errorf("Docker.Host = %q, want tcp://192.168.1.10:2375", cfg.Docker.Host)
-	}
-	if cfg.Docker.IdentityFile != "" {
-		t.Errorf("Docker.IdentityFile = %q, want empty", cfg.Docker.IdentityFile)
 	}
 }
 

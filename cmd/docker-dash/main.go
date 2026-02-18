@@ -14,6 +14,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: $HOME/.config/docker-dash.toml)")
+	host := flag.String("host", "", "Docker host. Override value from configuration file if exists")
 	flag.Parse()
 
 	// Resolve config file path
@@ -25,8 +26,13 @@ func main() {
 	// Load config; missing file is silently ignored (Load handles it gracefully)
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config %s: %v\n", cfgPath, err)
+		fmt.Fprintf(os.Stderr, "Error loading config %s: %v.\n", cfgPath, err)
 		os.Exit(1)
+	}
+
+	if *host != "" {
+		cfg.Docker.Host = *host
+		fmt.Fprintf(os.Stderr, "Override Docker host configuration with %s\n", *host)
 	}
 
 	// Build Docker client from config

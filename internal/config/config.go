@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -19,10 +20,6 @@ type DockerConfig struct {
 	// Host is the Docker daemon URL. Accepts unix://, tcp://, ssh:// schemes.
 	// If empty, the default local socket / DOCKER_HOST env var is used.
 	Host string `toml:"host"`
-
-	// IdentityFile is the path to an SSH private key for use with ssh:// hosts.
-	// Supports ~ expansion. If empty, the SSH agent is used.
-	IdentityFile string `toml:"identity_file"`
 }
 
 // DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml
@@ -41,6 +38,7 @@ func Load(path string) (*Config, error) {
 	_, err := toml.DecodeFile(path, cfg)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
+			fmt.Fprint(os.Stderr, "Config file not present. Using default values\n")
 			return cfg, nil
 		}
 		return nil, err
