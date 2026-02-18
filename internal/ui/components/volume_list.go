@@ -30,20 +30,20 @@ type volumeTreeLoadedMsg struct {
 	fileTree service.VolumeFileTree
 }
 
-// VolumeRemovedMsg is sent when a volume deletion completes
-type VolumeRemovedMsg struct {
+// volumeRemovedMsg is sent when a volume deletion completes
+type volumeRemovedMsg struct {
 	Name  string
 	Idx   int
 	Error error
 }
 
-// VolumeItem implements list.Item interface
-type VolumeItem struct {
+// volumeItem implements list.Item interface
+type volumeItem struct {
 	volume service.Volume
 }
 
-func (v VolumeItem) Title() string { return v.volume.Name }
-func (v VolumeItem) Description() string {
+func (v volumeItem) Title() string { return v.volume.Name }
+func (v volumeItem) Description() string {
 	var parts []string
 	parts = append(parts, v.volume.Driver)
 	parts = append(parts, formatSize(v.volume.Size))
@@ -55,7 +55,7 @@ func (v VolumeItem) Description() string {
 	}
 	return strings.Join(parts, " ")
 }
-func (v VolumeItem) FilterValue() string { return v.volume.Name }
+func (v volumeItem) FilterValue() string { return v.volume.Name }
 
 // VolumeList wraps bubbles/list for displaying volumes
 type VolumeList struct {
@@ -72,7 +72,7 @@ type VolumeList struct {
 func NewVolumeList(volumes []service.Volume, svc service.VolumeService) *VolumeList {
 	items := make([]list.Item, len(volumes))
 	for i, v := range volumes {
-		items[i] = VolumeItem{volume: v}
+		items[i] = volumeItem{volume: v}
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
@@ -149,7 +149,7 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 		}
 		v.viewport.SetContent(lipgloss.NewStyle().Width(v.viewport.Width).Render(msg.fileTree.Tree.String()))
 		return nil
-	case VolumeRemovedMsg:
+	case volumeRemovedMsg:
 		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -172,7 +172,7 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 			if selected == nil {
 				return nil
 			}
-			vol := selected.(VolumeItem).volume
+			vol := selected.(volumeItem).volume
 			v.showFileTree = !v.showFileTree
 			if v.showFileTree {
 				v.loading = true
@@ -255,7 +255,7 @@ func (v *VolumeList) updateVolumesCmd() tea.Cmd {
 		}
 		items := make([]list.Item, len(volumes))
 		for idx, vol := range volumes {
-			items[idx] = VolumeItem{volume: vol}
+			items[idx] = volumeItem{volume: vol}
 		}
 		return volumesLoadedMsg{items: items}
 	}
@@ -270,7 +270,7 @@ func (v *VolumeList) deleteVolumeCmd() tea.Cmd {
 	}
 
 	item := items[idx]
-	volumeItem, ok := item.(VolumeItem)
+	volumeItem, ok := item.(volumeItem)
 	if !ok {
 		return nil
 	}
@@ -278,6 +278,6 @@ func (v *VolumeList) deleteVolumeCmd() tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		err := svc.Remove(ctx, volumeItem.volume.Name, true)
-		return VolumeRemovedMsg{Name: volumeItem.volume.Name, Idx: idx, Error: err}
+		return volumeRemovedMsg{Name: volumeItem.volume.Name, Idx: idx, Error: err}
 	}
 }

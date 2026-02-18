@@ -32,8 +32,8 @@ type containersTreeLoadedMsg struct {
 	fileTree service.ContainerFileTree
 }
 
-// ContainerActionMsg is sent when a container action completes
-type ContainerActionMsg struct {
+// containerActionMsg is sent when a container action completes
+type containerActionMsg struct {
 	ID     string
 	Action string
 	Idx    int
@@ -52,20 +52,20 @@ type execSessionStartedMsg struct {
 
 type execCloseMsg struct{}
 
-// ContainerItem implements list.Item interface
-type ContainerItem struct {
+// containerItem implements list.Item interface
+type containerItem struct {
 	container service.Container
 }
 
-func (c ContainerItem) ID() string    { return c.container.ID }
-func (c ContainerItem) Title() string { return c.container.Name }
-func (c ContainerItem) Description() string {
+func (c containerItem) ID() string    { return c.container.ID }
+func (c containerItem) Title() string { return c.container.Name }
+func (c containerItem) Description() string {
 	stateIcon := theme.StatusIcon(string(c.container.State))
 	stateStyle := theme.StatusStyle(string(c.container.State))
 	state := stateStyle.Render(stateIcon + " " + string(c.container.State))
 	return state + " " + c.container.Image + " " + shortID(c.ID())
 }
-func (c ContainerItem) FilterValue() string { return c.container.Name }
+func (c containerItem) FilterValue() string { return c.container.Name }
 
 // ContainerList wraps bubbles/list for displaying containers
 type ContainerList struct {
@@ -90,7 +90,7 @@ type ContainerList struct {
 func NewContainerList(containers []service.Container, svc service.ContainerService) *ContainerList {
 	items := make([]list.Item, len(containers))
 	for i, c := range containers {
-		items[i] = ContainerItem{container: c}
+		items[i] = containerItem{container: c}
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
@@ -174,7 +174,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		}
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(msg.fileTree.Tree.String()))
 		return nil
-	case ContainerActionMsg:
+	case containerActionMsg:
 		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -252,7 +252,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				if selected == nil {
 					return nil
 				}
-				container := selected.(ContainerItem).container
+				container := selected.(containerItem).container
 				c.loading = true
 				c.showDetails = false
 				c.showLogs = false
@@ -267,7 +267,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			if selected == nil {
 				return nil
 			}
-			container := selected.(ContainerItem).container
+			container := selected.(containerItem).container
 			if container.State != service.StateRunning {
 				return func() tea.Msg {
 					return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
@@ -416,7 +416,7 @@ func (c *ContainerList) deleteContainerCmd() tea.Cmd {
 		return nil
 	}
 
-	containerItem, ok := items[idx].(ContainerItem)
+	containerItem, ok := items[idx].(containerItem)
 	if !ok {
 		return nil
 	}
@@ -424,7 +424,7 @@ func (c *ContainerList) deleteContainerCmd() tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		err := svc.Remove(ctx, containerItem.ID(), true)
-		return ContainerActionMsg{ID: containerItem.ID(), Action: "deleting", Idx: idx, Error: err}
+		return containerActionMsg{ID: containerItem.ID(), Action: "deleting", Idx: idx, Error: err}
 	}
 }
 
@@ -436,7 +436,7 @@ func (c *ContainerList) toggleContainerCmd() tea.Cmd {
 		return nil
 	}
 
-	containerItem, ok := items[idx].(ContainerItem)
+	containerItem, ok := items[idx].(containerItem)
 	if !ok {
 		return nil
 	}
@@ -453,7 +453,7 @@ func (c *ContainerList) toggleContainerCmd() tea.Cmd {
 			action = "starting"
 			err = svc.Start(ctx, container.ID)
 		}
-		return ContainerActionMsg{ID: container.ID, Action: action, Idx: idx, Error: err}
+		return containerActionMsg{ID: container.ID, Action: action, Idx: idx, Error: err}
 	}
 }
 
@@ -465,7 +465,7 @@ func (c *ContainerList) restartContainerCmd() tea.Cmd {
 		return nil
 	}
 
-	containerItem, ok := items[idx].(ContainerItem)
+	containerItem, ok := items[idx].(containerItem)
 	if !ok {
 		return nil
 	}
@@ -473,7 +473,7 @@ func (c *ContainerList) restartContainerCmd() tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		err := svc.Restart(ctx, containerItem.ID())
-		return ContainerActionMsg{ID: containerItem.ID(), Action: "restarting", Idx: idx, Error: err}
+		return containerActionMsg{ID: containerItem.ID(), Action: "restarting", Idx: idx, Error: err}
 	}
 }
 
@@ -487,7 +487,7 @@ func (c *ContainerList) updateContainersCmd() tea.Cmd {
 		}
 		items := make([]list.Item, len(containers))
 		for idx, container := range containers {
-			items[idx] = ContainerItem{container: container}
+			items[idx] = containerItem{container: container}
 		}
 		return containersLoadedMsg{items: items}
 	}
@@ -512,7 +512,7 @@ func (c *ContainerList) updateDetails() {
 		return
 	}
 
-	container := selected.(ContainerItem).container
+	container := selected.(containerItem).container
 
 	if c.showFileTree {
 		return
@@ -573,7 +573,7 @@ func (c *ContainerList) logsDetails() {
 		return
 	}
 
-	container := selected.(ContainerItem).container
+	container := selected.(containerItem).container
 	ctx := context.Background()
 	reader, err := c.service.Logs(ctx, container.ID, service.LogOptions{})
 	if err != nil {

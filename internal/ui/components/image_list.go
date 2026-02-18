@@ -36,8 +36,8 @@ type containerRunMsg struct {
 	error       error
 }
 
-// ImageRemovedMsg is sent when an image deletion completes
-type ImageRemovedMsg struct {
+// imageRemovedMsg is sent when an image deletion completes
+type imageRemovedMsg struct {
 	ID    string
 	Idx   int
 	Error error
@@ -47,17 +47,17 @@ var (
 	listStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
 )
 
-// ImageItem implements list.Item interface
-type ImageItem struct {
+// imageItem implements list.Item interface
+type imageItem struct {
 	image service.Image
 }
 
-func (i ImageItem) ID() string    { return i.image.ID }
-func (i ImageItem) Title() string { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
-func (i ImageItem) Description() string {
+func (i imageItem) ID() string    { return i.image.ID }
+func (i imageItem) Title() string { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
+func (i imageItem) Description() string {
 	return formatSize(i.image.Size) + formatContainerUse(i.image)
 }
-func (i ImageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
+func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
 // ImageList wraps bubbles/list
 type ImageList struct {
@@ -75,7 +75,7 @@ type ImageList struct {
 func NewImageList(images []service.Image, client service.DockerClient) *ImageList {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
-		items[i] = ImageItem{image: img}
+		items[i] = imageItem{image: img}
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
@@ -148,7 +148,7 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		cmd := i.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
-	case ImageRemovedMsg:
+	case imageRemovedMsg:
 		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -266,7 +266,7 @@ func (i *ImageList) deleteImageCmd() tea.Cmd {
 		return nil
 	}
 
-	dockerImage, ok := items[idx].(ImageItem)
+	dockerImage, ok := items[idx].(imageItem)
 	if !ok {
 		return nil
 	}
@@ -275,7 +275,7 @@ func (i *ImageList) deleteImageCmd() tea.Cmd {
 		ctx := context.Background()
 		err := svc.Remove(ctx, dockerImage.ID(), true)
 
-		return ImageRemovedMsg{ID: dockerImage.ID(), Idx: idx, Error: err}
+		return imageRemovedMsg{ID: dockerImage.ID(), Idx: idx, Error: err}
 	}
 }
 
@@ -289,7 +289,7 @@ func (i *ImageList) updateImagesCmd() tea.Cmd {
 		}
 		items := make([]list.Item, len(images))
 		for idx, img := range images {
-			items[idx] = ImageItem{image: img}
+			items[idx] = imageItem{image: img}
 		}
 		return imagesLoadedMsg{items: items}
 	}
@@ -303,7 +303,7 @@ func (i *ImageList) createContainerCmdAndRun() tea.Cmd {
 		return nil
 	}
 
-	dockerImage, ok := items[idx].(ImageItem)
+	dockerImage, ok := items[idx].(imageItem)
 	if !ok {
 		return nil
 	}
@@ -324,7 +324,7 @@ func (i *ImageList) updateDetails() {
 		return
 	}
 
-	img := selected.(ImageItem).image
+	img := selected.(imageItem).image
 
 	var content strings.Builder
 
