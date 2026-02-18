@@ -1,4 +1,4 @@
-package main
+package ui
 
 import (
 	"strings"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestFullOutput(t *testing.T) {
-	m := initialModel(service.NewMockClient())
+	m := InitialModel(service.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Docker")
 	tm.Send(tea.KeyMsg{
@@ -22,7 +22,7 @@ func TestFullOutput(t *testing.T) {
 }
 
 func TestExecPanel(t *testing.T) {
-	m := initialModel(service.NewMockClient())
+	m := InitialModel(service.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -53,7 +53,7 @@ func TestExecPanel(t *testing.T) {
 }
 
 func TestVolumesView(t *testing.T) {
-	m := initialModel(service.NewMockClient())
+	m := InitialModel(service.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render

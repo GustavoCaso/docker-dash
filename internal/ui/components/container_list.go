@@ -153,12 +153,12 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	ti.Prompt = "$ "
 
 	cl := &ContainerList{
-		list:         l,
-		viewport:     vp,
-		service:      svc,
-		spinner:      sp,
-		execInput:    ti,
-		execHistory:  []string{},
+		list:        l,
+		viewport:    vp,
+		service:     svc,
+		spinner:     sp,
+		execInput:   ti,
+		execHistory: []string{},
 	}
 
 	return cl
