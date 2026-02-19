@@ -1,7 +1,6 @@
 package keys
 
 import (
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 )
 
@@ -17,6 +16,7 @@ type KeyMap struct {
 	SwitchTab  key.Binding
 	Delete     key.Binding
 	FileTree   key.Binding
+	Filter     key.Binding
 
 	ImageLayers           key.Binding
 	CreateAndRunContainer key.Binding
@@ -77,6 +77,10 @@ var Keys = &KeyMap{
 		key.WithKeys("t"),
 		key.WithHelp("t", "show files"),
 	),
+	Filter: key.NewBinding(
+		key.WithKeys("/"),
+		key.WithHelp("/", "filter"),
+	),
 	ImageLayers: key.NewBinding(
 		key.WithKeys("l"),
 		key.WithHelp("l", "show layer"),
@@ -121,15 +125,29 @@ var Keys = &KeyMap{
 
 // ViewKeyMap implements help.KeyMap for list views
 type ViewKeyMap struct {
-	short []key.Binding
-	full  [][]key.Binding
+	short             []key.Binding
+	full              [][]key.Binding
+	contextualKeys    []key.Binding
+	contextualEnabled bool
 }
 
-func (v ViewKeyMap) ShortHelp() []key.Binding  { return v.short }
-func (v ViewKeyMap) FullHelp() [][]key.Binding { return v.full }
+func (v *ViewKeyMap) ShortHelp() []key.Binding {
+	if v.contextualEnabled {
+		return v.contextualKeys
+	}
+	return v.short
+}
+func (v *ViewKeyMap) FullHelp() [][]key.Binding { return v.full }
+func (v *ViewKeyMap) ToggleContextual(bindings []key.Binding) {
+	v.contextualKeys = bindings
+	v.contextualEnabled = true
+}
+func (v *ViewKeyMap) DisableContextual() {
+	v.contextualEnabled = false
+}
 
-func (k KeyMap) SidebarKeyMap() help.KeyMap {
-	return ViewKeyMap{
+func (k KeyMap) SidebarKeyMap() *ViewKeyMap {
+	return &ViewKeyMap{
 		short: []key.Binding{k.Up, k.Down, k.SwitchTab, k.Help, k.Quit},
 		full: [][]key.Binding{
 			{k.Up, k.Down, k.SwitchTab, k.Help},
@@ -138,8 +156,8 @@ func (k KeyMap) SidebarKeyMap() help.KeyMap {
 	}
 }
 
-func (k KeyMap) ImageKeyMap() help.KeyMap {
-	return ViewKeyMap{
+func (k KeyMap) ImageKeyMap() *ViewKeyMap {
+	return &ViewKeyMap{
 		short: []key.Binding{
 			k.Up, k.Down, k.Delete, k.ImageLayers, k.Quit,
 		},
@@ -151,8 +169,8 @@ func (k KeyMap) ImageKeyMap() help.KeyMap {
 	}
 }
 
-func (k KeyMap) ContainerKeyMap() help.KeyMap {
-	return ViewKeyMap{
+func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
+	return &ViewKeyMap{
 		short: []key.Binding{
 			k.Up, k.Down, k.ContainerStartStop, k.ContainerLogs, k.Help, k.Quit,
 		},
@@ -165,8 +183,8 @@ func (k KeyMap) ContainerKeyMap() help.KeyMap {
 	}
 }
 
-func (k KeyMap) VolumeKeyMap() help.KeyMap {
-	return ViewKeyMap{
+func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
+	return &ViewKeyMap{
 		short: []key.Binding{
 			k.Up, k.Down, k.Delete, k.FileTree, k.Help, k.Quit,
 		},

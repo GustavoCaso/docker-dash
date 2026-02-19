@@ -280,7 +280,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			c.execOutput = ""
 			c.execInput.Focus()
 			c.SetSize(c.width, c.height)
-			return tea.Batch(textinput.Blink, c.startExecSession(container.ID))
+			return tea.Batch(textinput.Blink, c.startExecSession(container.ID), c.extendExecHelpCommand())
 		case key.Matches(msg, keys.Keys.ContainerDelete):
 			return c.deleteContainerCmd()
 		case key.Matches(msg, keys.Keys.ContainerStartStop):
@@ -354,7 +354,7 @@ func (c *ContainerList) View() string {
 func (c *ContainerList) handleExecInut(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.Keys.Esc):
-		return c.closeExecSessionMsg()
+		return tea.Batch(c.closeExecSessionMsg(), func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
 	case key.Matches(msg, keys.Keys.Enter):
 		if c.execSession == nil {
 			return nil
@@ -599,6 +599,29 @@ func (c *ContainerList) startExecSession(containerID string) tea.Cmd {
 			return execOutputMsg{err: err}
 		}
 		return execSessionStartedMsg{session: session}
+	}
+}
+
+func (c *ContainerList) extendExecHelpCommand() tea.Cmd {
+	return func() tea.Msg {
+		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			key.NewBinding(
+				key.WithKeys("esc"),
+				key.WithHelp("esc", "exit"),
+			),
+			key.NewBinding(
+				key.WithKeys("enter"),
+				key.WithHelp("enter", "send command"),
+			),
+			key.NewBinding(
+				key.WithKeys("up"),
+				key.WithHelp("↑", "history up"),
+			),
+			key.NewBinding(
+				key.WithKeys("down"),
+				key.WithHelp("↓", "history down"),
+			),
+		}}
 	}
 }
 

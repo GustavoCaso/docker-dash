@@ -1,6 +1,9 @@
 package message
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 // ShowBannerMsg is sent by components to display a banner notification
 type ShowBannerMsg struct {
@@ -15,4 +18,13 @@ type ShowBannerMsg struct {
 type BubbleUpMsg struct {
 	KeyMsg     tea.KeyMsg
 	OnlyActive bool
+}
+
+// AddContextualKeyBindingsMsg is sent by components extend the status component with extra help info
+type AddContextualKeyBindingsMsg struct {
+	Bindings []key.Binding
+}
+
+// ClearContextualKeyBindingsMsg is sent by components to extra help info
+type ClearContextualKeyBindingsMsg struct {
 }

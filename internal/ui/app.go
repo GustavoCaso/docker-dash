@@ -9,7 +9,6 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -52,6 +51,11 @@ type model struct {
 	volumeList    *components.VolumeList
 	statusBar     *components.StatusBar
 	keys          *keys.KeyMap
+	imagesKeys    *keys.ViewKeyMap
+	containerKeys *keys.ViewKeyMap
+	volumeKeys    *keys.ViewKeyMap
+	activeKeys    *keys.ViewKeyMap
+	sidebarKeys   *keys.ViewKeyMap
 	focus         focus
 	width         int
 	height        int
@@ -74,9 +78,13 @@ func InitialModel(client service.DockerClient) tea.Model {
 		}
 	}
 
-	return model{
+	return &model{
 		client:        client,
 		keys:          keys.Keys,
+		sidebarKeys:   keys.Keys.SidebarKeyMap(),
+		imagesKeys:    keys.Keys.ImageKeyMap(),
+		containerKeys: keys.Keys.ContainerKeyMap(),
+		volumeKeys:    keys.Keys.VolumeKeyMap(),
 		sidebar:       components.NewSidebar(),
 		containerList: components.NewContainerList(containers, client.Containers()),
 		imageList:     components.NewImageList(images, client),
@@ -87,7 +95,7 @@ func InitialModel(client service.DockerClient) tea.Model {
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m *model) Init() tea.Cmd {
 	if m.initErr != "" {
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: m.initErr, IsError: true}
@@ -96,7 +104,7 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -139,6 +147,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bannerKind = bannerNone
 		return m, nil
 
+	case message.AddContextualKeyBindingsMsg:
+		m.activeKeys.ToggleContextual(msg.Bindings)
+		return m, nil
+	case message.ClearContextualKeyBindingsMsg:
+		m.activeKeys.DisableContextual()
+		return m, nil
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
@@ -192,7 +206,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m.forwardMessageToAll(msg)
 }
 
-func (m model) View() string {
+func (m *model) View() string {
 	if m.width == 0 {
 		return "Loading..."
 	}
@@ -202,25 +216,27 @@ func (m model) View() string {
 
 	// Get the active list view and key bindings based on the active view
 	var listView string
-	var listKeyMap help.KeyMap
+	var listKeyMap *keys.ViewKeyMap
 
 	switch m.sidebar.ActiveView() {
 	case components.ViewContainers:
 		listView = m.containerList.View()
-		listKeyMap = m.keys.ContainerKeyMap()
+		listKeyMap = m.containerKeys
 	case components.ViewImages:
 		listView = m.imageList.View()
-		listKeyMap = m.keys.ImageKeyMap()
+		listKeyMap = m.imagesKeys
 	case components.ViewVolumes:
 		listView = m.volumeList.View()
-		listKeyMap = m.keys.VolumeKeyMap()
+		listKeyMap = m.volumeKeys
 	}
 
 	// Set status bar bindings based on focused component
 	if m.focus == focusList {
+		m.activeKeys = listKeyMap
 		m.statusBar.SetKeyMap(listKeyMap)
 	} else {
-		m.statusBar.SetKeyMap(m.keys.SidebarKeyMap())
+		m.activeKeys = m.sidebarKeys
+		m.statusBar.SetKeyMap(m.sidebarKeys)
 	}
 
 	sidebar := m.sidebar.View()
@@ -242,7 +258,7 @@ func (m model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())
 }
 
-func (m model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch m.sidebar.ActiveView() {
@@ -257,7 +273,7 @@ func (m model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := []tea.Cmd{
 		m.containerList.Update(msg),
 		m.imageList.Update(msg),
