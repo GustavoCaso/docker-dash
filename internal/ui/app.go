@@ -10,6 +10,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -139,10 +140,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "ctrl+c":
+		switch {
+		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
-		case "tab", "shift+tab":
+		case key.Matches(msg, m.keys.SwitchTab):
 			// Toggle focus
 			if m.focus == focusSidebar {
 				m.focus = focusList
@@ -150,20 +151,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = focusSidebar
 			}
 			return m, nil
-		case "up":
+		case key.Matches(msg, m.keys.Up):
 			// Navigate sidebar when focused
 			if m.focus == focusSidebar {
 				m.sidebar.MoveUp()
 				return m, nil
 			}
-		case "down":
+		case key.Matches(msg, m.keys.Down):
 			// Navigate sidebar when focused
 			if m.focus == focusSidebar {
 				m.sidebar.MoveDown()
 				return m, nil
 			}
-		case "?":
+		case key.Matches(msg, m.keys.Refresh):
+			return m.forwardMessageToActive(msg)
+		case key.Matches(msg, m.keys.RefreshAll):
+			return m.forwardMessageToAll(tea.KeyMsg{
+				Type:  tea.KeyRunes,
+				Runes: []rune{'r'},
+			})
+		case key.Matches(msg, m.keys.Help):
 			m.statusBar.ToggleFullView()
+			// We need to force updating the height of all the components
 			return m, func() tea.Msg {
 				return tea.WindowSizeMsg{
 					Width:  m.width,
@@ -235,16 +244,16 @@ func (m model) View() string {
 
 func (m model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	if m.focus == focusList {
-		switch m.sidebar.ActiveView() {
-		case components.ViewContainers:
-			cmd = m.containerList.Update(msg)
-		case components.ViewImages:
-			cmd = m.imageList.Update(msg)
-		case components.ViewVolumes:
-			cmd = m.volumeList.Update(msg)
-		}
+
+	switch m.sidebar.ActiveView() {
+	case components.ViewContainers:
+		cmd = m.containerList.Update(msg)
+	case components.ViewImages:
+		cmd = m.imageList.Update(msg)
+	case components.ViewVolumes:
+		cmd = m.volumeList.Update(msg)
 	}
+
 	return m, cmd
 }
 

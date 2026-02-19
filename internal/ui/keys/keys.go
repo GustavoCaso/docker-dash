@@ -82,8 +82,8 @@ var Keys = &KeyMap{
 		key.WithHelp("l", "show layer"),
 	),
 	CreateAndRunContainer: key.NewBinding(
-		key.WithKeys("R"),
-		key.WithHelp("R", "run container"),
+		key.WithKeys("c"),
+		key.WithHelp("c", "create and run container"),
 	),
 	ContainerInfo: key.NewBinding(
 		key.WithKeys("d"),
@@ -132,8 +132,8 @@ func (k KeyMap) SidebarKeyMap() help.KeyMap {
 	return ViewKeyMap{
 		short: []key.Binding{k.Up, k.Down, k.SwitchTab, k.Help, k.Quit},
 		full: [][]key.Binding{
-			{k.Up, k.Down, k.SwitchTab, k.Help, k.Quit},
-			{k.Refresh, k.RefreshAll},
+			{k.Up, k.Down, k.SwitchTab, k.Help},
+			{k.Refresh, k.RefreshAll, k.Quit},
 		},
 	}
 }
@@ -141,12 +141,12 @@ func (k KeyMap) SidebarKeyMap() help.KeyMap {
 func (k KeyMap) ImageKeyMap() help.KeyMap {
 	return ViewKeyMap{
 		short: []key.Binding{
-			k.Up, k.Down, k.Delete, k.ImageLayers, k.Help, k.Quit,
+			k.Up, k.Down, k.Delete, k.ImageLayers, k.Quit,
 		},
 		full: [][]key.Binding{
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.ImageLayers, k.CreateAndRunContainer},
-			{k.SwitchTab, k.Refresh, k.RefreshAll, k.Help, k.Quit},
+			{k.SwitchTab, k.Help, k.Quit},
 		},
 	}
 }
@@ -160,7 +160,7 @@ func (k KeyMap) ContainerKeyMap() help.KeyMap {
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.ContainerDelete, k.ContainerInfo, k.ContainerLogs, k.ContainerStartStop},
 			{k.ContainerRestart, k.ContainerExec, k.FileTree},
-			{k.SwitchTab, k.Refresh, k.RefreshAll, k.Help, k.Quit},
+			{k.SwitchTab, k.Help, k.Quit},
 		},
 	}
 }
@@ -173,7 +173,7 @@ func (k KeyMap) VolumeKeyMap() help.KeyMap {
 		full: [][]key.Binding{
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.FileTree},
-			{k.SwitchTab, k.Refresh, k.RefreshAll, k.Help, k.Quit},
+			{k.SwitchTab, k.Help, k.Quit},
 		},
 	}
 }
