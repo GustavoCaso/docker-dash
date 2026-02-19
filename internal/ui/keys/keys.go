@@ -1,6 +1,9 @@
 package keys
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+)
 
 type KeyMap struct {
 	Up         key.Binding
@@ -74,7 +77,6 @@ var Keys = &KeyMap{
 		key.WithKeys("t"),
 		key.WithHelp("t", "show files"),
 	),
-
 	ImageLayers: key.NewBinding(
 		key.WithKeys("l"),
 		key.WithHelp("l", "show layer"),
@@ -83,7 +85,6 @@ var Keys = &KeyMap{
 		key.WithKeys("R"),
 		key.WithHelp("R", "run container"),
 	),
-
 	ContainerInfo: key.NewBinding(
 		key.WithKeys("d"),
 		key.WithHelp("d", "info"),
@@ -101,14 +102,13 @@ var Keys = &KeyMap{
 		key.WithHelp("s", "start/stop container"),
 	),
 	ContainerRestart: key.NewBinding(
-		key.WithKeys("R"),
-		key.WithHelp("R", "restart container"),
+		key.WithKeys("ctrl+R"),
+		key.WithHelp("ctrl+R", "restart container"),
 	),
 	ContainerExec: key.NewBinding(
 		key.WithKeys("e"),
 		key.WithHelp("e", "exec into container"),
 	),
-
 	Help: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "help"),
@@ -119,51 +119,61 @@ var Keys = &KeyMap{
 	),
 }
 
-func (k KeyMap) SidebadrBindings() []key.Binding {
-	return []key.Binding{
-		k.Up,
-		k.Down,
-		k.Refresh,
-		k.RefreshAll,
-		k.SwitchTab,
+// ViewKeyMap implements help.KeyMap for list views
+type ViewKeyMap struct {
+	short []key.Binding
+	full  [][]key.Binding
+}
+
+func (v ViewKeyMap) ShortHelp() []key.Binding  { return v.short }
+func (v ViewKeyMap) FullHelp() [][]key.Binding { return v.full }
+
+func (k KeyMap) SidebarKeyMap() help.KeyMap {
+	return ViewKeyMap{
+		short: []key.Binding{k.Up, k.Down, k.SwitchTab, k.Help, k.Quit},
+		full: [][]key.Binding{
+			{k.Up, k.Down, k.SwitchTab, k.Help, k.Quit},
+			{k.Refresh, k.RefreshAll},
+		},
 	}
 }
 
-func (k KeyMap) ImageBindings() []key.Binding {
-	return []key.Binding{
-		k.Up,
-		k.Down,
-		k.ScrollUp,
-		k.ScrollDown,
-		k.Delete,
-		k.ImageLayers,
-		k.CreateAndRunContainer,
+func (k KeyMap) ImageKeyMap() help.KeyMap {
+	return ViewKeyMap{
+		short: []key.Binding{
+			k.Up, k.Down, k.Delete, k.ImageLayers, k.Help, k.Quit,
+		},
+		full: [][]key.Binding{
+			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Delete, k.ImageLayers, k.CreateAndRunContainer},
+			{k.SwitchTab, k.Refresh, k.RefreshAll, k.Help, k.Quit},
+		},
 	}
 }
 
-func (k KeyMap) ContainerBindings() []key.Binding {
-	return []key.Binding{
-		k.Up,
-		k.Down,
-		k.ScrollUp,
-		k.ScrollDown,
-		k.ContainerDelete,
-		k.ContainerInfo,
-		k.ContainerLogs,
-		k.ContainerStartStop,
-		k.ContainerRestart,
-		k.ContainerExec,
-		k.FileTree,
+func (k KeyMap) ContainerKeyMap() help.KeyMap {
+	return ViewKeyMap{
+		short: []key.Binding{
+			k.Up, k.Down, k.ContainerStartStop, k.ContainerLogs, k.Help, k.Quit,
+		},
+		full: [][]key.Binding{
+			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.ContainerDelete, k.ContainerInfo, k.ContainerLogs, k.ContainerStartStop},
+			{k.ContainerRestart, k.ContainerExec, k.FileTree},
+			{k.SwitchTab, k.Refresh, k.RefreshAll, k.Help, k.Quit},
+		},
 	}
 }
 
-func (k KeyMap) VolumeBindings() []key.Binding {
-	return []key.Binding{
-		k.Up,
-		k.Down,
-		k.ScrollUp,
-		k.ScrollDown,
-		k.Delete,
-		k.FileTree,
+func (k KeyMap) VolumeKeyMap() help.KeyMap {
+	return ViewKeyMap{
+		short: []key.Binding{
+			k.Up, k.Down, k.Delete, k.FileTree, k.Help, k.Quit,
+		},
+		full: [][]key.Binding{
+			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Delete, k.FileTree},
+			{k.SwitchTab, k.Refresh, k.RefreshAll, k.Help, k.Quit},
+		},
 	}
 }

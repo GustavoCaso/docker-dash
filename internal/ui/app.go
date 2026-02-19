@@ -9,7 +9,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
-	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -102,7 +102,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Reserve space for status bar
-		statusBarHeight := lipgloss.Height(m.statusBar.View())
+		statusBarHeight := 1
+		if m.statusBar.IsFullView() {
+			statusBarHeight = lipgloss.Height(m.statusBar.View())
+		}
 		contentHeight := msg.Height - statusBarHeight
 
 		sidebarWidth := 24
@@ -113,7 +116,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.imageList.SetSize(listWidth, contentHeight)
 		m.volumeList.SetSize(listWidth, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
-
 	case message.ShowBannerMsg:
 		m.bannerMsg = msg.Message
 		if msg.IsError {
@@ -160,6 +162,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.sidebar.MoveDown()
 				return m, nil
 			}
+		case "?":
+			m.statusBar.ToggleFullView()
+			return m, func() tea.Msg {
+				return tea.WindowSizeMsg{
+					Width:  m.width,
+					Height: m.height,
+				}
+			}
 		}
 	}
 
@@ -183,25 +193,25 @@ func (m model) View() string {
 
 	// Get the active list view and key bindings based on the active view
 	var listView string
-	var listBindings []key.Binding
+	var listKeyMap help.KeyMap
 
 	switch m.sidebar.ActiveView() {
 	case components.ViewContainers:
 		listView = m.containerList.View()
-		listBindings = m.keys.ContainerBindings()
+		listKeyMap = m.keys.ContainerKeyMap()
 	case components.ViewImages:
 		listView = m.imageList.View()
-		listBindings = m.keys.ImageBindings()
+		listKeyMap = m.keys.ImageKeyMap()
 	case components.ViewVolumes:
 		listView = m.volumeList.View()
-		listBindings = m.keys.VolumeBindings()
+		listKeyMap = m.keys.VolumeKeyMap()
 	}
 
 	// Set status bar bindings based on focused component
 	if m.focus == focusList {
-		m.statusBar.SetBindings(listBindings)
+		m.statusBar.SetKeyMap(listKeyMap)
 	} else {
-		m.statusBar.SetBindings(m.keys.SidebadrBindings())
+		m.statusBar.SetKeyMap(m.keys.SidebarKeyMap())
 	}
 
 	sidebar := m.sidebar.View()

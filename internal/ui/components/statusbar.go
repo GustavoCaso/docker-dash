@@ -3,15 +3,14 @@ package components
 import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
 )
 
 // StatusBar renders contextual help at the bottom of the screen
 type StatusBar struct {
-	help     help.Model
-	bindings []key.Binding
-	width    int
-	height   int
+	help   help.Model
+	keyMap help.KeyMap
+	width  int
+	height int
 }
 
 // NewStatusBar creates a new status bar
@@ -27,14 +26,22 @@ func (s *StatusBar) SetSize(width, height int) {
 	s.height = height
 }
 
-// SetBindings sets the key bindings to display
-func (s *StatusBar) SetBindings(bindings []key.Binding) {
-	s.bindings = bindings
+// SetKeyMap sets the keyMap to display
+func (s *StatusBar) SetKeyMap(keyMap help.KeyMap) {
+	s.keyMap = keyMap
+}
+
+func (s *StatusBar) ToggleFullView() {
+	s.help.ShowAll = !s.help.ShowAll
+}
+
+func (s *StatusBar) IsFullView() bool {
+	return s.help.ShowAll
 }
 
 // View renders the status bar
 func (s *StatusBar) View() string {
-	helpContent := s.help.ShortHelpView(s.bindings)
+	helpContent := s.help.View(s.keyMap)
 
 	return theme.HelpStyle.Render(helpContent)
 }
