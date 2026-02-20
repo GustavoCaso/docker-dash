@@ -68,6 +68,7 @@ type ImageList struct {
 	width, height    int
 	showLayers       bool
 	loading          bool
+	isFilter         bool
 	spinner          spinner.Model
 }
 
@@ -195,6 +196,19 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(banner, refreshComponents)
 
 	case tea.KeyMsg:
+		if i.isFilter {
+			cmds := []tea.Cmd{}
+			var listCmd tea.Cmd
+			i.list, listCmd = i.list.Update(msg)
+			cmds = append(cmds, listCmd)
+
+			if key.Matches(msg, keys.Keys.Esc) {
+				i.isFilter = !i.isFilter
+				cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+			}
+			return tea.Batch(cmds...)
+		}
+
 		switch {
 		case key.Matches(msg, keys.Keys.ImageLayers):
 			i.showLayers = !i.showLayers
@@ -215,6 +229,11 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 			var vpCmd tea.Cmd
 			i.viewport, vpCmd = i.viewport.Update(msg)
 			return vpCmd
+		case key.Matches(msg, keys.Keys.Filter):
+			i.isFilter = !i.isFilter
+			var listCmd tea.Cmd
+			i.list, listCmd = i.list.Update(msg)
+			return tea.Batch(listCmd, i.extendFilterHelpCommand())
 		}
 	}
 
@@ -256,6 +275,17 @@ func (i *ImageList) View() string {
 		Render(i.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
+}
+
+func (i *ImageList) extendFilterHelpCommand() tea.Cmd {
+	return func() tea.Msg {
+		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			key.NewBinding(
+				key.WithKeys("esc"),
+				key.WithHelp("esc", "exit"),
+			),
+		}}
+	}
 }
 
 func (i *ImageList) deleteImageCmd() tea.Cmd {

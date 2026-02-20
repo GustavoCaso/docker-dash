@@ -70,6 +70,7 @@ func (c containerItem) FilterValue() string { return c.container.Name }
 // ContainerList wraps bubbles/list for displaying containers
 type ContainerList struct {
 	list                    list.Model
+	isFilter                bool
 	viewport                viewport.Model
 	service                 service.ContainerService
 	width, height           int
@@ -229,6 +230,19 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			return c.handleExecInut(msg)
 		}
 
+		if c.isFilter {
+			cmds := []tea.Cmd{}
+			var listCmd tea.Cmd
+			c.list, listCmd = c.list.Update(msg)
+			cmds = append(cmds, listCmd)
+
+			if key.Matches(msg, keys.Keys.Esc) {
+				c.isFilter = !c.isFilter
+				cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+			}
+			return tea.Batch(cmds...)
+		}
+
 		switch {
 		case key.Matches(msg, keys.Keys.ContainerInfo):
 			c.showDetails = !c.showDetails
@@ -295,6 +309,11 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			var vpCmd tea.Cmd
 			c.viewport, vpCmd = c.viewport.Update(msg)
 			return vpCmd
+		case key.Matches(msg, keys.Keys.Filter):
+			c.isFilter = !c.isFilter
+			var listCmd tea.Cmd
+			c.list, listCmd = c.list.Update(msg)
+			return tea.Batch(listCmd, c.extendFilterHelpCommand())
 		}
 	}
 
@@ -620,6 +639,17 @@ func (c *ContainerList) extendExecHelpCommand() tea.Cmd {
 			key.NewBinding(
 				key.WithKeys("down"),
 				key.WithHelp("↓", "history down"),
+			),
+		}}
+	}
+}
+
+func (c *ContainerList) extendFilterHelpCommand() tea.Cmd {
+	return func() tea.Msg {
+		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			key.NewBinding(
+				key.WithKeys("esc"),
+				key.WithHelp("esc", "exit"),
 			),
 		}}
 	}

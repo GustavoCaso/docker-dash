@@ -60,6 +60,7 @@ func (v volumeItem) FilterValue() string { return v.volume.Name }
 // VolumeList wraps bubbles/list for displaying volumes
 type VolumeList struct {
 	list          list.Model
+	isFilter      bool
 	viewport      viewport.Model
 	volumeService service.VolumeService
 	width, height int
@@ -166,6 +167,19 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 			}
 		}
 	case tea.KeyMsg:
+		if v.isFilter {
+			cmds := []tea.Cmd{}
+			var listCmd tea.Cmd
+			v.list, listCmd = v.list.Update(msg)
+			cmds = append(cmds, listCmd)
+
+			if key.Matches(msg, keys.Keys.Esc) {
+				v.isFilter = !v.isFilter
+				cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+			}
+			return tea.Batch(cmds...)
+		}
+
 		switch {
 		case key.Matches(msg, keys.Keys.FileTree):
 			selected := v.list.SelectedItem()
@@ -195,6 +209,11 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 			var vpCmd tea.Cmd
 			v.viewport, vpCmd = v.viewport.Update(msg)
 			return vpCmd
+		case key.Matches(msg, keys.Keys.Filter):
+			v.isFilter = !v.isFilter
+			var listCmd tea.Cmd
+			v.list, listCmd = v.list.Update(msg)
+			return tea.Batch(listCmd, v.extendFilterHelpCommand())
 		}
 	}
 
@@ -279,5 +298,16 @@ func (v *VolumeList) deleteVolumeCmd() tea.Cmd {
 		ctx := context.Background()
 		err := svc.Remove(ctx, volumeItem.volume.Name, true)
 		return volumeRemovedMsg{Name: volumeItem.volume.Name, Idx: idx, Error: err}
+	}
+}
+
+func (v *VolumeList) extendFilterHelpCommand() tea.Cmd {
+	return func() tea.Msg {
+		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			key.NewBinding(
+				key.WithKeys("esc"),
+				key.WithHelp("esc", "exit"),
+			),
+		}}
 	}
 }
