@@ -161,7 +161,7 @@ func (s *mockContainerService) Remove(ctx context.Context, id string, force bool
 	return fmt.Errorf("container not found: %s", id)
 }
 
-func (s *mockContainerService) Logs(ctx context.Context, id string, opts LogOptions) (io.ReadCloser, error) {
+func (s *mockContainerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
 	logs := `2024-01-15T10:30:00Z Starting application...
 2024-01-15T10:30:01Z Loading configuration...
 2024-01-15T10:30:02Z Connected to database
@@ -169,7 +169,14 @@ func (s *mockContainerService) Logs(ctx context.Context, id string, opts LogOpti
 2024-01-15T10:30:10Z GET /health 200 5ms
 2024-01-15T10:30:15Z GET /api/users 200 25ms
 `
-	return io.NopCloser(strings.NewReader(logs)), nil
+
+	pr, pw := io.Pipe()
+	go func() {
+		pw.Write([]byte(logs))
+		pw.Close()
+	}()
+
+	return NewLogsSession(io.NopCloser(pr), func() {}), nil
 }
 
 func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSession, error) {

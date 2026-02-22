@@ -17,7 +17,6 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/docker/docker/pkg/stdcopy"
 )
 
 // containersLoadedMsg is sent when containers have been loaded asynchronously
@@ -50,6 +49,16 @@ type execSessionStartedMsg struct {
 	session *service.ExecSession
 }
 
+// logsOutputMsg is sent when logs output is received from the background reader
+type logsOutputMsg struct {
+	output string
+	err    error
+}
+
+type logsSessionStartedMsg struct {
+	session *service.LogsSession
+}
+
 type execCloseMsg struct{}
 
 // containerItem implements list.Item interface
@@ -76,6 +85,8 @@ type ContainerList struct {
 	width, height           int
 	showDetails             bool
 	showLogs                bool
+	logsSession             *service.LogsSession
+	logsOutput              string
 	showFileTree            bool
 	loading                 bool
 	spinner                 spinner.Model
@@ -218,6 +229,23 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.execOutput))
 		c.viewport.GotoBottom()
 		return c.readExecOutput()
+	case logsSessionStartedMsg:
+		c.logsSession = msg.session
+		return c.readLogsOutput()
+	case logsOutputMsg:
+		if msg.err != nil {
+			if c.logsSession == nil {
+				return nil // session was closed manually, ignore
+			}
+			c.closeLogs()
+			return func() tea.Msg {
+				return message.ShowBannerMsg{Message: fmt.Sprintf("Logs session error. Err: %s", msg.err), IsError: true}
+			}
+		}
+		c.logsOutput += msg.output
+		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.logsOutput))
+		c.viewport.GotoBottom()
+		return c.readLogsOutput()
 	case execCloseMsg:
 		c.closeExec()
 		c.SetSize(c.width, c.height)
@@ -255,10 +283,29 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(c.spinner.Tick, c.updateContainersCmd())
 		case key.Matches(msg, keys.Keys.ContainerLogs):
 			c.showLogs = !c.showLogs
-			c.showDetails = false
-			c.showFileTree = false
-			c.SetSize(c.width, c.height)
-			return nil
+
+			if !c.showLogs {
+				c.SetSize(c.width, c.height)
+				c.closeLogs()
+				return nil
+			} else {
+				selected := c.list.SelectedItem()
+				if selected == nil {
+					return nil
+				}
+				container := selected.(containerItem).container
+				if container.State != service.StateRunning {
+					return func() tea.Msg {
+						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
+					}
+				}
+
+				c.showDetails = false
+				c.showFileTree = false
+				c.SetSize(c.width, c.height)
+				return tea.Batch(c.startLogsSession(container.ID))
+			}
+
 		case key.Matches(msg, keys.Keys.FileTree):
 			c.showFileTree = !c.showFileTree
 			if c.showFileTree {
@@ -542,7 +589,6 @@ func (c *ContainerList) updateDetails() {
 	}
 
 	if c.showLogs {
-		c.logsDetails()
 		return
 	}
 
@@ -585,28 +631,16 @@ func (c *ContainerList) updateDetails() {
 	c.viewport.GotoTop()
 }
 
-func (c *ContainerList) logsDetails() {
-	selected := c.list.SelectedItem()
-	if selected == nil {
-		c.viewport.SetContent("No container selected")
-		return
+func (c *ContainerList) startLogsSession(containerID string) tea.Cmd {
+	svc := c.service
+	return func() tea.Msg {
+		ctx := context.Background()
+		session, err := svc.Logs(ctx, containerID, service.LogOptions{Follow: true})
+		if err != nil {
+			return logsOutputMsg{err: err}
+		}
+		return logsSessionStartedMsg{session: session}
 	}
-
-	container := selected.(containerItem).container
-	ctx := context.Background()
-	reader, err := c.service.Logs(ctx, container.ID, service.LogOptions{})
-	if err != nil {
-		c.viewport.SetContent(fmt.Sprintf("Error reading logs: %s", err.Error()))
-		return
-	}
-	buf := new(strings.Builder)
-	_, err = stdcopy.StdCopy(buf, buf, reader)
-	if err != nil {
-		c.viewport.SetContent(fmt.Sprintf("Error reading logs: %s", err.Error()))
-		return
-	}
-
-	c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(buf.String()))
 }
 
 func (c *ContainerList) startExecSession(containerID string) tea.Cmd {
@@ -668,6 +702,16 @@ func (c *ContainerList) closeExec() {
 	c.execOutput = ""
 }
 
+func (c *ContainerList) closeLogs() {
+	c.showLogs = false
+	if c.logsSession != nil {
+		c.logsSession.Close()
+		c.logsSession = nil
+	}
+	c.viewport.SetContent("")
+	c.logsOutput = ""
+}
+
 func (c *ContainerList) readExecOutput() tea.Cmd {
 	session := c.execSession
 	if session == nil {
@@ -680,6 +724,21 @@ func (c *ContainerList) readExecOutput() tea.Cmd {
 			return execOutputMsg{err: err}
 		}
 		return execOutputMsg{output: string(buf[:n])}
+	}
+}
+
+func (c *ContainerList) readLogsOutput() tea.Cmd {
+	session := c.logsSession
+	if session == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		buf := make([]byte, 4096)
+		n, err := session.Reader.Read(buf)
+		if err != nil {
+			return logsOutputMsg{err: err}
+		}
+		return logsOutputMsg{output: string(buf[:n])}
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 )
 
@@ -238,14 +239,29 @@ func (s *localContainerService) Remove(ctx context.Context, id string, force boo
 	return s.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: force})
 }
 
-func (s *localContainerService) Logs(ctx context.Context, id string, opts LogOptions) (io.ReadCloser, error) {
-	return s.cli.ContainerLogs(ctx, id, container.LogsOptions{
+func (s *localContainerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
+	reader, err := s.cli.ContainerLogs(ctx, id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     opts.Follow,
 		Tail:       opts.Tail,
 		Timestamps: opts.Timestamps,
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		_, err := stdcopy.StdCopy(pw, pw, reader)
+		pw.CloseWithError(err)
+	}()
+
+	return NewLogsSession(
+		io.NopCloser(pr),
+		func() { reader.Close() },
+	), nil
 }
 
 func (s *localContainerService) Exec(ctx context.Context, id string) (*ExecSession, error) {

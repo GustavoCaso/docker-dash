@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"io"
 )
 
 // DockerClient provides access to Docker services
@@ -24,7 +23,7 @@ type ContainerService interface {
 	Restart(ctx context.Context, id string) error
 	Remove(ctx context.Context, id string, force bool) error
 	FileTree(ctx context.Context, id string) (ContainerFileTree, error)
-	Logs(ctx context.Context, id string, opts LogOptions) (io.ReadCloser, error)
+	Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error)
 	Exec(ctx context.Context, id string) (*ExecSession, error)
 }
 

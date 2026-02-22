@@ -100,6 +100,21 @@ type LogOptions struct {
 	Timestamps bool
 }
 
+type LogsSession struct {
+	Reader io.ReadCloser
+	closer func()
+}
+
+func NewLogsSession(reader io.ReadCloser, closer func()) *LogsSession {
+	return &LogsSession{Reader: reader, closer: closer}
+}
+
+func (e *LogsSession) Close() {
+	if e.closer != nil {
+		e.closer()
+	}
+}
+
 // ExecSession represents an interactive exec session inside a container
 type ExecSession struct {
 	Reader io.ReadCloser
