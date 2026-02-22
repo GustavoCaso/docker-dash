@@ -14,13 +14,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type focus int
-
-const (
-	focusSidebar focus = iota
-	focusList
-)
-
 type bannerType int
 
 const (
@@ -45,7 +38,7 @@ var (
 
 type model struct {
 	client        service.DockerClient
-	sidebar       *components.Sidebar
+	header        *components.Header
 	containerList *components.ContainerList
 	imageList     *components.ImageList
 	volumeList    *components.VolumeList
@@ -55,8 +48,6 @@ type model struct {
 	containerKeys *keys.ViewKeyMap
 	volumeKeys    *keys.ViewKeyMap
 	activeKeys    *keys.ViewKeyMap
-	sidebarKeys   *keys.ViewKeyMap
-	focus         focus
 	width         int
 	height        int
 	bannerMsg     string
@@ -81,16 +72,14 @@ func InitialModel(client service.DockerClient) tea.Model {
 	return &model{
 		client:        client,
 		keys:          keys.Keys,
-		sidebarKeys:   keys.Keys.SidebarKeyMap(),
 		imagesKeys:    keys.Keys.ImageKeyMap(),
 		containerKeys: keys.Keys.ContainerKeyMap(),
 		volumeKeys:    keys.Keys.VolumeKeyMap(),
-		sidebar:       components.NewSidebar(),
+		header:        components.NewHeader(),
 		containerList: components.NewContainerList(containers, client.Containers()),
 		imageList:     components.NewImageList(images, client),
 		volumeList:    components.NewVolumeList(volumes, client.Volumes()),
 		statusBar:     components.NewStatusBar(),
-		focus:         focusSidebar,
 		initErr:       initErr,
 	}
 }
@@ -115,16 +104,18 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.statusBar.IsFullView() {
 			statusBarHeight = lipgloss.Height(m.statusBar.View())
 		}
-		contentHeight := msg.Height - statusBarHeight
 
-		sidebarWidth := 24
-		listWidth := msg.Width - sidebarWidth
+		// Reserve space for header
+		m.header.SetWidth(msg.Width)
+		headerHeight := lipgloss.Height(m.header.View())
 
-		m.sidebar.SetSize(sidebarWidth, contentHeight)
-		m.containerList.SetSize(listWidth, contentHeight)
-		m.imageList.SetSize(listWidth, contentHeight)
-		m.volumeList.SetSize(listWidth, contentHeight)
+		contentHeight := msg.Height - statusBarHeight - headerHeight
+
+		m.containerList.SetSize(msg.Width, contentHeight)
+		m.imageList.SetSize(msg.Width, contentHeight)
+		m.volumeList.SetSize(msg.Width, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
+
 	case message.ShowBannerMsg:
 		m.bannerMsg = msg.Message
 		if msg.IsError {
@@ -140,8 +131,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.OnlyActive {
 			return m.forwardMessageToActive(msg.KeyMsg)
 		}
-
 		return m.forwardMessageToAll(msg.KeyMsg)
+
 	case clearBannerMsg:
 		m.bannerMsg = ""
 		m.bannerKind = bannerNone
@@ -150,33 +141,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case message.AddContextualKeyBindingsMsg:
 		m.activeKeys.ToggleContextual(msg.Bindings)
 		return m, nil
+
 	case message.ClearContextualKeyBindingsMsg:
 		m.activeKeys.DisableContextual()
 		return m, nil
+
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
-		case key.Matches(msg, m.keys.SwitchTab):
-			// Toggle focus
-			if m.focus == focusSidebar {
-				m.focus = focusList
-			} else {
-				m.focus = focusSidebar
-			}
+		case key.Matches(msg, m.keys.Left):
+			m.header.MoveLeft()
 			return m, nil
-		case key.Matches(msg, m.keys.Up):
-			// Navigate sidebar when focused
-			if m.focus == focusSidebar {
-				m.sidebar.MoveUp()
-				return m, nil
-			}
-		case key.Matches(msg, m.keys.Down):
-			// Navigate sidebar when focused
-			if m.focus == focusSidebar {
-				m.sidebar.MoveDown()
-				return m, nil
-			}
+		case key.Matches(msg, m.keys.Right):
+			m.header.MoveRight()
+			return m, nil
 		case key.Matches(msg, m.keys.Refresh):
 			return m.forwardMessageToActive(msg)
 		case key.Matches(msg, m.keys.RefreshAll):
@@ -186,7 +165,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		case key.Matches(msg, m.keys.Help):
 			m.statusBar.ToggleFullView()
-			// We need to force updating the height of all the components
 			return m, func() tea.Msg {
 				return tea.WindowSizeMsg{
 					Width:  m.width,
@@ -201,8 +179,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.forwardMessageToActive(msg)
 	}
 
-	// Forward other messages (async results, spinner ticks, etc.) to all components
-	// so each component receives its own internal messages regardless of active view
+	// Forward other messages to all components
 	return m.forwardMessageToAll(msg)
 }
 
@@ -211,14 +188,10 @@ func (m *model) View() string {
 		return "Loading..."
 	}
 
-	// Mark which component is focused
-	m.sidebar.SetFocused(m.focus == focusSidebar)
-
-	// Get the active list view and key bindings based on the active view
 	var listView string
 	var listKeyMap *keys.ViewKeyMap
 
-	switch m.sidebar.ActiveView() {
+	switch m.header.ActiveView() {
 	case components.ViewContainers:
 		listView = m.containerList.View()
 		listKeyMap = m.containerKeys
@@ -230,20 +203,11 @@ func (m *model) View() string {
 		listKeyMap = m.volumeKeys
 	}
 
-	// Set status bar bindings based on focused component
-	if m.focus == focusList {
-		m.activeKeys = listKeyMap
-		m.statusBar.SetKeyMap(listKeyMap)
-	} else {
-		m.activeKeys = m.sidebarKeys
-		m.statusBar.SetKeyMap(m.sidebarKeys)
-	}
+	m.activeKeys = listKeyMap
+	m.statusBar.SetKeyMap(listKeyMap)
 
-	sidebar := m.sidebar.View()
+	content := lipgloss.JoinVertical(lipgloss.Left, m.header.View(), listView)
 
-	content := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, listView)
-
-	// Overlay banner on content area (before status bar)
 	if m.bannerMsg != "" {
 		var style lipgloss.Style
 		if m.bannerKind == bannerError {
@@ -260,8 +224,7 @@ func (m *model) View() string {
 
 func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-
-	switch m.sidebar.ActiveView() {
+	switch m.header.ActiveView() {
 	case components.ViewContainers:
 		cmd = m.containerList.Update(msg)
 	case components.ViewImages:
@@ -269,7 +232,6 @@ func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case components.ViewVolumes:
 		cmd = m.volumeList.Update(msg)
 	}
-
 	return m, cmd
 }
 

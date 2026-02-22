@@ -13,7 +13,7 @@ import (
 func TestFullOutput(t *testing.T) {
 	m := InitialModel(service.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
-	waitForString(t, tm, "Docker")
+	waitForString(t, tm, "Images")
 	tm.Send(tea.KeyMsg{
 		Type:  tea.KeyRunes,
 		Runes: []rune("q"),
@@ -26,16 +26,13 @@ func TestExecPanel(t *testing.T) {
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
-	waitForString(t, tm, "Docker")
+	waitForString(t, tm, "Images")
 
-	// Navigate sidebar down to switch to Containers view (default is Images)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Navigate header right to switch to Containers view (default is Images)
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 
 	// Wait for Containers view to render
 	waitForString(t, tm, "nginx-proxy")
-
-	// Tab to focus the container list
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 
 	// Navigate to first container (should be running)
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
@@ -57,12 +54,12 @@ func TestVolumesView(t *testing.T) {
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
-	waitForString(t, tm, "Docker")
+	waitForString(t, tm, "Images")
 
-	// Navigate sidebar down twice to switch to Volumes view
+	// Navigate header right twice to switch to Volumes view
 	// (Images -> Containers -> Volumes)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 
 	// Wait for Volumes view to render
 	waitForString(t, tm, "postgres_data")

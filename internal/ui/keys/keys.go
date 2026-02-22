@@ -7,13 +7,14 @@ import (
 type KeyMap struct {
 	Up         key.Binding
 	Down       key.Binding
+	Left       key.Binding
+	Right      key.Binding
 	Esc        key.Binding
 	Enter      key.Binding
 	ScrollDown key.Binding
 	ScrollUp   key.Binding
 	Refresh    key.Binding
 	RefreshAll key.Binding
-	SwitchTab  key.Binding
 	Delete     key.Binding
 	FileTree   key.Binding
 	Filter     key.Binding
@@ -33,7 +34,7 @@ type KeyMap struct {
 }
 
 func (k *KeyMap) navigationKeys() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.ScrollUp, k.ScrollDown, k.SwitchTab, k.Filter}
+	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.ScrollUp, k.ScrollDown, k.Filter}
 }
 
 var Keys = &KeyMap{
@@ -53,6 +54,14 @@ var Keys = &KeyMap{
 		key.WithKeys("down"),
 		key.WithHelp("↓", "move down"),
 	),
+	Left: key.NewBinding(
+		key.WithKeys("left"),
+		key.WithHelp("←", "prev section"),
+	),
+	Right: key.NewBinding(
+		key.WithKeys("right"),
+		key.WithHelp("→", "next section"),
+	),
 	ScrollUp: key.NewBinding(
 		key.WithKeys("k"),
 		key.WithHelp("k", "scroll up"),
@@ -68,10 +77,6 @@ var Keys = &KeyMap{
 	RefreshAll: key.NewBinding(
 		key.WithKeys("ctrl+r"),
 		key.WithHelp("ctrl+r", "refresh all"),
-	),
-	SwitchTab: key.NewBinding(
-		key.WithKeys("tab", "shift+tab"),
-		key.WithHelp("tab", "change focus"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),
@@ -150,12 +155,12 @@ func (v *ViewKeyMap) DisableContextual() {
 	v.contextualEnabled = false
 }
 
-func (k KeyMap) SidebarKeyMap() *ViewKeyMap {
+func (k KeyMap) HeaderKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
-		short: []key.Binding{k.Up, k.Down, k.SwitchTab, k.Help, k.Quit},
+		short: []key.Binding{k.Left, k.Right, k.Help, k.Quit},
 		full: [][]key.Binding{
-			{k.Up, k.Down, k.SwitchTab, k.Help},
-			{k.Refresh, k.RefreshAll, k.Quit},
+			{k.Left, k.Right},
+			{k.Refresh, k.RefreshAll, k.Help, k.Quit},
 		},
 	}
 }
@@ -164,9 +169,10 @@ func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
+			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.ImageLayers, k.CreateAndRunContainer},
-			{k.SwitchTab, k.Filter, k.Help, k.Quit},
+			{k.Filter, k.Help, k.Quit},
 		},
 	}
 }
@@ -175,10 +181,11 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
+			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.ContainerDelete, k.ContainerInfo, k.ContainerLogs, k.ContainerStartStop},
 			{k.ContainerRestart, k.ContainerExec, k.FileTree},
-			{k.SwitchTab, k.Filter, k.Help, k.Quit},
+			{k.Filter, k.Help, k.Quit},
 		},
 	}
 }
@@ -187,9 +194,10 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
+			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.FileTree},
-			{k.SwitchTab, k.Filter, k.Help, k.Quit},
+			{k.Filter, k.Help, k.Quit},
 		},
 	}
 }

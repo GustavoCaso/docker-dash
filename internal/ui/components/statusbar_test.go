@@ -9,7 +9,7 @@ import (
 func TestStatusBarSetKeyMap(t *testing.T) {
 	sb := NewStatusBar()
 	sb.SetSize(80, 1)
-	sb.SetKeyMap(keys.Keys.SidebarKeyMap())
+	sb.SetKeyMap(keys.Keys.HeaderKeyMap())
 
 	got := sb.View()
 	if got == "" {

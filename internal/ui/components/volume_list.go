@@ -100,7 +100,7 @@ func (v *VolumeList) SetSize(width, height int) {
 	v.width = width
 	v.height = height
 
-	listX, listY := listStyle.GetFrameSize()
+	listX, listY := theme.ListStyle.GetFrameSize()
 
 	if v.showFileTree {
 		listWidth := int(float64(width) * 0.4)
@@ -237,7 +237,7 @@ func (v *VolumeList) View() string {
 		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, v.list.Width())
 	}
 
-	listView := listStyle.
+	listView := theme.ListStyle.
 		Width(v.list.Width()).
 		Render(listContent)
 
@@ -245,7 +245,7 @@ func (v *VolumeList) View() string {
 		return listView
 	}
 
-	detailView := listStyle.
+	detailView := theme.ListStyle.
 		Width(v.viewport.Width).
 		Render(v.viewport.View())
 

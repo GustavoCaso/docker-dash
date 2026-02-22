@@ -32,7 +32,7 @@ var (
 // These require a Nerd Font patched terminal font to display correctly
 const (
 	// Docker related icons
-	IconDocker    = "\uf308" // Docker whale icon
+	IconDocker    = "\uf21f" // Docker whale icon
 	IconContainer = "\uf4b7" // Container/cube icon
 	IconImage     = "\ue7ba" // Layers/image icon
 	IconVolume    = "\uf0a0" // Hard drive/volume icon
@@ -58,31 +58,6 @@ const (
 	IconSuccess = "\uf00c" // Checkmark
 )
 
-var LogoStyle = lipgloss.NewStyle().
-	Foreground(DockerBlue).
-	Bold(true).
-	PaddingLeft(1).
-	PaddingTop(1)
-
-// Sidebar styles
-var (
-	SidebarStyle = lipgloss.NewStyle().
-			Background(DockerDark).
-			Border(lipgloss.HiddenBorder())
-
-	SidebarItemStyle = lipgloss.NewStyle().
-				PaddingLeft(1).
-				MarginBottom(1).
-				Foreground(TextSecondary)
-
-	SidebarActiveStyle = lipgloss.NewStyle().
-				Foreground(TextPrimary).
-				Background(DockerBlue).
-				PaddingLeft(1).
-				MarginBottom(1).
-				Bold(true)
-)
-
 // Main panel styles
 var (
 	MainPanelStyle = lipgloss.NewStyle().
@@ -98,8 +73,37 @@ var (
 			PaddingBottom(1)
 )
 
+// Header tab bar styles (top navigation)
+var (
+	HeaderBarStyle = lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderBottom(true).
+			BorderForeground(Border).
+			PaddingTop(1)
+
+	HeaderItemStyle = lipgloss.NewStyle().
+			Foreground(TextSecondary).
+			Padding(0, 2)
+
+	HeaderActiveItemStyle = lipgloss.NewStyle().
+				Foreground(TextPrimary).
+				Background(DockerBlue).
+				Bold(true).
+				Padding(0, 2)
+
+	HeaderSeparatorStyle = lipgloss.NewStyle().
+				Foreground(TextMuted)
+
+	HeaderDockerStyle = lipgloss.NewStyle().
+				Foreground(DockerBlue).
+				Bold(true).
+				PaddingRight(3)
+)
+
 // List item styles
 var (
+	ListStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder())
 	ListItemStyle = lipgloss.NewStyle().
 			Foreground(TextSecondary).
 			Padding(0, 1)

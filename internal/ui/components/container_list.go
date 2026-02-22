@@ -126,7 +126,7 @@ func (c *ContainerList) SetSize(width, height int) {
 	c.height = height
 
 	// Account for padding and borders
-	listX, listY := listStyle.GetFrameSize()
+	listX, listY := theme.ListStyle.GetFrameSize()
 
 	if c.showDetails || c.showLogs || c.showFileTree || c.showExec {
 		// Split view: 40% list, 60% details
@@ -343,7 +343,7 @@ func (c *ContainerList) View() string {
 		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, c.list.Width())
 	}
 
-	listView := listStyle.
+	listView := theme.ListStyle.
 		Width(c.list.Width()).
 		Render(listContent)
 
@@ -363,7 +363,7 @@ func (c *ContainerList) View() string {
 		detailContent = c.viewport.View()
 	}
 
-	detailView := listStyle.
+	detailView := theme.ListStyle.
 		Width(c.viewport.Width).
 		Render(detailContent)
 

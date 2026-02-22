@@ -9,6 +9,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -42,10 +43,6 @@ type imageRemovedMsg struct {
 	Idx   int
 	Error error
 }
-
-var (
-	listStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
-)
 
 // imageItem implements list.Item interface
 type imageItem struct {
@@ -108,7 +105,7 @@ func (i *ImageList) SetSize(width, height int) {
 	i.height = height
 
 	// Account for padding and borders
-	listX, listY := listStyle.GetFrameSize()
+	listX, listY := theme.ListStyle.GetFrameSize()
 
 	if i.showLayers {
 		// Split view: 40% list, 60% details
@@ -259,7 +256,7 @@ func (i *ImageList) View() string {
 		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, i.list.Width())
 	}
 
-	listView := listStyle.
+	listView := theme.ListStyle.
 		Width(i.list.Width()).
 		Render(listContent)
 
@@ -270,7 +267,7 @@ func (i *ImageList) View() string {
 
 	i.updateDetails()
 
-	detailView := listStyle.
+	detailView := theme.ListStyle.
 		Width(i.viewport.Width).
 		Render(i.viewport.View())
 
