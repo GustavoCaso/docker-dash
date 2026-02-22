@@ -61,6 +61,11 @@ type logsSessionStartedMsg struct {
 
 type execCloseMsg struct{}
 
+type detailsMsg struct {
+	output string
+	err    error
+}
+
 // containerItem implements list.Item interface
 type containerItem struct {
 	container service.Container
@@ -229,6 +234,14 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.execOutput))
 		c.viewport.GotoBottom()
 		return c.readExecOutput()
+	case detailsMsg:
+		if msg.err != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{Message: msg.err.Error(), IsError: true}
+			}
+		}
+		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(msg.output))
+		return nil
 	case logsSessionStartedMsg:
 		c.logsSession = msg.session
 		return c.readLogsOutput()
@@ -248,7 +261,6 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		return c.readLogsOutput()
 	case execCloseMsg:
 		c.closeExec()
-		c.SetSize(c.width, c.height)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
 		}
@@ -274,9 +286,10 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		switch {
 		case key.Matches(msg, keys.Keys.ContainerInfo):
 			c.showDetails = !c.showDetails
-			c.showLogs = false
-			c.showFileTree = false
-			c.SetSize(c.width, c.height)
+			if c.showDetails {
+				return c.detailsCmd()
+			}
+			c.clearViewPort()
 			return nil
 		case key.Matches(msg, keys.Keys.Refresh):
 			c.loading = true
@@ -285,7 +298,6 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			c.showLogs = !c.showLogs
 
 			if !c.showLogs {
-				c.SetSize(c.width, c.height)
 				c.closeLogs()
 				return nil
 			} else {
@@ -300,9 +312,6 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 					}
 				}
 
-				c.showDetails = false
-				c.showFileTree = false
-				c.SetSize(c.width, c.height)
 				return tea.Batch(c.startLogsSession(container.ID))
 			}
 
@@ -315,33 +324,30 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				}
 				container := selected.(containerItem).container
 				c.loading = true
-				c.showDetails = false
-				c.showLogs = false
-				c.SetSize(c.width, c.height)
-				c.viewport.SetContent("")
 				return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation(container.ID))
 			}
-			c.SetSize(c.width, c.height)
+			c.clearViewPort()
 			return nil
 		case key.Matches(msg, keys.Keys.ContainerExec):
-			selected := c.list.SelectedItem()
-			if selected == nil {
-				return nil
-			}
-			container := selected.(containerItem).container
-			if container.State != service.StateRunning {
-				return func() tea.Msg {
-					return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
+			c.showExec = !c.showExec
+			if c.showExec {
+				selected := c.list.SelectedItem()
+				if selected == nil {
+					return nil
 				}
+				container := selected.(containerItem).container
+				if container.State != service.StateRunning {
+					return func() tea.Msg {
+						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
+					}
+				}
+
+				c.execOutput = ""
+				c.execInput.Focus()
+				return tea.Batch(textinput.Blink, c.startExecSession(container.ID), c.extendExecHelpCommand())
 			}
-			c.showExec = true
-			c.showDetails = false
-			c.showLogs = false
-			c.showFileTree = false
-			c.execOutput = ""
-			c.execInput.Focus()
-			c.SetSize(c.width, c.height)
-			return tea.Batch(textinput.Blink, c.startExecSession(container.ID), c.extendExecHelpCommand())
+			c.clearViewPort()
+			return nil
 		case key.Matches(msg, keys.Keys.ContainerDelete):
 			return c.deleteContainerCmd()
 		case key.Matches(msg, keys.Keys.ContainerStartStop):
@@ -351,6 +357,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			c.list, listCmd = c.list.Update(msg)
+			c.clearDetails()
 			return listCmd
 		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
 			var vpCmd tea.Cmd
@@ -373,15 +380,12 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	c.viewport, vpCmd = c.viewport.Update(msg)
 	cmds = append(cmds, vpCmd)
 
-	var tiCmd tea.Cmd
-	c.execInput, tiCmd = c.execInput.Update(msg)
-	cmds = append(cmds, tiCmd)
-
 	return tea.Batch(cmds...)
 }
 
 // View renders the list
 func (c *ContainerList) View() string {
+	c.SetSize(c.width, c.height)
 	listContent := c.list.View()
 
 	// Overlay spinner in bottom right corner when loading
@@ -399,15 +403,10 @@ func (c *ContainerList) View() string {
 		return listView
 	}
 
-	c.updateDetails()
-
-	var detailContent string
+	detailContent := c.viewport.View()
 	if c.showExec {
-		vpView := c.viewport.View()
 		inputView := c.execInput.View()
-		detailContent = lipgloss.JoinVertical(lipgloss.Left, vpView, inputView)
-	} else {
-		detailContent = c.viewport.View()
+		detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, inputView)
 	}
 
 	detailView := theme.ListStyle.
@@ -471,6 +470,69 @@ func (c *ContainerList) handleExecInut(msg tea.KeyMsg) tea.Cmd {
 		var inputCmd tea.Cmd
 		c.execInput, inputCmd = c.execInput.Update(msg)
 		return inputCmd
+	}
+}
+
+func (c *ContainerList) clearViewPort() {
+	c.viewport.SetContent("")
+}
+
+func (c *ContainerList) clearDetails() {
+	c.showLogs = false
+	c.showDetails = false
+	c.showFileTree = false
+	c.showExec = false
+	c.logsOutput = ""
+	c.execOutput = ""
+	c.clearViewPort()
+}
+
+func (c *ContainerList) detailsCmd() tea.Cmd {
+	return func() tea.Msg {
+		selected := c.list.SelectedItem()
+		if selected == nil {
+			return detailsMsg{
+				err: fmt.Errorf("No container selected"),
+			}
+		}
+		container := selected.(containerItem).container
+		var content strings.Builder
+
+		// Header
+		fmt.Fprintf(&content, "Container: %s\n", container.Name)
+		content.WriteString("═══════════════════════\n\n")
+
+		// Basic info
+		fmt.Fprintf(&content, "ID:      %s\n", shortID(container.ID))
+		fmt.Fprintf(&content, "Image:   %s\n", container.Image)
+		fmt.Fprintf(&content, "Status:  %s\n", container.Status)
+
+		stateStyle := theme.StatusStyle(string(container.State))
+		stateIcon := theme.StatusIcon(string(container.State))
+		fmt.Fprintf(&content, "State:   %s\n", stateStyle.Render(stateIcon+" "+string(container.State)))
+
+		fmt.Fprintf(&content, "Created: %s\n\n", container.Created.Format("2006-01-02 15:04:05"))
+
+		// Ports
+		if len(container.Ports) > 0 {
+			content.WriteString("Ports:\n")
+			for _, port := range container.Ports {
+				fmt.Fprintf(&content, "  %d:%d/%s\n", port.HostPort, port.ContainerPort, port.Protocol)
+			}
+			content.WriteString("\n")
+		}
+
+		// Mounts
+		if len(container.Mounts) > 0 {
+			content.WriteString("Mounts:\n")
+			for _, mount := range container.Mounts {
+				fmt.Fprintf(&content, "  [%s] %s -> %s\n", mount.Type, mount.Source, mount.Destination)
+			}
+			content.WriteString("\n")
+		}
+		return detailsMsg{
+			output: content.String(),
+		}
 	}
 }
 
@@ -570,67 +632,6 @@ func (c *ContainerList) fetchFileTreeInformation(containerID string) tea.Cmd {
 	}
 }
 
-// updateDetails updates the viewport content based on selected container
-func (c *ContainerList) updateDetails() {
-	selected := c.list.SelectedItem()
-	if selected == nil {
-		c.viewport.SetContent("No container selected")
-		return
-	}
-
-	container := selected.(containerItem).container
-
-	if c.showFileTree {
-		return
-	}
-
-	if c.showExec {
-		return
-	}
-
-	if c.showLogs {
-		return
-	}
-
-	var content strings.Builder
-
-	// Header
-	fmt.Fprintf(&content, "Container: %s\n", container.Name)
-	content.WriteString("═══════════════════════\n\n")
-
-	// Basic info
-	fmt.Fprintf(&content, "ID:      %s\n", shortID(container.ID))
-	fmt.Fprintf(&content, "Image:   %s\n", container.Image)
-	fmt.Fprintf(&content, "Status:  %s\n", container.Status)
-
-	stateStyle := theme.StatusStyle(string(container.State))
-	stateIcon := theme.StatusIcon(string(container.State))
-	fmt.Fprintf(&content, "State:   %s\n", stateStyle.Render(stateIcon+" "+string(container.State)))
-
-	fmt.Fprintf(&content, "Created: %s\n\n", container.Created.Format("2006-01-02 15:04:05"))
-
-	// Ports
-	if len(container.Ports) > 0 {
-		content.WriteString("Ports:\n")
-		for _, port := range container.Ports {
-			fmt.Fprintf(&content, "  %d:%d/%s\n", port.HostPort, port.ContainerPort, port.Protocol)
-		}
-		content.WriteString("\n")
-	}
-
-	// Mounts
-	if len(container.Mounts) > 0 {
-		content.WriteString("Mounts:\n")
-		for _, mount := range container.Mounts {
-			fmt.Fprintf(&content, "  [%s] %s -> %s\n", mount.Type, mount.Source, mount.Destination)
-		}
-		content.WriteString("\n")
-	}
-
-	c.viewport.SetContent(content.String())
-	c.viewport.GotoTop()
-}
-
 func (c *ContainerList) startLogsSession(containerID string) tea.Cmd {
 	svc := c.service
 	return func() tea.Msg {
@@ -696,7 +697,7 @@ func (c *ContainerList) closeExec() {
 		c.execSession.Close()
 		c.execSession = nil
 	}
-	c.viewport.SetContent("")
+	c.clearViewPort()
 	c.execHistoryCurrentIndex = 0
 	c.execHistory = []string{}
 	c.execOutput = ""
@@ -708,7 +709,7 @@ func (c *ContainerList) closeLogs() {
 		c.logsSession.Close()
 		c.logsSession = nil
 	}
-	c.viewport.SetContent("")
+	c.clearViewPort()
 	c.logsOutput = ""
 }
 
