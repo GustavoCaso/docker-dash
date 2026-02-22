@@ -2,14 +2,10 @@ package components
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
-	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
-	"github.com/GustavoCaso/docker-dash/internal/ui/message"
-	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -17,21 +13,27 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
-// containersLoadedMsg is sent when containers have been loaded asynchronously
+// containersLoadedMsg is sent when containers have been loaded asynchronously.
 type containersLoadedMsg struct {
 	error error
 	items []list.Item
 }
 
-// containersTreeLoadedMsg is sent when containers have been loaded asynchronously
+// containersTreeLoadedMsg is sent when containers have been loaded asynchronously.
 type containersTreeLoadedMsg struct {
 	error    error
 	fileTree service.ContainerFileTree
 }
 
-// containerActionMsg is sent when a container action completes
+// containerActionMsg is sent when a container action completes.
 type containerActionMsg struct {
 	ID     string
 	Action string
@@ -39,7 +41,7 @@ type containerActionMsg struct {
 	Error  error
 }
 
-// execOutputMsg is sent when exec output is received from the background reader
+// execOutputMsg is sent when exec output is received from the background reader.
 type execOutputMsg struct {
 	output string
 	err    error
@@ -49,7 +51,7 @@ type execSessionStartedMsg struct {
 	session *service.ExecSession
 }
 
-// logsOutputMsg is sent when logs output is received from the background reader
+// logsOutputMsg is sent when logs output is received from the background reader.
 type logsOutputMsg struct {
 	output string
 	err    error
@@ -66,7 +68,7 @@ type detailsMsg struct {
 	err    error
 }
 
-// containerItem implements list.Item interface
+// containerItem implements list.Item interface.
 type containerItem struct {
 	container service.Container
 }
@@ -81,7 +83,7 @@ func (c containerItem) Description() string {
 }
 func (c containerItem) FilterValue() string { return c.container.Name }
 
-// ContainerList wraps bubbles/list for displaying containers
+// ContainerList wraps bubbles/list for displaying containers.
 type ContainerList struct {
 	list                    list.Model
 	isFilter                bool
@@ -103,7 +105,7 @@ type ContainerList struct {
 	execOutput              string
 }
 
-// NewContainerList creates a new container list
+// NewContainerList creates a new container list.
 func NewContainerList(containers []service.Container, svc service.ContainerService) *ContainerList {
 	items := make([]list.Item, len(containers))
 	for i, c := range containers {
@@ -136,7 +138,7 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	return cl
 }
 
-// SetSize sets dimensions
+// SetSize sets dimensions.
 func (c *ContainerList) SetSize(width, height int) {
 	c.width = width
 	c.height = height
@@ -162,7 +164,7 @@ func (c *ContainerList) SetSize(width, height int) {
 	}
 }
 
-// Update handles messages
+// Update handles messages.
 func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
@@ -383,7 +385,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// View renders the list
+// View renders the list.
 func (c *ContainerList) View() string {
 	c.SetSize(c.width, c.height)
 	listContent := c.list.View()
@@ -492,7 +494,7 @@ func (c *ContainerList) detailsCmd() tea.Cmd {
 		selected := c.list.SelectedItem()
 		if selected == nil {
 			return detailsMsg{
-				err: fmt.Errorf("No container selected"),
+				err: errors.New("No container selected"),
 			}
 		}
 		container := selected.(containerItem).container

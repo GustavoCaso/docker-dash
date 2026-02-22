@@ -22,7 +22,7 @@ type DockerConfig struct {
 	Host string `toml:"host"`
 }
 
-// DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml
+// DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml.
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {

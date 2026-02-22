@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -10,14 +11,14 @@ import (
 	"github.com/charmbracelet/lipgloss/tree"
 )
 
-// MockClient provides a mock implementation of DockerClient for development
+// MockClient provides a mock implementation of DockerClient for development.
 type MockClient struct {
 	containers *mockContainerService
 	images     *mockImageService
 	volumes    *mockVolumeService
 }
 
-// NewMockClient creates a new mock Docker client with sample data
+// NewMockClient creates a new mock Docker client with sample data.
 func NewMockClient() *MockClient {
 	return &MockClient{
 		containers: newMockContainerService(),
@@ -32,7 +33,7 @@ func (c *MockClient) Volumes() VolumeService         { return c.volumes }
 func (c *MockClient) Ping(ctx context.Context) error { return nil }
 func (c *MockClient) Close() error                   { return nil }
 
-// mockContainerService provides mock container data
+// mockContainerService provides mock container data.
 type mockContainerService struct {
 	containers []Container
 }
@@ -152,7 +153,7 @@ func (s *mockContainerService) Remove(ctx context.Context, id string, force bool
 	for i, c := range s.containers {
 		if c.ID == id || c.Name == id {
 			if c.State == StateRunning && !force {
-				return fmt.Errorf("container is running, use force to remove")
+				return errors.New("container is running, use force to remove")
 			}
 			s.containers = append(s.containers[:i], s.containers[i+1:]...)
 			return nil
@@ -201,7 +202,7 @@ func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSessio
 	return nil, fmt.Errorf("container not found: %s", id)
 }
 
-// mockExecWriter simulates shell output by echoing back commands with a fake prompt
+// mockExecWriter simulates shell output by echoing back commands with a fake prompt.
 type mockExecWriter struct {
 	pw *io.PipeWriter
 }
@@ -224,7 +225,7 @@ func (s *mockContainerService) FileTree(ctx context.Context, id string) (Contain
 	return ContainerFileTree{Files: []string{}, Tree: tree.New()}, nil
 }
 
-// mockImageService provides mock image data
+// mockImageService provides mock image data.
 type mockImageService struct {
 	images []Image
 }
@@ -299,7 +300,7 @@ func (s *mockImageService) Remove(ctx context.Context, id string, force bool) er
 	return fmt.Errorf("image not found: %s", id)
 }
 
-// mockVolumeService provides mock volume data
+// mockVolumeService provides mock volume data.
 type mockVolumeService struct {
 	volumes []Volume
 }
@@ -370,7 +371,15 @@ func (s *mockVolumeService) FileTree(ctx context.Context, name string) (VolumeFi
 				baseDir.Child("13067")
 				pgdata.Child(baseDir)
 				t.Child(pgdata)
-				files = []string{"pgdata/", "pgdata/PG_VERSION", "pgdata/postgresql.conf", "pgdata/pg_hba.conf", "pgdata/base/", "pgdata/base/1", "pgdata/base/13067"}
+				files = []string{
+					"pgdata/",
+					"pgdata/PG_VERSION",
+					"pgdata/postgresql.conf",
+					"pgdata/pg_hba.conf",
+					"pgdata/base/",
+					"pgdata/base/1",
+					"pgdata/base/13067",
+				}
 			case "nginx_config":
 				t.Child("nginx.conf")
 				confD := tree.Root("conf.d")

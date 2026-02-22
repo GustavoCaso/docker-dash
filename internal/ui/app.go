@@ -4,14 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 type bannerType int
@@ -22,7 +23,7 @@ const (
 	bannerError
 )
 
-// clearBannerMsg is sent to clear the banner after a timeout
+// clearBannerMsg is sent to clear the banner after a timeout.
 type clearBannerMsg struct{}
 
 var (

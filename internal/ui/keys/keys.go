@@ -132,7 +132,7 @@ var Keys = &KeyMap{
 	),
 }
 
-// ViewKeyMap implements help.KeyMap for list views
+// ViewKeyMap implements help.KeyMap for list views.
 type ViewKeyMap struct {
 	short             []key.Binding
 	full              [][]key.Binding

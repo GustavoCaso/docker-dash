@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
+
+	"github.com/GustavoCaso/docker-dash/internal/service"
 )
 
 func TestFullOutput(t *testing.T) {

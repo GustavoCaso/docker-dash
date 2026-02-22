@@ -1,11 +1,12 @@
 package components
 
 import (
-	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
-// View represents the different views available in the header
+// View represents the different views available in the header.
 type View int
 
 const (

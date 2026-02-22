@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
-	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
-	"github.com/GustavoCaso/docker-dash/internal/ui/message"
-	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
 type focusedPane int
@@ -25,26 +26,26 @@ const (
 	focusViewport
 )
 
-// imagesLoadedMsg is sent when images have been loaded asynchronously
+// imagesLoadedMsg is sent when images have been loaded asynchronously.
 type imagesLoadedMsg struct {
 	error error
 	items []list.Item
 }
 
-// containerRunMsg is sent when a container is created
+// containerRunMsg is sent when a container is created.
 type containerRunMsg struct {
 	containerID string
 	error       error
 }
 
-// imageRemovedMsg is sent when an image deletion completes
+// imageRemovedMsg is sent when an image deletion completes.
 type imageRemovedMsg struct {
 	ID    string
 	Idx   int
 	Error error
 }
 
-// imageItem implements list.Item interface
+// imageItem implements list.Item interface.
 type imageItem struct {
 	image service.Image
 }
@@ -56,7 +57,7 @@ func (i imageItem) Description() string {
 }
 func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
-// ImageList wraps bubbles/list
+// ImageList wraps bubbles/list.
 type ImageList struct {
 	list             list.Model
 	viewport         viewport.Model
@@ -69,7 +70,7 @@ type ImageList struct {
 	spinner          spinner.Model
 }
 
-// NewImageList creates a new image list
+// NewImageList creates a new image list.
 func NewImageList(images []service.Image, client service.DockerClient) *ImageList {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
@@ -99,7 +100,7 @@ func NewImageList(images []service.Image, client service.DockerClient) *ImageLis
 	return il
 }
 
-// SetSize sets dimensions
+// SetSize sets dimensions.
 func (i *ImageList) SetSize(width, height int) {
 	i.width = width
 	i.height = height
@@ -121,7 +122,7 @@ func (i *ImageList) SetSize(width, height int) {
 	}
 }
 
-// Update handles messages
+// Update handles messages.
 func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
@@ -246,7 +247,7 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// View renders the list
+// View renders the list.
 func (i *ImageList) View() string {
 	listContent := i.list.View()
 
@@ -343,7 +344,7 @@ func (i *ImageList) createContainerCmdAndRun() tea.Cmd {
 	}
 }
 
-// updateDetails updates the viewport content based on selected image
+// updateDetails updates the viewport content based on selected image.
 func (i *ImageList) updateDetails() {
 	selected := i.list.SelectedItem()
 	if selected == nil {
@@ -374,7 +375,7 @@ func (i *ImageList) updateDetails() {
 	i.viewport.SetContent(content.String())
 }
 
-// shortID returns first 12 characters of an ID
+// shortID returns first 12 characters of an ID.
 func shortID(id string) string {
 	// Remove sha256: prefix if present
 	id = strings.TrimPrefix(id, "sha256:")
@@ -384,7 +385,7 @@ func shortID(id string) string {
 	return id
 }
 
-// truncateCommand shortens a command string
+// truncateCommand shortens a command string.
 func truncateCommand(cmd string, maxLen int) string {
 	// Clean up common prefixes
 	cmd = strings.TrimPrefix(cmd, "/bin/sh -c ")

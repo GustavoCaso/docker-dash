@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// DockerClient provides access to Docker services
+// DockerClient provides access to Docker services.
 type DockerClient interface {
 	Containers() ContainerService
 	Images() ImageService
@@ -13,7 +13,7 @@ type DockerClient interface {
 	Close() error
 }
 
-// ContainerService manages Docker containers
+// ContainerService manages Docker containers.
 type ContainerService interface {
 	List(ctx context.Context) ([]Container, error)
 	Run(ctx context.Context, image Image) (string, error)
@@ -27,14 +27,14 @@ type ContainerService interface {
 	Exec(ctx context.Context, id string) (*ExecSession, error)
 }
 
-// ImageService manages Docker images
+// ImageService manages Docker images.
 type ImageService interface {
 	List(ctx context.Context) ([]Image, error)
 	Get(ctx context.Context, id string) (Image, error)
 	Remove(ctx context.Context, id string, force bool) error
 }
 
-// VolumeService manages Docker volumes
+// VolumeService manages Docker volumes.
 type VolumeService interface {
 	List(ctx context.Context) ([]Volume, error)
 	Remove(ctx context.Context, name string, force bool) error

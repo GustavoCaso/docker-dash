@@ -5,39 +5,40 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
-	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
-	"github.com/GustavoCaso/docker-dash/internal/ui/message"
-	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
-// volumesLoadedMsg is sent when volumes have been loaded asynchronously
+// volumesLoadedMsg is sent when volumes have been loaded asynchronously.
 type volumesLoadedMsg struct {
 	error error
 	items []list.Item
 }
 
-// volumeTreeLoadedMsg is sent when the volume file tree is loaded
+// volumeTreeLoadedMsg is sent when the volume file tree is loaded.
 type volumeTreeLoadedMsg struct {
 	error    error
 	fileTree service.VolumeFileTree
 }
 
-// volumeRemovedMsg is sent when a volume deletion completes
+// volumeRemovedMsg is sent when a volume deletion completes.
 type volumeRemovedMsg struct {
 	Name  string
 	Idx   int
 	Error error
 }
 
-// volumeItem implements list.Item interface
+// volumeItem implements list.Item interface.
 type volumeItem struct {
 	volume service.Volume
 }
@@ -57,7 +58,7 @@ func (v volumeItem) Description() string {
 }
 func (v volumeItem) FilterValue() string { return v.volume.Name }
 
-// VolumeList wraps bubbles/list for displaying volumes
+// VolumeList wraps bubbles/list for displaying volumes.
 type VolumeList struct {
 	list          list.Model
 	isFilter      bool
@@ -69,7 +70,7 @@ type VolumeList struct {
 	spinner       spinner.Model
 }
 
-// NewVolumeList creates a new volume list
+// NewVolumeList creates a new volume list.
 func NewVolumeList(volumes []service.Volume, svc service.VolumeService) *VolumeList {
 	items := make([]list.Item, len(volumes))
 	for i, v := range volumes {
@@ -95,7 +96,7 @@ func NewVolumeList(volumes []service.Volume, svc service.VolumeService) *VolumeL
 	}
 }
 
-// SetSize sets dimensions
+// SetSize sets dimensions.
 func (v *VolumeList) SetSize(width, height int) {
 	v.width = width
 	v.height = height
@@ -114,7 +115,7 @@ func (v *VolumeList) SetSize(width, height int) {
 	}
 }
 
-// Update handles messages
+// Update handles messages.
 func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
@@ -228,7 +229,7 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// View renders the list
+// View renders the list.
 func (v *VolumeList) View() string {
 	listContent := v.list.View()
 

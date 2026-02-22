@@ -6,19 +6,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Docker Desktop inspired color palette
+// Docker Desktop inspired color palette.
 var (
-	// Primary Docker colors
+	// Primary Docker colors.
 	DockerBlue = lipgloss.Color("#1D63ED")
 	DockerDark = lipgloss.Color("#0B1929")
 
-	// Status colors
+	// Status colors.
 	StatusRunning = lipgloss.Color("#2ECC71")
 	StatusStopped = lipgloss.Color("#6C7A89")
 	StatusError   = lipgloss.Color("#E74C3C")
 	StatusPaused  = lipgloss.Color("#F39C12")
 
-	// UI colors
+	// UI colors.
 	TextPrimary   = lipgloss.Color("#FFFFFF")
 	TextSecondary = lipgloss.Color("#A0AEC0")
 	TextMuted     = lipgloss.Color("#6C7A89")
@@ -29,36 +29,36 @@ var (
 )
 
 // Nerd Font icon constants
-// These require a Nerd Font patched terminal font to display correctly
+// These require a Nerd Font patched terminal font to display correctly.
 const (
-	// Docker related icons
+	// Docker related icons.
 	IconDocker    = "\uf21f" // Docker whale icon
 	IconContainer = "\uf4b7" // Container/cube icon
 	IconImage     = "\ue7ba" // Layers/image icon
 	IconVolume    = "\uf0a0" // Hard drive/volume icon
 	IconNetwork   = "\uf6ff" // Network icon
 
-	// Status icons
+	// Status icons.
 	IconRunning = "\uf04b" // Play icon (running)
 	IconStopped = "\uf04d" // Stop icon (stopped)
 	IconPaused  = "\uf04c" // Pause icon
 	IconError   = "\uf00d" // X/error icon
 
-	// Tree navigation icons
+	// Tree navigation icons.
 	IconExpanded  = "\uf0d7" // Chevron down
 	IconCollapsed = "\uf0da" // Chevron right
 
-	// File system icons
+	// File system icons.
 	IconFolder = "\uf07b" // Folder icon
 	IconFile   = "\uf15b" // File icon
 
-	// Alert icons
+	// Alert icons.
 	IconWarning = "\uf071" // Warning triangle
 	IconInfo    = "\uf05a" // Info circle
 	IconSuccess = "\uf00c" // Checkmark
 )
 
-// Main panel styles
+// Main panel styles.
 var (
 	MainPanelStyle = lipgloss.NewStyle().
 			Background(Background)
@@ -73,7 +73,7 @@ var (
 			PaddingBottom(1)
 )
 
-// Header tab bar styles (top navigation)
+// Header tab bar styles (top navigation).
 var (
 	HeaderBarStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
@@ -100,7 +100,7 @@ var (
 				PaddingRight(3)
 )
 
-// List item styles
+// List item styles.
 var (
 	ListStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder())
@@ -115,7 +115,7 @@ var (
 				Padding(0, 1)
 )
 
-// Detail panel styles
+// Detail panel styles.
 var (
 	DetailStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
@@ -130,7 +130,7 @@ var (
 				Foreground(TextPrimary)
 )
 
-// Status indicator styles
+// Status indicator styles.
 var (
 	StatusRunningStyle = lipgloss.NewStyle().
 				Foreground(StatusRunning).
@@ -147,7 +147,7 @@ var (
 				Foreground(StatusPaused)
 )
 
-// Action button styles
+// Action button styles.
 var (
 	ActionButtonStyle = lipgloss.NewStyle().
 				Foreground(TextSecondary).
@@ -166,13 +166,13 @@ var (
 				BorderForeground(DockerBlue)
 )
 
-// Status bar styles
+// Status bar styles.
 var (
 	HelpStyle = lipgloss.NewStyle().Padding(0, 1)
 )
 
 // StatusStyle returns the appropriate style for a given container/resource state.
-// Recognized states: "running", "stopped", "exited", "paused", "error", "dead", "created"
+// Recognized states: "running", "stopped", "exited", "paused", "error", "dead", "created".
 func StatusStyle(state string) lipgloss.Style {
 	switch state {
 	case "running":

@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/docker/cli/cli/connhelper"
 	dockertypes "github.com/docker/docker/api/types"
@@ -20,9 +19,11 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
+
+	"github.com/GustavoCaso/docker-dash/internal/config"
 )
 
-// LocalDockerClient connects to the local Docker daemon
+// LocalDockerClient connects to the local Docker daemon.
 type LocalDockerClient struct {
 	cli        *client.Client
 	containers *localContainerService
@@ -99,7 +100,7 @@ func (c *LocalDockerClient) Close() error {
 	return c.cli.Close()
 }
 
-// Local Container Service
+// Local Container Service.
 type localContainerService struct {
 	cli *client.Client
 }
@@ -355,7 +356,7 @@ func buildContainerFileTree(reader io.ReadCloser) ContainerFileTree {
 	return ContainerFileTree{Files: files, Tree: t}
 }
 
-// Local Image Service
+// Local Image Service.
 type localImageService struct {
 	cli *client.Client
 }
@@ -380,7 +381,7 @@ func (s *localImageService) List(ctx context.Context) ([]Image, error) {
 	return result, nil
 }
 
-// fetchLayers retrieves the layer history for an image
+// fetchLayers retrieves the layer history for an image.
 func (s *localImageService) fetchLayers(ctx context.Context, imageID string) []Layer {
 	history, err := s.cli.ImageHistory(ctx, imageID)
 	if err != nil {
@@ -447,7 +448,7 @@ func (s *localImageService) Remove(ctx context.Context, id string, force bool) e
 	return err
 }
 
-// Local Volume Service
+// Local Volume Service.
 type localVolumeService struct {
 	cli *client.Client
 }
@@ -533,7 +534,7 @@ func (s *localVolumeService) copyFileTree(ctx context.Context, containerID, path
 	defer reader.Close()
 
 	cft := buildContainerFileTree(reader)
-	return VolumeFileTree{Files: cft.Files, Tree: cft.Tree}, nil
+	return VolumeFileTree(cft), nil
 }
 
 const (
@@ -586,7 +587,7 @@ func (s *localVolumeService) fileTreeViaTempContainer(ctx context.Context, volum
 	return ft, nil
 }
 
-// Helper to get containers using a volume
+// Helper to get containers using a volume.
 func (s *localVolumeService) getVolumeUsage(ctx context.Context, volumeName string) ([]string, error) {
 	containers, err := s.cli.ContainerList(ctx, container.ListOptions{
 		All:     true,
@@ -603,10 +604,10 @@ func (s *localVolumeService) getVolumeUsage(ctx context.Context, volumeName stri
 	return ids, nil
 }
 
-// timeFromUnix converts Unix timestamp to time.Time
+// timeFromUnix converts Unix timestamp to time.Time.
 func timeFromUnix(unix int64) time.Time {
 	return time.Unix(unix, 0)
 }
 
-// Ensure LocalDockerClient implements DockerClient
+// Ensure LocalDockerClient implements DockerClient.
 var _ DockerClient = (*LocalDockerClient)(nil)

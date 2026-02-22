@@ -8,7 +8,7 @@ import (
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 )
 
-// Container represents a Docker container
+// Container represents a Docker container.
 type Container struct {
 	ID      string
 	Name    string
@@ -51,7 +51,7 @@ type Mount struct {
 	Destination string
 }
 
-// Layer represents a Docker image layer
+// Layer represents a Docker image layer.
 type Layer struct {
 	ID      string    // Layer digest/ID
 	Command string    // Dockerfile instruction that created this layer
@@ -61,7 +61,7 @@ type Layer struct {
 
 const none = "<none>"
 
-// Image represents a Docker image
+// Image represents a Docker image.
 type Image struct {
 	ID         string
 	Repo       string
@@ -83,7 +83,7 @@ func (i Image) Name() string {
 	return i.ID
 }
 
-// Volume represents a Docker volume
+// Volume represents a Docker volume.
 type Volume struct {
 	Name      string
 	Driver    string
@@ -93,7 +93,7 @@ type Volume struct {
 	UsedCount int
 }
 
-// LogOptions configures log streaming
+// LogOptions configures log streaming.
 type LogOptions struct {
 	Follow     bool
 	Tail       string
@@ -115,7 +115,7 @@ func (e *LogsSession) Close() {
 	}
 }
 
-// ExecSession represents an interactive exec session inside a container
+// ExecSession represents an interactive exec session inside a container.
 type ExecSession struct {
 	Reader io.ReadCloser
 	Writer io.WriteCloser
