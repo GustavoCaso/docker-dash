@@ -2,6 +2,8 @@
 
 A terminal UI for managing Docker containers, images, and volumes — without leaving your terminal.
 
+<img src="./assets/overview.gif" />
+
 ## Why
 
 Switching between the terminal and a Docker GUI breaks flow. `docker-dash` gives you a keyboard-driven interface to inspect and manage your Docker environment, keeping you in the terminal where you already work.
