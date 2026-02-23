@@ -374,7 +374,7 @@ func (s *imageService) List(ctx context.Context) ([]Image, error) {
 		if err != nil {
 			return result, err
 		}
-
+		imageInspect.Containers = img.Containers
 		result[i] = imageInspect
 	}
 
@@ -425,21 +425,15 @@ func (s *imageService) Get(ctx context.Context, id string) (Image, error) {
 	// Fetch layer history for this image
 	layers := s.fetchLayers(ctx, img.ID)
 
-	containers := 0
-	for _, manifest := range img.Manifests {
-		containers += len(manifest.ImageData.Containers)
-	}
-
 	return Image{
-		ID:         img.ID,
-		Repo:       repo,
-		Tag:        tag,
-		Size:       img.Size,
-		Created:    created,
-		Dangling:   len(img.RepoTags) == 0 || repo == none && tag == none,
-		Layers:     layers,
-		Containers: containers,
-		Config:     img.Config,
+		ID:       img.ID,
+		Repo:     repo,
+		Tag:      tag,
+		Size:     img.Size,
+		Created:  created,
+		Dangling: len(img.RepoTags) == 0 || repo == none && tag == none,
+		Layers:   layers,
+		Config:   img.Config,
 	}, nil
 }
 

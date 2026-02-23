@@ -76,8 +76,8 @@ type containerItem struct {
 func (c containerItem) ID() string    { return c.container.ID }
 func (c containerItem) Title() string { return c.container.Name }
 func (c containerItem) Description() string {
-	stateIcon := theme.StatusIcon(string(c.container.State))
-	stateStyle := theme.StatusStyle(string(c.container.State))
+	stateIcon := theme.GetContainerStatusIcon(string(c.container.State))
+	stateStyle := theme.GetContainerStatusStyle(string(c.container.State))
 	state := stateStyle.Render(stateIcon + " " + string(c.container.State))
 	return state + " " + c.container.Image + " " + shortID(c.ID())
 }
@@ -509,8 +509,8 @@ func (c *ContainerList) detailsCmd() tea.Cmd {
 		fmt.Fprintf(&content, "Image:   %s\n", container.Image)
 		fmt.Fprintf(&content, "Status:  %s\n", container.Status)
 
-		stateStyle := theme.StatusStyle(string(container.State))
-		stateIcon := theme.StatusIcon(string(container.State))
+		stateStyle := theme.GetContainerStatusStyle(string(container.State))
+		stateIcon := theme.GetContainerStatusIcon(string(container.State))
 		fmt.Fprintf(&content, "State:   %s\n", stateStyle.Render(stateIcon+" "+string(container.State)))
 
 		fmt.Fprintf(&content, "Created: %s\n\n", container.Created.Format("2006-01-02 15:04:05"))

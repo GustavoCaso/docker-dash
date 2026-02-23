@@ -69,7 +69,7 @@ type Image struct {
 	Size       int64
 	Created    time.Time
 	Dangling   bool
-	Containers int
+	Containers int64
 	UsedBy     []string // Container IDs using this image
 	Layers     []Layer  // Image layers from history
 	Config     *dockerspec.DockerOCIImageConfig

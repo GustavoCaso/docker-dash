@@ -38,11 +38,15 @@ const (
 	IconVolume    = "\uf0a0" // Hard drive/volume icon
 	IconNetwork   = "\uf6ff" // Network icon
 
-	// Status icons.
+	// Contianer Status icons.
 	IconRunning = "\uf04b" // Play icon (running)
 	IconStopped = "\uf04d" // Stop icon (stopped)
 	IconPaused  = "\uf04c" // Pause icon
 	IconError   = "\uf00d" // X/error icon
+
+	// Image Status icons.
+	ImageUsedIcon = "\uf111" // nf-fa-circle
+	ImageNotUsed  = "\uf4aa" // nf-oct-circle
 
 	// Tree navigation icons.
 	IconExpanded  = "\uf0d7" // Chevron down
@@ -171,9 +175,25 @@ var (
 	HelpStyle = lipgloss.NewStyle().Padding(0, 1)
 )
 
-// StatusStyle returns the appropriate style for a given container/resource state.
+// GetContainerStatusIcon returns the appropriate icon for a given container/resource state.
+func GetContainerStatusIcon(state string) string {
+	switch state {
+	case "running":
+		return IconRunning
+	case "stopped", "exited":
+		return IconStopped
+	case "paused":
+		return IconPaused
+	case "error", "dead":
+		return IconError
+	default:
+		return IconStopped
+	}
+}
+
+// GetContainerStatusStyle returns the appropriate style for a given container/resource state.
 // Recognized states: "running", "stopped", "exited", "paused", "error", "dead", "created".
-func StatusStyle(state string) lipgloss.Style {
+func GetContainerStatusStyle(state string) lipgloss.Style {
 	switch state {
 	case "running":
 		return StatusRunningStyle
@@ -190,18 +210,18 @@ func StatusStyle(state string) lipgloss.Style {
 	}
 }
 
-// StatusIcon returns the appropriate icon for a given container/resource state.
-func StatusIcon(state string) string {
-	switch state {
-	case "running":
-		return IconRunning
-	case "stopped", "exited":
-		return IconStopped
-	case "paused":
-		return IconPaused
-	case "error", "dead":
-		return IconError
-	default:
-		return IconStopped
+// GetImageStatusIcon returns the appropriate icon for a given image state.
+func GetImageStatusIcon(containers int64) string {
+	if containers > 0 {
+		return ImageUsedIcon
 	}
+	return ImageNotUsed
+}
+
+// GetImageStatusStyle returns the appropriate style for a given image state.
+func GetImageStatusStyle(containers int64) lipgloss.Style {
+	if containers > 0 {
+		return StatusRunningStyle
+	}
+	return StatusStoppedStyle
 }

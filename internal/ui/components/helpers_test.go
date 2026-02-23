@@ -2,8 +2,6 @@ package components
 
 import (
 	"testing"
-
-	"github.com/GustavoCaso/docker-dash/internal/service"
 )
 
 func TestShortID(t *testing.T) {
@@ -69,26 +67,6 @@ func TestTruncateCommand(t *testing.T) {
 			got := truncateCommand(tt.cmd, tt.maxLen)
 			if got != tt.want {
 				t.Errorf("truncateCommand(%q, %d) = %q, want %q", tt.cmd, tt.maxLen, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFormatContainerUse(t *testing.T) {
-	tests := []struct {
-		name string
-		img  service.Image
-		want string
-	}{
-		{"used by containers", service.Image{Containers: 3}, " used by 3 containers"},
-		{"unused", service.Image{Containers: 0}, " unused"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := formatContainerUse(tt.img)
-			if got != tt.want {
-				t.Errorf("formatContainerUse() = %q, want %q", got, tt.want)
 			}
 		})
 	}

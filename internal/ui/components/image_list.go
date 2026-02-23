@@ -53,7 +53,10 @@ type imageItem struct {
 func (i imageItem) ID() string    { return i.image.ID }
 func (i imageItem) Title() string { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
 func (i imageItem) Description() string {
-	return formatSize(i.image.Size) + formatContainerUse(i.image)
+	stateIcon := theme.GetImageStatusIcon(i.image.Containers)
+	stateStyle := theme.GetImageStatusStyle(i.image.Containers)
+	state := stateStyle.Render(stateIcon)
+	return state + " " + formatSize(i.image.Size)
 }
 func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
@@ -414,12 +417,4 @@ func formatSize(bytes int64) string {
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}
-}
-
-func formatContainerUse(img service.Image) string {
-	if img.Containers > 0 {
-		return fmt.Sprintf(" used by %d containers", img.Containers)
-	}
-
-	return " unused"
 }
