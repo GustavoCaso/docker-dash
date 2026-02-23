@@ -23,22 +23,22 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/config"
 )
 
-// LocalDockerClient connects to the local Docker daemon.
-type LocalDockerClient struct {
+// dockerClient connects to a local or remote Docker daemon.
+type dockerClient struct {
 	cli        *client.Client
-	containers *localContainerService
-	images     *localImageService
-	volumes    *localVolumeService
+	containers *containerService
+	images     *imageService
+	volumes    *volumeService
 }
 
-// NewDockerClientFromConfig creates a LocalDockerClient using settings from cfg.
+// NewDockerClientFromConfig creates a dockerClient using settings from cfg.
 //
 // Connection logic:
 //   - cfg.Host empty → client.FromEnv (reads DOCKER_HOST, etc. from environment)
 //   - cfg.Host is ssh:// AND identity_file set → custom SSH dialer with key file auth
 //   - cfg.Host is ssh:// AND no identity_file → custom SSH dialer with SSH agent auth
 //   - cfg.Host is anything else (tcp://, unix://) → client.WithHost directly
-func NewDockerClientFromConfig(cfg config.DockerConfig) (*LocalDockerClient, error) {
+func NewDockerClientFromConfig(cfg config.DockerConfig) (DockerClient, error) {
 	opts := []client.Opt{
 		client.WithAPIVersionNegotiation(),
 	}
@@ -75,10 +75,10 @@ func NewDockerClientFromConfig(cfg config.DockerConfig) (*LocalDockerClient, err
 		return nil, err
 	}
 
-	c := &LocalDockerClient{cli: cli}
-	c.containers = &localContainerService{cli: cli}
-	c.images = &localImageService{cli: cli}
-	c.volumes = &localVolumeService{cli: cli}
+	c := &dockerClient{cli: cli}
+	c.containers = &containerService{cli: cli}
+	c.images = &imageService{cli: cli}
+	c.volumes = &volumeService{cli: cli}
 	return c, nil
 }
 
@@ -87,25 +87,25 @@ func isSSHHost(host string) bool {
 	return strings.HasPrefix(host, "ssh://")
 }
 
-func (c *LocalDockerClient) Containers() ContainerService { return c.containers }
-func (c *LocalDockerClient) Images() ImageService         { return c.images }
-func (c *LocalDockerClient) Volumes() VolumeService       { return c.volumes }
+func (c *dockerClient) Containers() ContainerService { return c.containers }
+func (c *dockerClient) Images() ImageService         { return c.images }
+func (c *dockerClient) Volumes() VolumeService       { return c.volumes }
 
-func (c *LocalDockerClient) Ping(ctx context.Context) error {
+func (c *dockerClient) Ping(ctx context.Context) error {
 	_, err := c.cli.Ping(ctx)
 	return err
 }
 
-func (c *LocalDockerClient) Close() error {
+func (c *dockerClient) Close() error {
 	return c.cli.Close()
 }
 
 // Local Container Service.
-type localContainerService struct {
+type containerService struct {
 	cli *client.Client
 }
 
-func (s *localContainerService) List(ctx context.Context) ([]Container, error) {
+func (s *containerService) List(ctx context.Context) ([]Container, error) {
 	containers, err := s.cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return nil, err
@@ -163,7 +163,7 @@ func (s *localContainerService) List(ctx context.Context) ([]Container, error) {
 	return result, nil
 }
 
-func (s *localContainerService) Run(ctx context.Context, image Image) (string, error) {
+func (s *containerService) Run(ctx context.Context, image Image) (string, error) {
 	ports := nat.PortSet{}
 
 	for port := range image.Config.ExposedPorts {
@@ -200,7 +200,7 @@ func (s *localContainerService) Run(ctx context.Context, image Image) (string, e
 	return containerResponse.ID, nil
 }
 
-func (s *localContainerService) Get(ctx context.Context, id string) (*Container, error) {
+func (s *containerService) Get(ctx context.Context, id string) (*Container, error) {
 	c, err := s.cli.ContainerInspect(ctx, id)
 	if err != nil {
 		return nil, err
@@ -224,23 +224,23 @@ func (s *localContainerService) Get(ctx context.Context, id string) (*Container,
 	}, nil
 }
 
-func (s *localContainerService) Start(ctx context.Context, id string) error {
+func (s *containerService) Start(ctx context.Context, id string) error {
 	return s.cli.ContainerStart(ctx, id, container.StartOptions{})
 }
 
-func (s *localContainerService) Stop(ctx context.Context, id string) error {
+func (s *containerService) Stop(ctx context.Context, id string) error {
 	return s.cli.ContainerStop(ctx, id, container.StopOptions{})
 }
 
-func (s *localContainerService) Restart(ctx context.Context, id string) error {
+func (s *containerService) Restart(ctx context.Context, id string) error {
 	return s.cli.ContainerRestart(ctx, id, container.StopOptions{})
 }
 
-func (s *localContainerService) Remove(ctx context.Context, id string, force bool) error {
+func (s *containerService) Remove(ctx context.Context, id string, force bool) error {
 	return s.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: force})
 }
 
-func (s *localContainerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
+func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
 	reader, err := s.cli.ContainerLogs(ctx, id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
@@ -265,7 +265,7 @@ func (s *localContainerService) Logs(ctx context.Context, id string, opts LogOpt
 	), nil
 }
 
-func (s *localContainerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
+func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
 	execConfig := container.ExecOptions{
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -291,7 +291,7 @@ func (s *localContainerService) Exec(ctx context.Context, id string) (*ExecSessi
 	), nil
 }
 
-func (s *localContainerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
+func (s *containerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
 	reader, err := s.cli.ContainerExport(ctx, id)
 	if err != nil {
 		return ContainerFileTree{}, err
@@ -357,11 +357,11 @@ func buildContainerFileTree(reader io.ReadCloser) ContainerFileTree {
 }
 
 // Local Image Service.
-type localImageService struct {
+type imageService struct {
 	cli *client.Client
 }
 
-func (s *localImageService) List(ctx context.Context) ([]Image, error) {
+func (s *imageService) List(ctx context.Context) ([]Image, error) {
 	images, err := s.cli.ImageList(ctx, image.ListOptions{All: true})
 	if err != nil {
 		return nil, err
@@ -382,7 +382,7 @@ func (s *localImageService) List(ctx context.Context) ([]Image, error) {
 }
 
 // fetchLayers retrieves the layer history for an image.
-func (s *localImageService) fetchLayers(ctx context.Context, imageID string) []Layer {
+func (s *imageService) fetchLayers(ctx context.Context, imageID string) []Layer {
 	history, err := s.cli.ImageHistory(ctx, imageID)
 	if err != nil {
 		return nil
@@ -401,7 +401,7 @@ func (s *localImageService) fetchLayers(ctx context.Context, imageID string) []L
 	return layers
 }
 
-func (s *localImageService) Get(ctx context.Context, id string) (Image, error) {
+func (s *imageService) Get(ctx context.Context, id string) (Image, error) {
 	img, err := s.cli.ImageInspect(ctx, id, client.ImageInspectWithManifests(true))
 	if err != nil {
 		return Image{}, err
@@ -443,17 +443,17 @@ func (s *localImageService) Get(ctx context.Context, id string) (Image, error) {
 	}, nil
 }
 
-func (s *localImageService) Remove(ctx context.Context, id string, force bool) error {
+func (s *imageService) Remove(ctx context.Context, id string, force bool) error {
 	_, err := s.cli.ImageRemove(ctx, id, image.RemoveOptions{Force: force})
 	return err
 }
 
 // Local Volume Service.
-type localVolumeService struct {
+type volumeService struct {
 	cli *client.Client
 }
 
-func (s *localVolumeService) List(ctx context.Context) ([]Volume, error) {
+func (s *volumeService) List(ctx context.Context) ([]Volume, error) {
 	du, err := s.cli.DiskUsage(ctx, dockertypes.DiskUsageOptions{
 		Types: []dockertypes.DiskUsageObject{dockertypes.VolumeObject},
 	})
@@ -483,11 +483,11 @@ func (s *localVolumeService) List(ctx context.Context) ([]Volume, error) {
 	return result, nil
 }
 
-func (s *localVolumeService) Remove(ctx context.Context, name string, force bool) error {
+func (s *volumeService) Remove(ctx context.Context, name string, force bool) error {
 	return s.cli.VolumeRemove(ctx, name, force)
 }
 
-func (s *localVolumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
+func (s *volumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
 	// Try to find a running container that mounts this volume
 	containerID, mountPoint, err := s.findRunningContainerForVolume(ctx, name)
 	if err != nil {
@@ -504,7 +504,7 @@ func (s *localVolumeService) FileTree(ctx context.Context, name string) (VolumeF
 
 // findRunningContainerForVolume returns the ID and mount point of a running
 // container that uses the given volume, or empty strings if none found.
-func (s *localVolumeService) findRunningContainerForVolume(ctx context.Context, name string) (string, string, error) {
+func (s *volumeService) findRunningContainerForVolume(ctx context.Context, name string) (string, string, error) {
 	usedBy, err := s.getVolumeUsage(ctx, name)
 	if err != nil {
 		return "", "", err
@@ -526,7 +526,7 @@ func (s *localVolumeService) findRunningContainerForVolume(ctx context.Context, 
 }
 
 // copyFileTree reads a tar archive from a container path and builds a file tree.
-func (s *localVolumeService) copyFileTree(ctx context.Context, containerID, path string) (VolumeFileTree, error) {
+func (s *volumeService) copyFileTree(ctx context.Context, containerID, path string) (VolumeFileTree, error) {
 	reader, _, err := s.cli.CopyFromContainer(ctx, containerID, path)
 	if err != nil {
 		return VolumeFileTree{}, fmt.Errorf("copy from container failed: %w", err)
@@ -543,7 +543,7 @@ const (
 )
 
 // ensureImage pulls the image if it doesn't exist locally.
-func (s *localVolumeService) ensureImage(ctx context.Context, ref string) error {
+func (s *volumeService) ensureImage(ctx context.Context, ref string) error {
 	_, err := s.cli.ImageInspect(ctx, ref)
 	if err == nil {
 		return nil // already exists
@@ -561,7 +561,7 @@ func (s *localVolumeService) ensureImage(ctx context.Context, ref string) error 
 
 // fileTreeViaTempContainer creates a temporary alpine container to browse
 // a volume that is not in use by any running container.
-func (s *localVolumeService) fileTreeViaTempContainer(ctx context.Context, volumeName string) (VolumeFileTree, error) {
+func (s *volumeService) fileTreeViaTempContainer(ctx context.Context, volumeName string) (VolumeFileTree, error) {
 	if err := s.ensureImage(ctx, alpineImage); err != nil {
 		return VolumeFileTree{}, err
 	}
@@ -588,7 +588,7 @@ func (s *localVolumeService) fileTreeViaTempContainer(ctx context.Context, volum
 }
 
 // Helper to get containers using a volume.
-func (s *localVolumeService) getVolumeUsage(ctx context.Context, volumeName string) ([]string, error) {
+func (s *volumeService) getVolumeUsage(ctx context.Context, volumeName string) ([]string, error) {
 	containers, err := s.cli.ContainerList(ctx, container.ListOptions{
 		All:     true,
 		Filters: filters.NewArgs(filters.Arg("volume", volumeName)),
@@ -609,5 +609,5 @@ func timeFromUnix(unix int64) time.Time {
 	return time.Unix(unix, 0)
 }
 
-// Ensure LocalDockerClient implements DockerClient.
-var _ DockerClient = (*LocalDockerClient)(nil)
+// Ensure dockerClient implements DockerClient.
+var _ DockerClient = (*dockerClient)(nil)
