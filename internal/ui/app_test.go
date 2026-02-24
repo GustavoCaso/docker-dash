@@ -50,6 +50,25 @@ func TestExecPanel(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestContainerStatsOnStoppedContainer(t *testing.T) {
+	m := InitialModel(service.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+	// Switch to Containers view
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	waitForString(t, tm, "nginx-proxy")
+	// Navigate to old-container (stopped, last in list)
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Try to open stats on stopped container
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	waitForString(t, tm, "Container is not running")
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func TestVolumesView(t *testing.T) {
 	m := InitialModel(service.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))

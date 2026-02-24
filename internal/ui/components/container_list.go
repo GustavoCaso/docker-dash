@@ -147,8 +147,6 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	ti := textinput.New()
 	ti.Prompt = "$ "
 
-	memChart := streamlinechart.New(1, 1)
-
 	cl := &ContainerList{
 		list:               l,
 		viewport:           vp,
@@ -157,7 +155,7 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 		execInput:          ti,
 		execHistory:        []string{},
 		cpuStreamlinechart: streamlinechart.New(1, 1),
-		memStreamlinechart: memChart,
+		memStreamlinechart: streamlinechart.New(1, 1),
 	}
 
 	return cl
