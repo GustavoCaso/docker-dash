@@ -25,6 +25,7 @@ type ContainerService interface {
 	FileTree(ctx context.Context, id string) (ContainerFileTree, error)
 	Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error)
 	Exec(ctx context.Context, id string) (*ExecSession, error)
+	Stats(ctx context.Context, is string) (*StatsSession, error)
 }
 
 // ImageService manages Docker images.

@@ -28,6 +28,7 @@ type KeyMap struct {
 	ContainerStartStop key.Binding
 	ContainerRestart   key.Binding
 	ContainerExec      key.Binding
+	ContainerStats     key.Binding
 
 	Help key.Binding
 	Quit key.Binding
@@ -122,6 +123,10 @@ var Keys = &KeyMap{
 		key.WithKeys("e"),
 		key.WithHelp("e", "exec into container"),
 	),
+	ContainerStats: key.NewBinding(
+		key.WithKeys("S"),
+		key.WithHelp("S", "container stats"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "help"),
@@ -184,7 +189,7 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.ContainerDelete, k.ContainerInfo, k.ContainerLogs, k.ContainerStartStop},
-			{k.ContainerRestart, k.ContainerExec, k.FileTree},
+			{k.ContainerStats, k.ContainerRestart, k.ContainerExec, k.FileTree},
 			{k.Filter, k.Help, k.Quit},
 		},
 	}

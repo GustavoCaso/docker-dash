@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,6 +14,9 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/docker/docker/api/types/container"
+
+	"github.com/NimbleMarkets/ntcharts/linechart/streamlinechart"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -49,6 +53,19 @@ type execOutputMsg struct {
 
 type execSessionStartedMsg struct {
 	session *service.ExecSession
+}
+
+// statsOutputMsg is sent when stats output is received.
+type statsOutputMsg struct {
+	cpuPercetange    float64
+	memoryPercentage float64
+	memoryUsage      float64
+	memoryLimit      float64
+	err              error
+}
+
+type statsSessionStartedMsg struct {
+	session *service.StatsSession
 }
 
 // logsOutputMsg is sent when logs output is received from the background reader.
@@ -103,6 +120,10 @@ type ContainerList struct {
 	execHistory             []string
 	execHistoryCurrentIndex int
 	execOutput              string
+	showStats               bool
+	statsSession            *service.StatsSession
+	cpuStreamlinechart      streamlinechart.Model
+	memStreamlinechart      streamlinechart.Model
 }
 
 // NewContainerList creates a new container list.
@@ -126,13 +147,17 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	ti := textinput.New()
 	ti.Prompt = "$ "
 
+	memChart := streamlinechart.New(1, 1)
+
 	cl := &ContainerList{
-		list:        l,
-		viewport:    vp,
-		service:     svc,
-		spinner:     sp,
-		execInput:   ti,
-		execHistory: []string{},
+		list:               l,
+		viewport:           vp,
+		service:            svc,
+		spinner:            sp,
+		execInput:          ti,
+		execHistory:        []string{},
+		cpuStreamlinechart: streamlinechart.New(1, 1),
+		memStreamlinechart: memChart,
 	}
 
 	return cl
@@ -146,7 +171,7 @@ func (c *ContainerList) SetSize(width, height int) {
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if c.showDetails || c.showLogs || c.showFileTree || c.showExec {
+	if c.showDetails || c.showLogs || c.showFileTree || c.showExec || c.showStats {
 		// Split view: 40% list, 60% details
 		listWidth := int(float64(width) * 0.4)
 		detailWidth := width - listWidth
@@ -158,6 +183,9 @@ func (c *ContainerList) SetSize(width, height int) {
 		} else {
 			c.viewport.Height = height - listY
 		}
+		chartHeight := (height - listY) / 2
+		c.cpuStreamlinechart.Resize(detailWidth-listX, chartHeight)
+		c.memStreamlinechart.Resize(detailWidth-listX, chartHeight)
 	} else {
 		// Full width list when viewport is hidden
 		c.list.SetSize(width-listX, height-listY)
@@ -236,6 +264,33 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.execOutput))
 		c.viewport.GotoBottom()
 		return c.readExecOutput()
+	case statsSessionStartedMsg:
+		c.statsSession = msg.session
+		return c.readStatsOutput()
+	case statsOutputMsg:
+		if msg.err != nil {
+			if c.statsSession == nil {
+				return nil // session was closed manually, ignore
+			}
+			c.closeStatsSession()
+			return func() tea.Msg {
+				return message.ShowBannerMsg{Message: fmt.Sprintf("Stats session error. Err: %s", msg.err), IsError: true}
+			}
+		}
+		c.cpuStreamlinechart.Push(msg.cpuPercetange)
+		c.cpuStreamlinechart.Draw()
+		c.memStreamlinechart.Push(msg.memoryPercentage)
+		c.memStreamlinechart.Draw()
+		cpuLabel := fmt.Sprintf("CPU %.2f%%", msg.cpuPercetange)
+		memLabel := fmt.Sprintf("MEM %.2f%% (%s / %s)", msg.memoryPercentage, formatBytes(uint64(msg.memoryUsage)), formatBytes(uint64(msg.memoryLimit)))
+		combined := lipgloss.JoinVertical(lipgloss.Left,
+			cpuLabel,
+			c.cpuStreamlinechart.View(),
+			memLabel,
+			c.memStreamlinechart.View(),
+		)
+		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(combined))
+		return c.readStatsOutput()
 	case detailsMsg:
 		if msg.err != nil {
 			return func() tea.Msg {
@@ -330,6 +385,24 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			}
 			c.clearViewPort()
 			return nil
+		case key.Matches(msg, keys.Keys.ContainerStats):
+			c.showStats = !c.showStats
+			if c.showStats {
+				selected := c.list.SelectedItem()
+				if selected == nil {
+					return nil
+				}
+				container := selected.(containerItem).container
+				if container.State != service.StateRunning {
+					return func() tea.Msg {
+						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
+					}
+				}
+
+				return c.startStatsSession(container.ID)
+			}
+			c.closeStatsSession()
+			return nil
 		case key.Matches(msg, keys.Keys.ContainerExec):
 			c.showExec = !c.showExec
 			if c.showExec {
@@ -401,7 +474,7 @@ func (c *ContainerList) View() string {
 		Render(listContent)
 
 	// Only show viewport when details are toggled on
-	if !c.showDetails && !c.showLogs && !c.showFileTree && !c.showExec {
+	if !c.showDetails && !c.showLogs && !c.showFileTree && !c.showExec && !c.showStats {
 		return listView
 	}
 
@@ -484,6 +557,7 @@ func (c *ContainerList) clearDetails() {
 	c.showDetails = false
 	c.showFileTree = false
 	c.showExec = false
+	c.showStats = false
 	c.logsOutput = ""
 	c.execOutput = ""
 	c.clearViewPort()
@@ -658,6 +732,27 @@ func (c *ContainerList) startExecSession(containerID string) tea.Cmd {
 	}
 }
 
+func (c *ContainerList) startStatsSession(containerID string) tea.Cmd {
+	svc := c.service
+	return func() tea.Msg {
+		ctx := context.Background()
+		session, err := svc.Stats(ctx, containerID)
+		if err != nil {
+			return statsOutputMsg{err: err}
+		}
+		return statsSessionStartedMsg{session: session}
+	}
+}
+
+func (c *ContainerList) closeStatsSession() {
+	c.showStats = false
+	if c.statsSession != nil {
+		c.statsSession.Close()
+		c.statsSession = nil
+	}
+	c.clearViewPort()
+}
+
 func (c *ContainerList) extendExecHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
@@ -730,6 +825,44 @@ func (c *ContainerList) readExecOutput() tea.Cmd {
 	}
 }
 
+func (c *ContainerList) readStatsOutput() tea.Cmd {
+	session := c.statsSession
+	if session == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		buf := make([]byte, 4096)
+		n, err := session.Reader.Read(buf)
+		if err != nil {
+			return statsOutputMsg{err: err}
+		}
+		var stats container.StatsResponse
+		err = json.Unmarshal(buf[:n], &stats)
+		if err != nil {
+			return statsOutputMsg{err: err}
+		}
+		cpuDelta := stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage
+		systemCpuDelta := stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage
+		numberCpus := stats.CPUStats.OnlineCPUs
+
+		percentageCpuUsage := float64(cpuDelta) / float64(systemCpuDelta) * float64(numberCpus) * 100.0
+
+		memUsage := float64(stats.MemoryStats.Usage)
+		memLimit := float64(stats.MemoryStats.Limit)
+		var memPercentage float64
+		if memLimit > 0 {
+			memPercentage = memUsage / memLimit * 100.0
+		}
+
+		return statsOutputMsg{
+			cpuPercetange:    percentageCpuUsage,
+			memoryPercentage: memPercentage,
+			memoryUsage:      memUsage,
+			memoryLimit:      memLimit,
+		}
+	}
+}
+
 func (c *ContainerList) readLogsOutput() tea.Cmd {
 	session := c.logsSession
 	if session == nil {
@@ -749,4 +882,17 @@ func (c *ContainerList) closeExecSessionMsg() tea.Cmd {
 	return func() tea.Msg {
 		return execCloseMsg{}
 	}
+}
+
+func formatBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }

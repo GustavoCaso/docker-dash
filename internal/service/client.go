@@ -291,6 +291,25 @@ func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, e
 	), nil
 }
 
+func (s *containerService) Stats(ctx context.Context, id string) (*StatsSession, error) {
+	reader, err := s.cli.ContainerStats(ctx, id, true)
+
+	if err != nil {
+		return nil, err
+	}
+
+	pr, pw := io.Pipe()
+	go func() {
+		_, err := io.Copy(pw, reader.Body)
+		pw.CloseWithError(err)
+	}()
+
+	return NewStatsSession(
+		io.NopCloser(pr),
+		func() { reader.Body.Close() },
+	), nil
+}
+
 func (s *containerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
 	reader, err := s.cli.ContainerExport(ctx, id)
 	if err != nil {

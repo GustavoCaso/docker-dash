@@ -202,6 +202,27 @@ func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSessio
 	return nil, fmt.Errorf("container not found: %s", id)
 }
 
+func (s *mockContainerService) Stats(ctx context.Context, id string) (*StatsSession, error) {
+	for _, c := range s.containers {
+		if c.ID == id || c.Name == id {
+			if c.State != StateRunning {
+				return nil, fmt.Errorf("container %s is not running", id)
+			}
+
+			pr, pw := io.Pipe()
+
+			return NewStatsSession(
+				pr,
+				func() {
+					pw.Close()
+					pr.Close()
+				},
+			), nil
+		}
+	}
+	return nil, fmt.Errorf("container not found: %s", id)
+}
+
 // mockExecWriter simulates shell output by echoing back commands with a fake prompt.
 type mockExecWriter struct {
 	pw *io.PipeWriter
