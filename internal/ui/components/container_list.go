@@ -125,12 +125,12 @@ type ContainerList struct {
 	execHistory             []string
 	execHistoryCurrentIndex int
 	execOutput              string
-	showStats                bool
-	statsSession             *service.StatsSession
-	cpuStreamlinechart       streamlinechart.Model
-	memStreamlinechart       streamlinechart.Model
-	networkStreamlinechart   streamlinechart.Model
-	ioStreamlinechart        streamlinechart.Model
+	showStats               bool
+	statsSession            *service.StatsSession
+	cpuStreamlinechart      streamlinechart.Model
+	memStreamlinechart      streamlinechart.Model
+	networkStreamlinechart  streamlinechart.Model
+	ioStreamlinechart       streamlinechart.Model
 }
 
 // NewContainerList creates a new container list.
@@ -175,13 +175,21 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 			1,
 			1,
 			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusRunning)),
-			streamlinechart.WithDataSetStyles("write", runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusPaused)),
+			streamlinechart.WithDataSetStyles(
+				"write",
+				runes.ArcLineStyle,
+				lipgloss.NewStyle().Foreground(theme.StatusPaused),
+			),
 		),
 		ioStreamlinechart: streamlinechart.New(
 			1,
 			1,
 			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.DockerBlue)),
-			streamlinechart.WithDataSetStyles("write", runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusError)),
+			streamlinechart.WithDataSetStyles(
+				"write",
+				runes.ArcLineStyle,
+				lipgloss.NewStyle().Foreground(theme.StatusError),
+			),
 		),
 	}
 
@@ -294,6 +302,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		c.viewport.GotoBottom()
 		return c.readExecOutput()
 	case statsSessionStartedMsg:
+		c.loading = false
 		c.statsSession = msg.session
 		return c.readStatsOutput()
 	case statsOutputMsg:
@@ -448,7 +457,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
 					}
 				}
-
+				c.loading = true
 				return c.startStatsSession(container.ID)
 			}
 			c.closeStatsSession()

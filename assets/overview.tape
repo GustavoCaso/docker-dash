@@ -26,6 +26,7 @@ Right@500ms 1
 Sleep 3
 Type "?"
 Sleep 2
+Down 1
 Type "l"
 Sleep 4
 Type "t"
@@ -35,6 +36,11 @@ Type@500ms "j"
 Type@500ms "j"
 Sleep 5
 Type "?"
+Sleep 5
+Type "?"
+Sleep 5
+Type "S"
+Sleep 10
 
 Hide
 Ctrl+C
