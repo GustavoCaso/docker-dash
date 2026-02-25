@@ -202,6 +202,43 @@ func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSessio
 	return nil, fmt.Errorf("container not found: %s", id)
 }
 
+// mockStatsJSON is a single Docker stats response frame used by the mock.
+// CPU%: (2e8 - 1e8) / (2e10 - 1e10) * 4 * 100 = 4%
+// Mem: 512 MiB usage / 8 GiB limit = 6.25%
+const mockStatsJSON = `{"cpu_stats":{"cpu_usage":{"total_usage":200000000},"system_cpu_usage":20000000000,"online_cpus":4},"precpu_stats":{"cpu_usage":{"total_usage":100000000},"system_cpu_usage":10000000000},"memory_stats":{"usage":536870912,"limit":8589934592}}`
+
+func (s *mockContainerService) Stats(ctx context.Context, id string) (*StatsSession, error) {
+	for _, c := range s.containers {
+		if c.ID == id || c.Name == id {
+			if c.State != StateRunning {
+				return nil, fmt.Errorf("container %s is not running", id)
+			}
+
+			pr, pw := io.Pipe()
+
+			go func() {
+				for {
+					_, err := pw.Write([]byte(mockStatsJSON))
+					if err != nil {
+						pw.CloseWithError(err)
+						return
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+			}()
+
+			return NewStatsSession(
+				pr,
+				func() {
+					pw.Close()
+					pr.Close()
+				},
+			), nil
+		}
+	}
+	return nil, fmt.Errorf("container not found: %s", id)
+}
+
 // mockExecWriter simulates shell output by echoing back commands with a fake prompt.
 type mockExecWriter struct {
 	pw *io.PipeWriter

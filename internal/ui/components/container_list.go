@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,6 +14,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/docker/docker/api/types/container"
+
+	"github.com/NimbleMarkets/ntcharts/canvas/runes"
+	"github.com/NimbleMarkets/ntcharts/linechart/streamlinechart"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -49,6 +54,23 @@ type execOutputMsg struct {
 
 type execSessionStartedMsg struct {
 	session *service.ExecSession
+}
+
+// statsOutputMsg is sent when stats output is received.
+type statsOutputMsg struct {
+	cpuPercetange    float64
+	memoryPercentage float64
+	memoryUsage      float64
+	memoryLimit      float64
+	networkRead      float64
+	netwrokWrite     float64
+	ioRead           float64
+	ioWrite          float64
+	err              error
+}
+
+type statsSessionStartedMsg struct {
+	session *service.StatsSession
 }
 
 // logsOutputMsg is sent when logs output is received from the background reader.
@@ -103,6 +125,12 @@ type ContainerList struct {
 	execHistory             []string
 	execHistoryCurrentIndex int
 	execOutput              string
+	showStats               bool
+	statsSession            *service.StatsSession
+	cpuStreamlinechart      streamlinechart.Model
+	memStreamlinechart      streamlinechart.Model
+	networkStreamlinechart  streamlinechart.Model
+	ioStreamlinechart       streamlinechart.Model
 }
 
 // NewContainerList creates a new container list.
@@ -133,6 +161,36 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 		spinner:     sp,
 		execInput:   ti,
 		execHistory: []string{},
+		cpuStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.DockerBlue)),
+		),
+		memStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusRunning)),
+		),
+		networkStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusRunning)),
+			streamlinechart.WithDataSetStyles(
+				"write",
+				runes.ArcLineStyle,
+				lipgloss.NewStyle().Foreground(theme.StatusPaused),
+			),
+		),
+		ioStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.DockerBlue)),
+			streamlinechart.WithDataSetStyles(
+				"write",
+				runes.ArcLineStyle,
+				lipgloss.NewStyle().Foreground(theme.StatusError),
+			),
+		),
 	}
 
 	return cl
@@ -146,7 +204,7 @@ func (c *ContainerList) SetSize(width, height int) {
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if c.showDetails || c.showLogs || c.showFileTree || c.showExec {
+	if c.showDetails || c.showLogs || c.showFileTree || c.showExec || c.showStats {
 		// Split view: 40% list, 60% details
 		listWidth := int(float64(width) * 0.4)
 		detailWidth := width - listWidth
@@ -158,6 +216,13 @@ func (c *ContainerList) SetSize(width, height int) {
 		} else {
 			c.viewport.Height = height - listY
 		}
+		chartWidth := (detailWidth - listX) / 2
+		cpuMemChartHeight := (height-listY)/2 - 1 // subtract 1 for the label line
+		netIOChartHeight := (height-listY)/2 - 2  // subtract 2 for label + legend line
+		c.cpuStreamlinechart.Resize(chartWidth, cpuMemChartHeight)
+		c.memStreamlinechart.Resize(chartWidth, cpuMemChartHeight)
+		c.networkStreamlinechart.Resize(chartWidth, netIOChartHeight)
+		c.ioStreamlinechart.Resize(chartWidth, netIOChartHeight)
 	} else {
 		// Full width list when viewport is hidden
 		c.list.SetSize(width-listX, height-listY)
@@ -236,6 +301,55 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.execOutput))
 		c.viewport.GotoBottom()
 		return c.readExecOutput()
+	case statsSessionStartedMsg:
+		c.loading = false
+		c.statsSession = msg.session
+		return c.readStatsOutput()
+	case statsOutputMsg:
+		if msg.err != nil {
+			if c.statsSession == nil {
+				return nil // session was closed manually, ignore
+			}
+			c.closeStatsSession()
+			return func() tea.Msg {
+				return message.ShowBannerMsg{Message: fmt.Sprintf("Stats session error. Err: %s", msg.err), IsError: true}
+			}
+		}
+		c.cpuStreamlinechart.Push(msg.cpuPercetange)
+		c.cpuStreamlinechart.Draw()
+		c.memStreamlinechart.Push(msg.memoryPercentage)
+		c.memStreamlinechart.Draw()
+		c.networkStreamlinechart.Push(msg.networkRead)
+		c.networkStreamlinechart.PushDataSet("write", msg.netwrokWrite)
+		c.networkStreamlinechart.DrawAll()
+		c.ioStreamlinechart.Push(msg.ioRead)
+		c.ioStreamlinechart.PushDataSet("write", msg.ioWrite)
+		c.ioStreamlinechart.DrawAll()
+
+		cpuLabel := fmt.Sprintf("CPU %.2f%%", msg.cpuPercetange)
+		memLabel := fmt.Sprintf("MEM %.2f%% (%s / %s)", msg.memoryPercentage, formatBytes(uint64(msg.memoryUsage)), formatBytes(uint64(msg.memoryLimit)))
+		netLabel := fmt.Sprintf("NET  rx:%s tx:%s", formatBytes(uint64(msg.networkRead)), formatBytes(uint64(msg.netwrokWrite)))
+		ioLabel := fmt.Sprintf("I/O  r:%s w:%s", formatBytes(uint64(msg.ioRead)), formatBytes(uint64(msg.ioWrite)))
+
+		netReadLegend := lipgloss.NewStyle().Foreground(theme.StatusRunning).Render("● read")
+		netWriteLegend := lipgloss.NewStyle().Foreground(theme.StatusPaused).Render("● write")
+		netLegend := netReadLegend + "  " + netWriteLegend
+
+		ioReadLegend := lipgloss.NewStyle().Foreground(theme.DockerBlue).Render("● read")
+		ioWriteLegend := lipgloss.NewStyle().Foreground(theme.StatusError).Render("● write")
+		ioLegend := ioReadLegend + "  " + ioWriteLegend
+
+		row1 := lipgloss.JoinHorizontal(lipgloss.Top,
+			lipgloss.JoinVertical(lipgloss.Left, cpuLabel, c.cpuStreamlinechart.View()),
+			lipgloss.JoinVertical(lipgloss.Left, memLabel, c.memStreamlinechart.View()),
+		)
+		row2 := lipgloss.JoinHorizontal(lipgloss.Top,
+			lipgloss.JoinVertical(lipgloss.Left, netLabel, netLegend, c.networkStreamlinechart.View()),
+			lipgloss.JoinVertical(lipgloss.Left, ioLabel, ioLegend, c.ioStreamlinechart.View()),
+		)
+		combined := lipgloss.JoinVertical(lipgloss.Left, row1, row2)
+		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(combined))
+		return c.readStatsOutput()
 	case detailsMsg:
 		if msg.err != nil {
 			return func() tea.Msg {
@@ -330,6 +444,24 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			}
 			c.clearViewPort()
 			return nil
+		case key.Matches(msg, keys.Keys.ContainerStats):
+			c.showStats = !c.showStats
+			if c.showStats {
+				selected := c.list.SelectedItem()
+				if selected == nil {
+					return nil
+				}
+				container := selected.(containerItem).container
+				if container.State != service.StateRunning {
+					return func() tea.Msg {
+						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
+					}
+				}
+				c.loading = true
+				return c.startStatsSession(container.ID)
+			}
+			c.closeStatsSession()
+			return nil
 		case key.Matches(msg, keys.Keys.ContainerExec):
 			c.showExec = !c.showExec
 			if c.showExec {
@@ -401,7 +533,7 @@ func (c *ContainerList) View() string {
 		Render(listContent)
 
 	// Only show viewport when details are toggled on
-	if !c.showDetails && !c.showLogs && !c.showFileTree && !c.showExec {
+	if !c.showDetails && !c.showLogs && !c.showFileTree && !c.showExec && !c.showStats {
 		return listView
 	}
 
@@ -484,6 +616,7 @@ func (c *ContainerList) clearDetails() {
 	c.showDetails = false
 	c.showFileTree = false
 	c.showExec = false
+	c.showStats = false
 	c.logsOutput = ""
 	c.execOutput = ""
 	c.clearViewPort()
@@ -658,6 +791,27 @@ func (c *ContainerList) startExecSession(containerID string) tea.Cmd {
 	}
 }
 
+func (c *ContainerList) startStatsSession(containerID string) tea.Cmd {
+	svc := c.service
+	return func() tea.Msg {
+		ctx := context.Background()
+		session, err := svc.Stats(ctx, containerID)
+		if err != nil {
+			return statsOutputMsg{err: err}
+		}
+		return statsSessionStartedMsg{session: session}
+	}
+}
+
+func (c *ContainerList) closeStatsSession() {
+	c.showStats = false
+	if c.statsSession != nil {
+		c.statsSession.Close()
+		c.statsSession = nil
+	}
+	c.clearViewPort()
+}
+
 func (c *ContainerList) extendExecHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
@@ -730,6 +884,69 @@ func (c *ContainerList) readExecOutput() tea.Cmd {
 	}
 }
 
+func (c *ContainerList) readStatsOutput() tea.Cmd {
+	session := c.statsSession
+	if session == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		buf := make([]byte, 4096)
+		n, err := session.Reader.Read(buf)
+		if err != nil {
+			return statsOutputMsg{err: err}
+		}
+		var stats container.StatsResponse
+		err = json.Unmarshal(buf[:n], &stats)
+		if err != nil {
+			return statsOutputMsg{err: err}
+		}
+		cpuDelta := stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage
+		systemCpuDelta := stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage
+		numberCpus := stats.CPUStats.OnlineCPUs
+
+		percentageCpuUsage := float64(cpuDelta) / float64(systemCpuDelta) * float64(numberCpus) * 100.0
+
+		memUsage := float64(stats.MemoryStats.Usage) - float64(stats.MemoryStats.Stats["cache"])
+		memLimit := float64(stats.MemoryStats.Limit)
+		var memPercentage float64
+		if memLimit > 0 {
+			memPercentage = memUsage / memLimit * 100.0
+		}
+
+		networkRead := float64(0.0)
+		networkWrite := float64(0.0)
+
+		for _, stat := range stats.Networks {
+			networkRead += float64(stat.RxBytes)
+			networkWrite += float64(stat.TxBytes)
+		}
+
+		ioRead := float64(0.0)
+		ioWrite := float64(0.0)
+
+		for _, stat := range stats.BlkioStats.IoServiceBytesRecursive {
+			if stat.Op == "read" {
+				ioRead += float64(stat.Value)
+			}
+
+			if stat.Op == "write" {
+				ioWrite += float64(stat.Value)
+			}
+		}
+
+		return statsOutputMsg{
+			cpuPercetange:    percentageCpuUsage,
+			memoryPercentage: memPercentage,
+			memoryUsage:      memUsage,
+			memoryLimit:      memLimit,
+			networkRead:      networkRead,
+			netwrokWrite:     networkWrite,
+			ioRead:           ioRead,
+			ioWrite:          ioWrite,
+		}
+	}
+}
+
 func (c *ContainerList) readLogsOutput() tea.Cmd {
 	session := c.logsSession
 	if session == nil {
@@ -749,4 +966,17 @@ func (c *ContainerList) closeExecSessionMsg() tea.Cmd {
 	return func() tea.Msg {
 		return execCloseMsg{}
 	}
+}
+
+func formatBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
 }

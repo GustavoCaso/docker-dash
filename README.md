@@ -56,6 +56,7 @@ docker-dash
 | `D`        | Delete container   |
 | `l`        | View logs          |
 | `s`        | Start/stop         |
+| `S`        | Stats              |
 | `ctrl+R`   | Restart            |
 | `e`        | Exec into container|
 | `t`        | Show files         |

@@ -131,3 +131,19 @@ func (e *ExecSession) Close() {
 		e.closer()
 	}
 }
+
+// StatsSession represents an interactive exec session inside a container.
+type StatsSession struct {
+	Reader io.ReadCloser
+	closer func()
+}
+
+func NewStatsSession(reader io.ReadCloser, closer func()) *StatsSession {
+	return &StatsSession{Reader: reader, closer: closer}
+}
+
+func (e *StatsSession) Close() {
+	if e.closer != nil {
+		e.closer()
+	}
+}

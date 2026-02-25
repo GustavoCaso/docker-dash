@@ -102,6 +102,21 @@ func TestContainerListDelete(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
+func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
+	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "nginx-proxy")
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Open stats on running container
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	// Both labels appear in the same rendered frame; check them together so the
+	// ANSI compressor (which only diffs changed lines) doesn't swallow one of them.
+	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
+		s := string(b)
+		return strings.Contains(s, "CPU") && strings.Contains(s, "MEM")
+	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
 
 func TestContainerListRefresh(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
@@ -115,4 +130,28 @@ func TestContainerListRefresh(t *testing.T) {
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestFormatBytes(t *testing.T) {
+	tests := []struct {
+		input    uint64
+		expected string
+	}{
+		{0, "0 B"},
+		{512, "512 B"},
+		{1023, "1023 B"},
+		{1024, "1.0 KiB"},
+		{1536, "1.5 KiB"},
+		{1024 * 1024, "1.0 MiB"},
+		{512 * 1024 * 1024, "512.0 MiB"},
+		{1024 * 1024 * 1024, "1.0 GiB"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			got := formatBytes(tt.input)
+			if got != tt.expected {
+				t.Errorf("formatBytes(%d) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
 }
