@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/docker/docker/api/types/container"
 
+	"github.com/NimbleMarkets/ntcharts/canvas/runes"
 	"github.com/NimbleMarkets/ntcharts/linechart/streamlinechart"
 
 	"github.com/GustavoCaso/docker-dash/internal/service"
@@ -61,6 +62,10 @@ type statsOutputMsg struct {
 	memoryPercentage float64
 	memoryUsage      float64
 	memoryLimit      float64
+	networkRead      float64
+	netwrokWrite     float64
+	ioRead           float64
+	ioWrite          float64
 	err              error
 }
 
@@ -120,10 +125,12 @@ type ContainerList struct {
 	execHistory             []string
 	execHistoryCurrentIndex int
 	execOutput              string
-	showStats               bool
-	statsSession            *service.StatsSession
-	cpuStreamlinechart      streamlinechart.Model
-	memStreamlinechart      streamlinechart.Model
+	showStats                bool
+	statsSession             *service.StatsSession
+	cpuStreamlinechart       streamlinechart.Model
+	memStreamlinechart       streamlinechart.Model
+	networkStreamlinechart   streamlinechart.Model
+	ioStreamlinechart        streamlinechart.Model
 }
 
 // NewContainerList creates a new container list.
@@ -148,14 +155,34 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	ti.Prompt = "$ "
 
 	cl := &ContainerList{
-		list:               l,
-		viewport:           vp,
-		service:            svc,
-		spinner:            sp,
-		execInput:          ti,
-		execHistory:        []string{},
-		cpuStreamlinechart: streamlinechart.New(1, 1),
-		memStreamlinechart: streamlinechart.New(1, 1),
+		list:        l,
+		viewport:    vp,
+		service:     svc,
+		spinner:     sp,
+		execInput:   ti,
+		execHistory: []string{},
+		cpuStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.DockerBlue)),
+		),
+		memStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusRunning)),
+		),
+		networkStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusRunning)),
+			streamlinechart.WithDataSetStyles("write", runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusPaused)),
+		),
+		ioStreamlinechart: streamlinechart.New(
+			1,
+			1,
+			streamlinechart.WithStyles(runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.DockerBlue)),
+			streamlinechart.WithDataSetStyles("write", runes.ArcLineStyle, lipgloss.NewStyle().Foreground(theme.StatusError)),
+		),
 	}
 
 	return cl
@@ -181,9 +208,13 @@ func (c *ContainerList) SetSize(width, height int) {
 		} else {
 			c.viewport.Height = height - listY
 		}
-		chartHeight := (height - listY) / 2
-		c.cpuStreamlinechart.Resize(detailWidth-listX, chartHeight)
-		c.memStreamlinechart.Resize(detailWidth-listX, chartHeight)
+		chartWidth := (detailWidth - listX) / 2
+		cpuMemChartHeight := (height-listY)/2 - 1 // subtract 1 for the label line
+		netIOChartHeight := (height-listY)/2 - 2  // subtract 2 for label + legend line
+		c.cpuStreamlinechart.Resize(chartWidth, cpuMemChartHeight)
+		c.memStreamlinechart.Resize(chartWidth, cpuMemChartHeight)
+		c.networkStreamlinechart.Resize(chartWidth, netIOChartHeight)
+		c.ioStreamlinechart.Resize(chartWidth, netIOChartHeight)
 	} else {
 		// Full width list when viewport is hidden
 		c.list.SetSize(width-listX, height-listY)
@@ -279,14 +310,35 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		c.cpuStreamlinechart.Draw()
 		c.memStreamlinechart.Push(msg.memoryPercentage)
 		c.memStreamlinechart.Draw()
+		c.networkStreamlinechart.Push(msg.networkRead)
+		c.networkStreamlinechart.PushDataSet("write", msg.netwrokWrite)
+		c.networkStreamlinechart.DrawAll()
+		c.ioStreamlinechart.Push(msg.ioRead)
+		c.ioStreamlinechart.PushDataSet("write", msg.ioWrite)
+		c.ioStreamlinechart.DrawAll()
+
 		cpuLabel := fmt.Sprintf("CPU %.2f%%", msg.cpuPercetange)
 		memLabel := fmt.Sprintf("MEM %.2f%% (%s / %s)", msg.memoryPercentage, formatBytes(uint64(msg.memoryUsage)), formatBytes(uint64(msg.memoryLimit)))
-		combined := lipgloss.JoinVertical(lipgloss.Left,
-			cpuLabel,
-			c.cpuStreamlinechart.View(),
-			memLabel,
-			c.memStreamlinechart.View(),
+		netLabel := fmt.Sprintf("NET  rx:%s tx:%s", formatBytes(uint64(msg.networkRead)), formatBytes(uint64(msg.netwrokWrite)))
+		ioLabel := fmt.Sprintf("I/O  r:%s w:%s", formatBytes(uint64(msg.ioRead)), formatBytes(uint64(msg.ioWrite)))
+
+		netReadLegend := lipgloss.NewStyle().Foreground(theme.StatusRunning).Render("● read")
+		netWriteLegend := lipgloss.NewStyle().Foreground(theme.StatusPaused).Render("● write")
+		netLegend := netReadLegend + "  " + netWriteLegend
+
+		ioReadLegend := lipgloss.NewStyle().Foreground(theme.DockerBlue).Render("● read")
+		ioWriteLegend := lipgloss.NewStyle().Foreground(theme.StatusError).Render("● write")
+		ioLegend := ioReadLegend + "  " + ioWriteLegend
+
+		row1 := lipgloss.JoinHorizontal(lipgloss.Top,
+			lipgloss.JoinVertical(lipgloss.Left, cpuLabel, c.cpuStreamlinechart.View()),
+			lipgloss.JoinVertical(lipgloss.Left, memLabel, c.memStreamlinechart.View()),
 		)
+		row2 := lipgloss.JoinHorizontal(lipgloss.Top,
+			lipgloss.JoinVertical(lipgloss.Left, netLabel, netLegend, c.networkStreamlinechart.View()),
+			lipgloss.JoinVertical(lipgloss.Left, ioLabel, ioLegend, c.ioStreamlinechart.View()),
+		)
+		combined := lipgloss.JoinVertical(lipgloss.Left, row1, row2)
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(combined))
 		return c.readStatsOutput()
 	case detailsMsg:
@@ -845,11 +897,32 @@ func (c *ContainerList) readStatsOutput() tea.Cmd {
 
 		percentageCpuUsage := float64(cpuDelta) / float64(systemCpuDelta) * float64(numberCpus) * 100.0
 
-		memUsage := float64(stats.MemoryStats.Usage)
+		memUsage := float64(stats.MemoryStats.Usage) - float64(stats.MemoryStats.Stats["cache"])
 		memLimit := float64(stats.MemoryStats.Limit)
 		var memPercentage float64
 		if memLimit > 0 {
 			memPercentage = memUsage / memLimit * 100.0
+		}
+
+		networkRead := float64(0.0)
+		networkWrite := float64(0.0)
+
+		for _, stat := range stats.Networks {
+			networkRead += float64(stat.RxBytes)
+			networkWrite += float64(stat.TxBytes)
+		}
+
+		ioRead := float64(0.0)
+		ioWrite := float64(0.0)
+
+		for _, stat := range stats.BlkioStats.IoServiceBytesRecursive {
+			if stat.Op == "read" {
+				ioRead += float64(stat.Value)
+			}
+
+			if stat.Op == "write" {
+				ioWrite += float64(stat.Value)
+			}
 		}
 
 		return statsOutputMsg{
@@ -857,6 +930,10 @@ func (c *ContainerList) readStatsOutput() tea.Cmd {
 			memoryPercentage: memPercentage,
 			memoryUsage:      memUsage,
 			memoryLimit:      memLimit,
+			networkRead:      networkRead,
+			netwrokWrite:     networkWrite,
+			ioRead:           ioRead,
+			ioWrite:          ioWrite,
 		}
 	}
 }
