@@ -104,7 +104,7 @@ func (v *VolumeList) SetSize(width, height int) {
 	listX, listY := theme.ListStyle.GetFrameSize()
 
 	if v.showFileTree {
-		listWidth := int(float64(width) * 0.4)
+		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
 
 		v.list.SetSize(listWidth-listX, height-listY)
@@ -169,16 +169,16 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 		}
 	case tea.KeyMsg:
 		if v.isFilter {
-			cmds := []tea.Cmd{}
+			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd
 			v.list, listCmd = v.list.Update(msg)
-			cmds = append(cmds, listCmd)
+			filterCmds = append(filterCmds, listCmd)
 
 			if key.Matches(msg, keys.Keys.Esc) {
 				v.isFilter = !v.isFilter
-				cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
 			}
-			return tea.Batch(cmds...)
+			return tea.Batch(filterCmds...)
 		}
 
 		switch {
@@ -187,7 +187,11 @@ func (v *VolumeList) Update(msg tea.Msg) tea.Cmd {
 			if selected == nil {
 				return nil
 			}
-			vol := selected.(volumeItem).volume
+			vItem, ok := selected.(volumeItem)
+			if !ok {
+				return nil
+			}
+			vol := vItem.volume
 			v.showFileTree = !v.showFileTree
 			if v.showFileTree {
 				v.loading = true
@@ -290,15 +294,15 @@ func (v *VolumeList) deleteVolumeCmd() tea.Cmd {
 	}
 
 	item := items[idx]
-	volumeItem, ok := item.(volumeItem)
+	vi, ok := item.(volumeItem)
 	if !ok {
 		return nil
 	}
 
 	return func() tea.Msg {
 		ctx := context.Background()
-		err := svc.Remove(ctx, volumeItem.volume.Name, true)
-		return volumeRemovedMsg{Name: volumeItem.volume.Name, Idx: idx, Error: err}
+		err := svc.Remove(ctx, vi.volume.Name, true)
+		return volumeRemovedMsg{Name: vi.volume.Name, Idx: idx, Error: err}
 	}
 }
 

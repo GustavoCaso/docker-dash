@@ -19,13 +19,6 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
-type focusedPane int
-
-const (
-	focusList focusedPane = iota
-	focusViewport
-)
-
 // imagesLoadedMsg is sent when images have been loaded asynchronously.
 type imagesLoadedMsg struct {
 	error error
@@ -113,7 +106,7 @@ func (i *ImageList) SetSize(width, height int) {
 
 	if i.showLayers {
 		// Split view: 40% list, 60% details
-		listWidth := int(float64(width) * 0.4)
+		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
 
 		i.list.SetSize(listWidth-listX, height-listY)
@@ -198,16 +191,16 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 
 	case tea.KeyMsg:
 		if i.isFilter {
-			cmds := []tea.Cmd{}
+			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd
 			i.list, listCmd = i.list.Update(msg)
-			cmds = append(cmds, listCmd)
+			filterCmds = append(filterCmds, listCmd)
 
 			if key.Matches(msg, keys.Keys.Esc) {
 				i.isFilter = !i.isFilter
-				cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
 			}
-			return tea.Batch(cmds...)
+			return tea.Batch(filterCmds...)
 		}
 
 		switch {
@@ -355,7 +348,11 @@ func (i *ImageList) updateDetails() {
 		return
 	}
 
-	img := selected.(imageItem).image
+	item, ok := selected.(imageItem)
+	if !ok {
+		return
+	}
+	img := item.image
 
 	var content strings.Builder
 
@@ -363,11 +360,12 @@ func (i *ImageList) updateDetails() {
 	fmt.Fprintf(&content, "Layers for %s:%s\n", img.Repo, img.Tag)
 	content.WriteString("═══════════════════════\n\n")
 
+	const maxLayerCmdLen = 50 // max chars to show for a layer command
 	if len(img.Layers) == 0 {
 		content.WriteString("No layer information available\n")
 	} else {
 		for idx, layer := range img.Layers {
-			cmd := truncateCommand(layer.Command, 50)
+			cmd := truncateCommand(layer.Command, maxLayerCmdLen)
 			fmt.Fprintf(&content, "%2d. %s\n", idx+1, cmd)
 			fmt.Fprintf(&content, "    Size: %-10s  ID: %s\n\n",
 				formatSize(layer.Size),
@@ -378,12 +376,14 @@ func (i *ImageList) updateDetails() {
 	i.viewport.SetContent(content.String())
 }
 
+const shortIDLength = 12 // length of shortened container/image IDs
+
 // shortID returns first 12 characters of an ID.
 func shortID(id string) string {
 	// Remove sha256: prefix if present
 	id = strings.TrimPrefix(id, "sha256:")
-	if len(id) > 12 {
-		return id[:12]
+	if len(id) > shortIDLength {
+		return id[:shortIDLength]
 	}
 	return id
 }
@@ -403,17 +403,17 @@ func truncateCommand(cmd string, maxLen int) string {
 
 func formatSize(bytes int64) string {
 	const (
-		KB = 1024
-		MB = KB * 1024
-		GB = MB * 1024
+		kb = 1024
+		mb = kb * 1024
+		gb = mb * 1024
 	)
 	switch {
-	case bytes >= GB:
-		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
-	case bytes >= MB:
-		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
-	case bytes >= KB:
-		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
+	case bytes >= gb:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
+	case bytes >= mb:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
+	case bytes >= kb:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}

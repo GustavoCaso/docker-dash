@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// overlayBottomRight places text in the bottom right corner of content.
+// OverlayBottomRight places text in the bottom right corner of content.
 //
 // The challenge: terminal text contains ANSI escape codes for styling (colors,
 // bold, etc.) which take bytes but have zero visual width. For example:

@@ -20,7 +20,7 @@ func NewStatusBar() *StatusBar {
 	return &StatusBar{help: h}
 }
 
-// SetWidth sets the status bar width.
+// SetSize sets the status bar size.
 func (s *StatusBar) SetSize(width, height int) {
 	s.width = width
 	s.help.Width = width

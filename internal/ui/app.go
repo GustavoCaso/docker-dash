@@ -23,6 +23,11 @@ const (
 	bannerError
 )
 
+const (
+	bannerTimeoutSecs  = 3 // seconds before banner auto-clears
+	bannerOverlayLines = 2 // lines from bottom for banner overlay position
+)
+
 // clearBannerMsg is sent to clear the banner after a timeout.
 type clearBannerMsg struct{}
 
@@ -124,7 +129,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.bannerKind = bannerSuccess
 		}
-		return m, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+		return m, tea.Tick(bannerTimeoutSecs*time.Second, func(_ time.Time) tea.Msg {
 			return clearBannerMsg{}
 		})
 
@@ -217,7 +222,7 @@ func (m *model) View() string {
 			style = bannerSuccessStyle
 		}
 		bannerText := style.Render(m.bannerMsg)
-		content = helper.OverlayBottomRight(2, content, bannerText, m.width)
+		content = helper.OverlayBottomRight(bannerOverlayLines, content, bannerText, m.width)
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())

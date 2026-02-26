@@ -105,6 +105,14 @@ func (c containerItem) Description() string {
 }
 func (c containerItem) FilterValue() string { return c.container.Name }
 
+const (
+	listSplitRatio   = 0.4   // fraction of width used by list in split view
+	readBufSize      = 4096  // buffer size for reading container output
+	cpuPercentFactor = 100.0 // multiplier to convert CPU ratio to percentage
+	chartHalves      = 2     // divisor to split chart space in half
+	netIOChartLines  = 2     // lines reserved for net/io chart label and legend
+)
+
 // ContainerList wraps bubbles/list for displaying containers.
 type ContainerList struct {
 	list                    list.Model
@@ -206,7 +214,7 @@ func (c *ContainerList) SetSize(width, height int) {
 
 	if c.showDetails || c.showLogs || c.showFileTree || c.showExec || c.showStats {
 		// Split view: 40% list, 60% details
-		listWidth := int(float64(width) * 0.4)
+		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
 
 		c.list.SetSize(listWidth-listX, height-listY)
@@ -216,9 +224,9 @@ func (c *ContainerList) SetSize(width, height int) {
 		} else {
 			c.viewport.Height = height - listY
 		}
-		chartWidth := (detailWidth - listX) / 2
-		cpuMemChartHeight := (height-listY)/2 - 1 // subtract 1 for the label line
-		netIOChartHeight := (height-listY)/2 - 2  // subtract 2 for label + legend line
+		chartWidth := (detailWidth - listX) / chartHalves
+		cpuMemChartHeight := (height-listY)/chartHalves - 1              // subtract 1 for the label line
+		netIOChartHeight := (height-listY)/chartHalves - netIOChartLines // subtract 2 for label + legend line
 		c.cpuStreamlinechart.Resize(chartWidth, cpuMemChartHeight)
 		c.memStreamlinechart.Resize(chartWidth, cpuMemChartHeight)
 		c.networkStreamlinechart.Resize(chartWidth, netIOChartHeight)
@@ -230,6 +238,8 @@ func (c *ContainerList) SetSize(width, height int) {
 }
 
 // Update handles messages.
+//
+//nolint:gocyclo // Update routes all container list events; splitting would scatter event handling logic
 func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
@@ -387,16 +397,16 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 		}
 
 		if c.isFilter {
-			cmds := []tea.Cmd{}
+			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd
 			c.list, listCmd = c.list.Update(msg)
-			cmds = append(cmds, listCmd)
+			filterCmds = append(filterCmds, listCmd)
 
 			if key.Matches(msg, keys.Keys.Esc) {
 				c.isFilter = !c.isFilter
-				cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
 			}
-			return tea.Batch(cmds...)
+			return tea.Batch(filterCmds...)
 		}
 
 		switch {
@@ -416,20 +426,22 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			if !c.showLogs {
 				c.closeLogs()
 				return nil
-			} else {
-				selected := c.list.SelectedItem()
-				if selected == nil {
-					return nil
-				}
-				container := selected.(containerItem).container
-				if container.State != service.StateRunning {
-					return func() tea.Msg {
-						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
-					}
-				}
-
-				return tea.Batch(c.startLogsSession(container.ID))
 			}
+
+			selected := c.list.SelectedItem()
+			if selected == nil {
+				return nil
+			}
+			cItem, ok := selected.(containerItem)
+			if !ok {
+				return nil
+			}
+			if cItem.container.State != service.StateRunning {
+				return func() tea.Msg {
+					return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
+				}
+			}
+			return tea.Batch(c.startLogsSession(cItem.container.ID))
 
 		case key.Matches(msg, keys.Keys.FileTree):
 			c.showFileTree = !c.showFileTree
@@ -438,9 +450,12 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				if selected == nil {
 					return nil
 				}
-				container := selected.(containerItem).container
+				cItem, ok := selected.(containerItem)
+				if !ok {
+					return nil
+				}
 				c.loading = true
-				return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation(container.ID))
+				return tea.Batch(c.spinner.Tick, c.fetchFileTreeInformation(cItem.container.ID))
 			}
 			c.clearViewPort()
 			return nil
@@ -451,14 +466,17 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				if selected == nil {
 					return nil
 				}
-				container := selected.(containerItem).container
-				if container.State != service.StateRunning {
+				cItem, ok := selected.(containerItem)
+				if !ok {
+					return nil
+				}
+				if cItem.container.State != service.StateRunning {
 					return func() tea.Msg {
 						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
 					}
 				}
 				c.loading = true
-				return c.startStatsSession(container.ID)
+				return c.startStatsSession(cItem.container.ID)
 			}
 			c.closeStatsSession()
 			return nil
@@ -469,8 +487,11 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				if selected == nil {
 					return nil
 				}
-				container := selected.(containerItem).container
-				if container.State != service.StateRunning {
+				cItem, ok := selected.(containerItem)
+				if !ok {
+					return nil
+				}
+				if cItem.container.State != service.StateRunning {
 					return func() tea.Msg {
 						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
 					}
@@ -478,7 +499,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 
 				c.execOutput = ""
 				c.execInput.Focus()
-				return tea.Batch(textinput.Blink, c.startExecSession(container.ID), c.extendExecHelpCommand())
+				return tea.Batch(textinput.Blink, c.startExecSession(cItem.container.ID), c.extendExecHelpCommand())
 			}
 			c.clearViewPort()
 			return nil
@@ -584,12 +605,13 @@ func (c *ContainerList) handleExecInut(msg tea.KeyMsg) tea.Cmd {
 		if len(c.execHistory) == 0 {
 			return nil
 		}
-		if c.execHistoryCurrentIndex > 0 {
+		switch {
+		case c.execHistoryCurrentIndex > 0:
 			c.execHistoryCurrentIndex--
-		} else if c.execHistoryCurrentIndex == len(c.execHistory) {
+		case c.execHistoryCurrentIndex == len(c.execHistory):
 			// Start browsing from the most recent entry
 			c.execHistoryCurrentIndex = len(c.execHistory) - 1
-		} else {
+		default:
 			// Already at oldest entry
 			return nil
 		}
@@ -634,10 +656,14 @@ func (c *ContainerList) detailsCmd() tea.Cmd {
 		selected := c.list.SelectedItem()
 		if selected == nil {
 			return detailsMsg{
-				err: errors.New("No container selected"),
+				err: errors.New("no container selected"),
 			}
 		}
-		container := selected.(containerItem).container
+		cItem, ok := selected.(containerItem)
+		if !ok {
+			return detailsMsg{err: errors.New("no container selected")}
+		}
+		container := cItem.container
 		var content strings.Builder
 
 		// Header
@@ -686,15 +712,15 @@ func (c *ContainerList) deleteContainerCmd() tea.Cmd {
 		return nil
 	}
 
-	containerItem, ok := items[idx].(containerItem)
+	ci, ok := items[idx].(containerItem)
 	if !ok {
 		return nil
 	}
 
 	return func() tea.Msg {
 		ctx := context.Background()
-		err := svc.Remove(ctx, containerItem.ID(), true)
-		return containerActionMsg{ID: containerItem.ID(), Action: "deleting", Idx: idx, Error: err}
+		err := svc.Remove(ctx, ci.ID(), true)
+		return containerActionMsg{ID: ci.ID(), Action: "deleting", Idx: idx, Error: err}
 	}
 }
 
@@ -706,12 +732,12 @@ func (c *ContainerList) toggleContainerCmd() tea.Cmd {
 		return nil
 	}
 
-	containerItem, ok := items[idx].(containerItem)
+	ci, ok := items[idx].(containerItem)
 	if !ok {
 		return nil
 	}
 
-	container := containerItem.container
+	container := ci.container
 	return func() tea.Msg {
 		ctx := context.Background()
 		var err error
@@ -735,15 +761,15 @@ func (c *ContainerList) restartContainerCmd() tea.Cmd {
 		return nil
 	}
 
-	containerItem, ok := items[idx].(containerItem)
+	ci, ok := items[idx].(containerItem)
 	if !ok {
 		return nil
 	}
 
 	return func() tea.Msg {
 		ctx := context.Background()
-		err := svc.Restart(ctx, containerItem.ID())
-		return containerActionMsg{ID: containerItem.ID(), Action: "restarting", Idx: idx, Error: err}
+		err := svc.Restart(ctx, ci.ID())
+		return containerActionMsg{ID: ci.ID(), Action: "restarting", Idx: idx, Error: err}
 	}
 }
 
@@ -768,7 +794,7 @@ func (c *ContainerList) fetchFileTreeInformation(containerID string) tea.Cmd {
 		ctx := context.Background()
 		fileTree, err := c.service.FileTree(ctx, containerID)
 		if err != nil {
-			return containersTreeLoadedMsg{error: fmt.Errorf("Error getting the file tree: %s", err.Error())}
+			return containersTreeLoadedMsg{error: fmt.Errorf("error getting the file tree: %s", err.Error())}
 		}
 		return containersTreeLoadedMsg{fileTree: fileTree}
 	}
@@ -882,7 +908,7 @@ func (c *ContainerList) readExecOutput() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		buf := make([]byte, 4096)
+		buf := make([]byte, readBufSize)
 		n, err := session.Reader.Read(buf)
 		if err != nil {
 			return execOutputMsg{err: err}
@@ -897,7 +923,7 @@ func (c *ContainerList) readStatsOutput() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		buf := make([]byte, 4096)
+		buf := make([]byte, readBufSize)
 		n, err := session.Reader.Read(buf)
 		if err != nil {
 			return statsOutputMsg{err: err}
@@ -908,16 +934,16 @@ func (c *ContainerList) readStatsOutput() tea.Cmd {
 			return statsOutputMsg{err: err}
 		}
 		cpuDelta := stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage
-		systemCpuDelta := stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage
+		systemCPUDelta := stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage
 		numberCpus := stats.CPUStats.OnlineCPUs
 
-		percentageCpuUsage := float64(cpuDelta) / float64(systemCpuDelta) * float64(numberCpus) * 100.0
+		percentageCPUUsage := float64(cpuDelta) / float64(systemCPUDelta) * float64(numberCpus) * cpuPercentFactor
 
 		memUsage := float64(stats.MemoryStats.Usage) - float64(stats.MemoryStats.Stats["cache"])
 		memLimit := float64(stats.MemoryStats.Limit)
 		var memPercentage float64
 		if memLimit > 0 {
-			memPercentage = memUsage / memLimit * 100.0
+			memPercentage = memUsage / memLimit * cpuPercentFactor
 		}
 
 		networkRead := float64(0.0)
@@ -942,7 +968,7 @@ func (c *ContainerList) readStatsOutput() tea.Cmd {
 		}
 
 		return statsOutputMsg{
-			cpuPercetange:    percentageCpuUsage,
+			cpuPercetange:    percentageCPUUsage,
 			memoryPercentage: memPercentage,
 			memoryUsage:      memUsage,
 			memoryLimit:      memLimit,
@@ -960,7 +986,7 @@ func (c *ContainerList) readLogsOutput() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		buf := make([]byte, 4096)
+		buf := make([]byte, readBufSize)
 		n, err := session.Reader.Read(buf)
 		if err != nil {
 			return logsOutputMsg{err: err}

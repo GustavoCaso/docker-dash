@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -207,11 +208,12 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 	}
 
 	state := StateStopped
-	if c.State.Running {
+	switch {
+	case c.State.Running:
 		state = StateRunning
-	} else if c.State.Paused {
+	case c.State.Paused:
 		state = StatePaused
-	} else if c.State.Restarting {
+	case c.State.Restarting:
 		state = StateRestarting
 	}
 
@@ -248,7 +250,7 @@ func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions)
 		Follow:     opts.Follow,
 		Tail:       opts.Tail,
 		Timestamps: opts.Timestamps,
-		Since:      fmt.Sprintf("%d", now.Add(-time.Hour*2).Unix()),
+		Since:      strconv.FormatInt(now.Add(-time.Hour*logsSinceHours).Unix(), 10),
 	})
 
 	if err != nil {
@@ -257,13 +259,13 @@ func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions)
 
 	pr, pw := io.Pipe()
 	go func() {
-		_, err := stdcopy.StdCopy(pw, pw, reader)
-		pw.CloseWithError(err)
+		_, copyErr := stdcopy.StdCopy(pw, pw, reader)
+		pw.CloseWithError(copyErr)
 	}()
 
 	return NewLogsSession(
 		io.NopCloser(pr),
-		func() { reader.Close() },
+		func() { _ = reader.Close() },
 	), nil
 }
 
@@ -288,8 +290,8 @@ func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, e
 
 	pr, pw := io.Pipe()
 	go func() {
-		_, err := stdcopy.StdCopy(pw, pw, attachResp.Reader)
-		pw.CloseWithError(err)
+		_, copyErr := stdcopy.StdCopy(pw, pw, attachResp.Reader)
+		pw.CloseWithError(copyErr)
 	}()
 
 	return NewExecSession(
@@ -308,13 +310,13 @@ func (s *containerService) Stats(ctx context.Context, id string) (*StatsSession,
 
 	pr, pw := io.Pipe()
 	go func() {
-		_, err := io.Copy(pw, reader.Body)
-		pw.CloseWithError(err)
+		_, copyErr := io.Copy(pw, reader.Body)
+		pw.CloseWithError(copyErr)
 	}()
 
 	return NewStatsSession(
 		io.NopCloser(pr),
-		func() { reader.Body.Close() },
+		func() { _ = reader.Body.Close() },
 	), nil
 }
 
@@ -353,29 +355,30 @@ func buildContainerFileTree(reader io.ReadCloser) ContainerFileTree {
 			isLast := i == len(parts)-1
 
 			if isLast && !isDir {
-				// file entry — add as leaf
+				// file entry — add as leaf and move to next part
 				if hdr.Linkname != "" {
 					subTree.Child(part + " -> " + hdr.Linkname)
 				} else {
 					subTree.Child(part)
 				}
-			} else {
-				// directory entry — find existing subtree or create one
-				found := false
-				children := subTree.Children()
-				for j := range children.Length() {
-					child := children.At(j)
-					if sub, ok := child.(*tree.Tree); ok && child.Value() == part {
-						subTree = sub
-						found = true
-						break
-					}
+				continue
+			}
+
+			// directory entry — find existing subtree or create one
+			found := false
+			children := subTree.Children()
+			for j := range children.Length() {
+				child := children.At(j)
+				if sub, ok := child.(*tree.Tree); ok && child.Value() == part {
+					subTree = sub
+					found = true
+					break
 				}
-				if !found {
-					c := tree.Root(part)
-					subTree.Child(c)
-					subTree = c
-				}
+			}
+			if !found {
+				c := tree.Root(part)
+				subTree.Child(c)
+				subTree = c
 			}
 		}
 	}
@@ -396,13 +399,12 @@ func (s *imageService) List(ctx context.Context) ([]Image, error) {
 
 	result := make([]Image, len(images))
 	for i, img := range images {
-		imageInspect, err := s.Get(ctx, img.ID)
-
-		if err != nil {
-			return result, err
+		imageData, getErr := s.Get(ctx, img.ID)
+		if getErr != nil {
+			return result, getErr
 		}
-		imageInspect.Containers = img.Containers
-		result[i] = imageInspect
+		imageData.Containers = img.Containers
+		result[i] = imageData
 	}
 
 	return result, nil
@@ -437,7 +439,7 @@ func (s *imageService) Get(ctx context.Context, id string) (Image, error) {
 	repo := none
 	tag := none
 	if len(img.RepoTags) > 0 {
-		parts := strings.SplitN(img.RepoTags[0], ":", 2)
+		parts := strings.SplitN(img.RepoTags[0], ":", repoTagParts)
 		repo = parts[0]
 		if len(parts) > 1 {
 			tag = parts[1]
@@ -532,8 +534,8 @@ func (s *volumeService) findRunningContainerForVolume(ctx context.Context, name 
 	}
 
 	for _, cID := range usedBy {
-		inspect, err := s.cli.ContainerInspect(ctx, cID)
-		if err != nil || !inspect.State.Running {
+		inspect, inspectErr := s.cli.ContainerInspect(ctx, cID)
+		if inspectErr != nil || !inspect.State.Running {
 			continue
 		}
 		for _, m := range inspect.Mounts {
@@ -561,6 +563,8 @@ func (s *volumeService) copyFileTree(ctx context.Context, containerID, path stri
 const (
 	volumeMountPath = "/mnt/volume"
 	alpineImage     = "alpine:latest"
+	logsSinceHours  = 2 // hours of log history to fetch
+	repoTagParts    = 2 // parts when splitting repo:tag on ":"
 )
 
 // ensureImage pulls the image if it doesn't exist locally.
@@ -598,7 +602,7 @@ func (s *volumeService) fileTreeViaTempContainer(ctx context.Context, volumeName
 	}
 
 	// Always clean up the temporary container
-	defer s.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+	defer func() { _ = s.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true}) }()
 
 	ft, err := s.copyFileTree(ctx, resp.ID, volumeMountPath)
 	if err != nil {

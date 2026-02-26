@@ -62,6 +62,13 @@ const (
 	IconSuccess = "\uf00c" // Checkmark
 )
 
+// Layout constants.
+const (
+	horizontalPadding = 2  // standard horizontal padding for tabs and buttons
+	dockerPadding     = 3  // right padding for Docker icon in header
+	labelColumnWidth  = 16 // fixed width of the detail label column
+)
+
 // Main panel styles.
 var (
 	MainPanelStyle = lipgloss.NewStyle().
@@ -87,13 +94,13 @@ var (
 
 	HeaderItemStyle = lipgloss.NewStyle().
 			Foreground(TextSecondary).
-			Padding(0, 2)
+			Padding(0, horizontalPadding)
 
 	HeaderActiveItemStyle = lipgloss.NewStyle().
 				Foreground(TextPrimary).
 				Background(DockerBlue).
 				Bold(true).
-				Padding(0, 2)
+				Padding(0, horizontalPadding)
 
 	HeaderSeparatorStyle = lipgloss.NewStyle().
 				Foreground(TextMuted)
@@ -101,7 +108,7 @@ var (
 	HeaderDockerStyle = lipgloss.NewStyle().
 				Foreground(DockerBlue).
 				Bold(true).
-				PaddingRight(3)
+				PaddingRight(dockerPadding)
 )
 
 // List item styles.
@@ -124,11 +131,11 @@ var (
 	DetailStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.RoundedBorder()).
 			BorderForeground(Border).
-			Padding(1, 2)
+			Padding(1, horizontalPadding)
 
 	DetailLabelStyle = lipgloss.NewStyle().
 				Foreground(TextMuted).
-				Width(16)
+				Width(labelColumnWidth)
 
 	DetailValueStyle = lipgloss.NewStyle().
 				Foreground(TextPrimary)
@@ -156,7 +163,7 @@ var (
 	ActionButtonStyle = lipgloss.NewStyle().
 				Foreground(TextSecondary).
 				Background(DockerDark).
-				Padding(0, 2).
+				Padding(0, horizontalPadding).
 				MarginRight(1).
 				BorderStyle(lipgloss.RoundedBorder()).
 				BorderForeground(Border)
@@ -164,7 +171,7 @@ var (
 	ActionButtonActiveStyle = lipgloss.NewStyle().
 				Foreground(TextPrimary).
 				Background(DockerBlue).
-				Padding(0, 2).
+				Padding(0, horizontalPadding).
 				MarginRight(1).
 				BorderStyle(lipgloss.RoundedBorder()).
 				BorderForeground(DockerBlue)
