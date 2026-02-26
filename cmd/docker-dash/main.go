@@ -37,26 +37,10 @@ func main() {
 	}
 
 	// Build Docker client from config
-	var dockerClient service.DockerClient
-
-	realClient, err := service.NewDockerClientFromConfig(cfg.Docker)
-	if err != nil {
-		if cfg.Docker.Host != "" {
-			fmt.Fprintf(os.Stderr, "Warning: could not create Docker client: %v — falling back to mock data\n", err)
-		}
-	} else if pingErr := realClient.Ping(context.Background()); pingErr != nil {
-		realClient.Close()
-		if cfg.Docker.Host != "" {
-			fmt.Fprintf(os.Stderr, "Warning: Docker daemon unreachable (%v) — falling back to mock data\n", pingErr)
-		}
-	} else {
-		dockerClient = realClient
-	}
-
+	dockerClient := setupDockerClient(cfg.Docker)
 	if dockerClient == nil {
 		dockerClient = service.NewMockClient()
 	}
-	defer dockerClient.Close()
 
 	p := tea.NewProgram(
 		ui.InitialModel(dockerClient),
@@ -64,8 +48,30 @@ func main() {
 		tea.WithMouseCellMotion(),
 	)
 
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	_, runErr := p.Run()
+	if closeErr := dockerClient.Close(); closeErr != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to close Docker client: %v\n", closeErr)
+	}
+	if runErr != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", runErr)
 		os.Exit(1)
 	}
+}
+
+// setupDockerClient tries to connect to the Docker daemon and returns a client,
+// or nil if the connection fails (falling back to mock data).
+func setupDockerClient(cfg config.DockerConfig) service.DockerClient {
+	realClient, err := service.NewDockerClientFromConfig(cfg)
+	if err != nil {
+		return nil
+	}
+
+	pingErr := realClient.Ping(context.Background())
+	if pingErr != nil {
+		_ = realClient.Close()
+		fmt.Fprintf(os.Stderr, "Warning: Docker daemon unreachable (%v) — falling back to mock data\n", pingErr)
+		return nil
+	}
+
+	return realClient
 }
