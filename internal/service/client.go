@@ -241,12 +241,14 @@ func (s *containerService) Remove(ctx context.Context, id string, force bool) er
 }
 
 func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
+	now := time.Now()
 	reader, err := s.cli.ContainerLogs(ctx, id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     opts.Follow,
 		Tail:       opts.Tail,
 		Timestamps: opts.Timestamps,
+		Since:      fmt.Sprintf("%d", now.Add(-time.Hour*2).Unix()),
 	})
 
 	if err != nil {
