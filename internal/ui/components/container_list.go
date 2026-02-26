@@ -514,6 +514,13 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 	c.viewport, vpCmd = c.viewport.Update(msg)
 	cmds = append(cmds, vpCmd)
 
+	// Handle Blink Cmd
+	if c.showExec {
+		var inputCmd tea.Cmd
+		c.execInput, inputCmd = c.execInput.Update(msg)
+		cmds = append(cmds, inputCmd)
+	}
+
 	return tea.Batch(cmds...)
 }
 
