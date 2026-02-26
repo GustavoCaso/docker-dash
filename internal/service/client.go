@@ -284,8 +284,14 @@ func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, e
 		return nil, err
 	}
 
+	pr, pw := io.Pipe()
+	go func() {
+		_, err := stdcopy.StdCopy(pw, pw, attachResp.Reader)
+		pw.CloseWithError(err)
+	}()
+
 	return NewExecSession(
-		io.NopCloser(attachResp.Reader),
+		io.NopCloser(pr),
 		attachResp.Conn,
 		func() { attachResp.Close() },
 	), nil
