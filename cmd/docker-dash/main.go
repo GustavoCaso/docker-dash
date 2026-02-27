@@ -43,7 +43,7 @@ func main() {
 	}
 
 	p := tea.NewProgram(
-		ui.InitialModel(dockerClient),
+		ui.InitialModel(cfg, dockerClient),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

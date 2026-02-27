@@ -13,7 +13,7 @@ func TestDefaultPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(home, ".config", "docker-dash.toml")
+	want := filepath.Join(home, ".config", "docker-dash", "config.toml")
 	got := config.DefaultPath()
 	if got != want {
 		t.Errorf("DefaultPath() = %q, want %q", got, want)
@@ -38,6 +38,8 @@ func TestLoad_ValidConfig(t *testing.T) {
 	_, err = f.WriteString(`
 [docker]
 host = "ssh://pi@raspberrypi.local"
+[refresh]
+interval = "10s"
 `)
 	f.Close()
 	if err != nil {
@@ -50,6 +52,10 @@ host = "ssh://pi@raspberrypi.local"
 	}
 	if cfg.Docker.Host != "ssh://pi@raspberrypi.local" {
 		t.Errorf("Docker.Host = %q, want %q", cfg.Docker.Host, "ssh://pi@raspberrypi.local")
+	}
+
+	if cfg.Refresh.Interval != "10s" {
+		t.Errorf("Refresh.Interval = %q, want %q", cfg.Refresh.Interval, "10s")
 	}
 }
 
@@ -90,6 +96,29 @@ func TestLoad_HostOnly(t *testing.T) {
 	}
 	if cfg.Docker.Host != "tcp://192.168.1.10:2375" {
 		t.Errorf("Docker.Host = %q, want tcp://192.168.1.10:2375", cfg.Docker.Host)
+	}
+}
+
+func TestLoad_RefreshOnly(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "*.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = f.WriteString("[refresh]\ninterval = \"30s\"\n")
+	f.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(f.Name())
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Refresh.Interval != "30s" {
+		t.Errorf("Refresh.Interval = %q, want %q", cfg.Refresh.Interval, "30s")
+	}
+	if cfg.Docker.Host != "" {
+		t.Errorf("Docker.Host = %q, want empty", cfg.Docker.Host)
 	}
 }
 
