@@ -13,7 +13,7 @@ func TestDefaultPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(home, ".config", "docker-dash.toml")
+	want := filepath.Join(home, ".config", "docker-dash", "config.toml")
 	got := config.DefaultPath()
 	if got != want {
 		t.Errorf("DefaultPath() = %q, want %q", got, want)
@@ -38,6 +38,8 @@ func TestLoad_ValidConfig(t *testing.T) {
 	_, err = f.WriteString(`
 [docker]
 host = "ssh://pi@raspberrypi.local"
+[refresh]
+interval = "10s"
 `)
 	f.Close()
 	if err != nil {
@@ -50,6 +52,10 @@ host = "ssh://pi@raspberrypi.local"
 	}
 	if cfg.Docker.Host != "ssh://pi@raspberrypi.local" {
 		t.Errorf("Docker.Host = %q, want %q", cfg.Docker.Host, "ssh://pi@raspberrypi.local")
+	}
+
+	if cfg.Refresh.Interval != "10s" {
+		t.Errorf("Refresh.Interval = %q, want %q", cfg.Refresh.Interval, "10s")
 	}
 }
 

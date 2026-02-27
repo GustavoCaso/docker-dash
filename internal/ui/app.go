@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -31,6 +32,9 @@ const (
 // clearBannerMsg is sent to clear the banner after a timeout.
 type clearBannerMsg struct{}
 
+// autoRefreshMsg is sent periodically to refresh all views when a refresh interval is configured.
+type autoRefreshMsg struct{}
+
 var (
 	bannerSuccessStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("229")).
@@ -43,25 +47,27 @@ var (
 )
 
 type model struct {
-	client        service.DockerClient
-	header        *components.Header
-	containerList *components.ContainerList
-	imageList     *components.ImageList
-	volumeList    *components.VolumeList
-	statusBar     *components.StatusBar
-	keys          *keys.KeyMap
-	imagesKeys    *keys.ViewKeyMap
-	containerKeys *keys.ViewKeyMap
-	volumeKeys    *keys.ViewKeyMap
-	activeKeys    *keys.ViewKeyMap
-	width         int
-	height        int
-	bannerMsg     string
-	bannerKind    bannerType
-	initErr       string
+	cfg             *config.Config
+	client          service.DockerClient
+	header          *components.Header
+	containerList   *components.ContainerList
+	imageList       *components.ImageList
+	volumeList      *components.VolumeList
+	statusBar       *components.StatusBar
+	keys            *keys.KeyMap
+	imagesKeys      *keys.ViewKeyMap
+	containerKeys   *keys.ViewKeyMap
+	volumeKeys      *keys.ViewKeyMap
+	activeKeys      *keys.ViewKeyMap
+	width           int
+	height          int
+	bannerMsg       string
+	bannerKind      bannerType
+	initErr         string
+	refreshInterval time.Duration
 }
 
-func InitialModel(client service.DockerClient) tea.Model {
+func InitialModel(cfg *config.Config, client service.DockerClient) tea.Model {
 	ctx := context.Background()
 	containers, containersErr := client.Containers().List(ctx)
 	images, imagesErr := client.Images().List(ctx)
@@ -75,18 +81,30 @@ func InitialModel(client service.DockerClient) tea.Model {
 		}
 	}
 
+	var refreshInterval time.Duration
+	if cfg.Refresh.Interval != "" {
+		d, err := time.ParseDuration(cfg.Refresh.Interval)
+		if err != nil {
+			initErr = "Invalid refresh interval: " + err.Error()
+		} else {
+			refreshInterval = d
+		}
+	}
+
 	return &model{
-		client:        client,
-		keys:          keys.Keys,
-		imagesKeys:    keys.Keys.ImageKeyMap(),
-		containerKeys: keys.Keys.ContainerKeyMap(),
-		volumeKeys:    keys.Keys.VolumeKeyMap(),
-		header:        components.NewHeader(),
-		containerList: components.NewContainerList(containers, client.Containers()),
-		imageList:     components.NewImageList(images, client),
-		volumeList:    components.NewVolumeList(volumes, client.Volumes()),
-		statusBar:     components.NewStatusBar(),
-		initErr:       initErr,
+		cfg:             cfg,
+		client:          client,
+		keys:            keys.Keys,
+		imagesKeys:      keys.Keys.ImageKeyMap(),
+		containerKeys:   keys.Keys.ContainerKeyMap(),
+		volumeKeys:      keys.Keys.VolumeKeyMap(),
+		header:          components.NewHeader(),
+		containerList:   components.NewContainerList(containers, client.Containers()),
+		imageList:       components.NewImageList(images, client),
+		volumeList:      components.NewVolumeList(volumes, client.Volumes()),
+		statusBar:       components.NewStatusBar(),
+		initErr:         initErr,
+		refreshInterval: refreshInterval,
 	}
 }
 
@@ -95,6 +113,12 @@ func (m *model) Init() tea.Cmd {
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: m.initErr, IsError: true}
 		}
+	}
+
+	if m.refreshInterval > 0 {
+		return tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
+			return autoRefreshMsg{}
+		})
 	}
 	return nil
 }
@@ -143,6 +167,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.bannerMsg = ""
 		m.bannerKind = bannerNone
 		return m, nil
+
+	case autoRefreshMsg:
+		_, cmd := m.forwardMessageToAll(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+		return m, tea.Batch(cmd, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
+			return autoRefreshMsg{}
+		}))
 
 	case message.AddContextualKeyBindingsMsg:
 		m.activeKeys.ToggleContextual(msg.Bindings)

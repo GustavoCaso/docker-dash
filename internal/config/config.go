@@ -12,7 +12,8 @@ import (
 
 // Config holds all docker-dash configuration.
 type Config struct {
-	Docker DockerConfig `toml:"docker"`
+	Docker  DockerConfig  `toml:"docker"`
+	Refresh RefreshConfig `toml:"refresh"`
 }
 
 // DockerConfig holds Docker client connection settings.
@@ -22,13 +23,18 @@ type DockerConfig struct {
 	Host string `toml:"host"`
 }
 
+// RefreshConfig holds refresh configuration.
+type RefreshConfig struct {
+	Interval string `toml:"interval"`
+}
+
 // DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml.
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "docker-dash.toml"
+		return "config.toml"
 	}
-	return filepath.Join(home, ".config", "docker-dash.toml")
+	return filepath.Join(home, ".config", "docker-dash", "config.toml")
 }
 
 // Load parses a TOML config file at path.

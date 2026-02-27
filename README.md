@@ -35,6 +35,32 @@ make build
 docker-dash
 ```
 
+### Configuration File
+
+By default, docker-dash looks for a config file at `~/.config/docker-dash/config.toml`.
+
+```toml
+[docker]
+# Docker daemon URL. Accepts ssh:// schemes.
+# Defaults to the DOCKER_HOST environment variable.
+host = "ssh://pi5@pi5"
+
+[refresh]
+# Auto-refresh interval
+# Examples: "500ms", "5s", "1m", "2m30s"
+interval = "10s"
+```
+
+### CLI Flags
+
+| Flag | Description | Example |
+|---|---|---|
+| `-config` | Path to config file (default: `~/.config/docker-dash/config.toml`) | `-config /path/to/config.toml` |
+| `-docker.host` | Docker daemon URL (overrides config file) | `-docker.host tcp://localhost:2375` |
+| `-refresh.interval` | Auto-refresh interval (overrides config file) | `-refresh.interval 5s` |
+
+CLI flags take precedence over values in the config file.
+
 ### Keybindings
 
 **Navigation**

@@ -15,7 +15,12 @@ import (
 
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: $HOME/.config/docker-dash.toml)")
-	host := flag.String("host", "", "Docker host. Override value from configuration file if exists")
+	refreshConfig := flag.String(
+		"refresh.interval",
+		"",
+		"Refresh interval. Override value from configuration file if exists",
+	)
+	host := flag.String("docker.host", "", "Docker host. Override value from configuration file if exists")
 	flag.Parse()
 
 	// Resolve config file path
@@ -36,6 +41,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Override Docker host configuration with %s\n", *host)
 	}
 
+	if *refreshConfig != "" {
+		cfg.Refresh.Interval = *refreshConfig
+		fmt.Fprintf(os.Stderr, "Override refresh intervalconfiguration with %s\n", *refreshConfig)
+	}
+
 	// Build Docker client from config
 	dockerClient := setupDockerClient(cfg.Docker)
 	if dockerClient == nil {
@@ -43,7 +53,7 @@ func main() {
 	}
 
 	p := tea.NewProgram(
-		ui.InitialModel(dockerClient),
+		ui.InitialModel(cfg, dockerClient),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
