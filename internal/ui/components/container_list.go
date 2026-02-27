@@ -590,6 +590,14 @@ func (c *ContainerList) handleExecInut(msg tea.KeyMsg) tea.Cmd {
 		if cmd == "" {
 			return nil
 		}
+
+		if strings.TrimSpace(cmd) == "clear" {
+			c.execInput.Reset()
+			c.execOutput = ""
+			c.clearViewPort()
+			return nil
+		}
+
 		c.execHistory = append(c.execHistory, cmd)
 		c.execHistoryCurrentIndex = len(c.execHistory) // sentinel: not browsing
 		c.execInput.Reset()
