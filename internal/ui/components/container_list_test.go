@@ -2,6 +2,7 @@ package components
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -130,6 +131,70 @@ func TestContainerListRefresh(t *testing.T) {
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContainerListExecClearClearsOutput(t *testing.T) {
+	client := service.NewMockClient()
+	containers, _ := client.Containers().List(context.Background())
+	cl := NewContainerList(containers, client.Containers())
+	cl.SetSize(120, 40)
+
+	pr, pw := io.Pipe()
+	cl.showExec = true
+	cl.execSession = service.NewExecSession(io.NopCloser(pr), pw, func() {
+		pr.Close()
+		pw.Close()
+	})
+	cl.execOutput = "previous exec output"
+	cl.viewport.SetContent("previous exec output")
+	cl.execInput.Focus()
+
+	runes := []rune{}
+	for _, ch := range "clear" {
+		runes = append(runes, ch)
+	}
+	cl.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: runes})
+	cl.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if cl.execOutput != "" {
+		t.Errorf("execOutput should be empty after clear, got %q", cl.execOutput)
+	}
+	if cl.execInput.Value() != "" {
+		t.Errorf("execInput should be empty after clear, got %q", cl.execInput.Value())
+	}
+
+	cl.execSession.Close()
+}
+
+func TestContainerListExecClearWithWhitespace(t *testing.T) {
+	client := service.NewMockClient()
+	containers, _ := client.Containers().List(context.Background())
+	cl := NewContainerList(containers, client.Containers())
+	cl.SetSize(120, 40)
+
+	pr, pw := io.Pipe()
+	cl.showExec = true
+	cl.execSession = service.NewExecSession(io.NopCloser(pr), pw, func() {
+		pr.Close()
+		pw.Close()
+	})
+	cl.execOutput = "some output"
+	cl.execInput.Focus()
+
+	// Type "  clear  " (with surrounding spaces) — TrimSpace should still match.
+	runes := []rune{}
+	for _, ch := range "  clear  " {
+		runes = append(runes, ch)
+	}
+
+	cl.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: runes})
+	cl.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if cl.execOutput != "" {
+		t.Errorf("execOutput should be empty after '  clear  ', got %q", cl.execOutput)
+	}
+
+	cl.execSession.Close()
 }
 
 func TestFormatBytes(t *testing.T) {
