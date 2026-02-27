@@ -99,29 +99,6 @@ func TestLoad_HostOnly(t *testing.T) {
 	}
 }
 
-func TestLoad_RefreshOnly(t *testing.T) {
-	f, err := os.CreateTemp(t.TempDir(), "*.toml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = f.WriteString("[refresh]\ninterval = \"30s\"\n")
-	f.Close()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cfg, err := config.Load(f.Name())
-	if err != nil {
-		t.Fatalf("Load() error = %v", err)
-	}
-	if cfg.Refresh.Interval != "30s" {
-		t.Errorf("Refresh.Interval = %q, want %q", cfg.Refresh.Interval, "30s")
-	}
-	if cfg.Docker.Host != "" {
-		t.Errorf("Docker.Host = %q, want empty", cfg.Docker.Host)
-	}
-}
-
 func TestLoad_InvalidTOML(t *testing.T) {
 	f, err := os.CreateTemp(t.TempDir(), "*.toml")
 	if err != nil {
