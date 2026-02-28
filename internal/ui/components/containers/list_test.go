@@ -1,4 +1,4 @@
-package components
+package containers
 
 import (
 	"context"
@@ -10,17 +10,17 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/client"
 )
 
 type containerListModel struct {
-	list *ContainerList
+	list *List
 }
 
 func newContainerListModel() containerListModel {
-	client := service.NewMockClient()
+	client := client.NewMockClient()
 	containers, _ := client.Containers().List(context.Background())
-	cl := NewContainerList(containers, client.Containers())
+	cl := New(containers, client.Containers())
 	cl.SetSize(120, 40)
 	return containerListModel{list: cl}
 }
@@ -134,14 +134,14 @@ func TestContainerListRefresh(t *testing.T) {
 }
 
 func TestContainerListExecClearClearsOutput(t *testing.T) {
-	client := service.NewMockClient()
-	containers, _ := client.Containers().List(context.Background())
-	cl := NewContainerList(containers, client.Containers())
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	cl := New(containers, dockerClient.Containers())
 	cl.SetSize(120, 40)
 
 	pr, pw := io.Pipe()
 	cl.showExec = true
-	cl.execSession = service.NewExecSession(io.NopCloser(pr), pw, func() {
+	cl.execSession = client.NewExecSession(io.NopCloser(pr), pw, func() {
 		pr.Close()
 		pw.Close()
 	})
@@ -167,14 +167,14 @@ func TestContainerListExecClearClearsOutput(t *testing.T) {
 }
 
 func TestContainerListExecClearWithWhitespace(t *testing.T) {
-	client := service.NewMockClient()
-	containers, _ := client.Containers().List(context.Background())
-	cl := NewContainerList(containers, client.Containers())
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	cl := New(containers, dockerClient.Containers())
 	cl.SetSize(120, 40)
 
 	pr, pw := io.Pipe()
 	cl.showExec = true
-	cl.execSession = service.NewExecSession(io.NopCloser(pr), pw, func() {
+	cl.execSession = client.NewExecSession(io.NopCloser(pr), pw, func() {
 		pr.Close()
 		pw.Close()
 	})

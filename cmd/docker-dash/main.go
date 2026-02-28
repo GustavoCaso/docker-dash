@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
-	"github.com/GustavoCaso/docker-dash/internal/service"
 	"github.com/GustavoCaso/docker-dash/internal/ui"
 )
 
@@ -49,7 +49,7 @@ func main() {
 	// Build Docker client from config
 	dockerClient := setupDockerClient(cfg.Docker)
 	if dockerClient == nil {
-		dockerClient = service.NewMockClient()
+		dockerClient = client.NewMockClient()
 	}
 
 	p := tea.NewProgram(
@@ -70,8 +70,8 @@ func main() {
 
 // setupDockerClient tries to connect to the Docker daemon and returns a client,
 // or nil if the connection fails (falling back to mock data).
-func setupDockerClient(cfg config.DockerConfig) service.DockerClient {
-	realClient, err := service.NewDockerClientFromConfig(cfg)
+func setupDockerClient(cfg config.DockerConfig) client.Client {
+	realClient, err := client.NewDockerClientFromConfig(cfg)
 	if err != nil {
 		return nil
 	}

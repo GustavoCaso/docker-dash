@@ -1,15 +1,14 @@
-package service_test
+package client
 
 import (
 	"testing"
 
 	"github.com/GustavoCaso/docker-dash/internal/config"
-	"github.com/GustavoCaso/docker-dash/internal/service"
 )
 
 func TestNewDockerClientFromConfig_EmptyHost(t *testing.T) {
 	cfg := config.DockerConfig{}
-	client, err := service.NewDockerClientFromConfig(cfg)
+	client, err := NewDockerClientFromConfig(cfg)
 	if err == nil {
 		if client == nil {
 			t.Error("NewDockerClientFromConfig() returned nil client with nil error")
@@ -24,7 +23,7 @@ func TestNewDockerClientFromConfig_TCPHost(t *testing.T) {
 	cfg := config.DockerConfig{
 		Host: "tcp://127.0.0.1:2375",
 	}
-	client, err := service.NewDockerClientFromConfig(cfg)
+	client, err := NewDockerClientFromConfig(cfg)
 	// Client creation should succeed even if daemon is unreachable.
 	if err != nil {
 		t.Fatalf("NewDockerClientFromConfig() TCP host creation error: %v", err)

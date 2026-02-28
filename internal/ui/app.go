@@ -8,9 +8,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
-	"github.com/GustavoCaso/docker-dash/internal/service"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/containers"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/header"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/images"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/statusbar"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/volumes"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -48,12 +52,12 @@ var (
 
 type model struct {
 	cfg             *config.Config
-	client          service.DockerClient
-	header          *components.Header
-	containerList   *components.ContainerList
-	imageList       *components.ImageList
-	volumeList      *components.VolumeList
-	statusBar       *components.StatusBar
+	client          client.Client
+	header          *header.Header
+	containerList   *containers.List
+	imageList       *images.List
+	volumeList      *volumes.List
+	statusBar       *statusbar.StatusBar
 	keys            *keys.KeyMap
 	imagesKeys      *keys.ViewKeyMap
 	containerKeys   *keys.ViewKeyMap
@@ -67,11 +71,11 @@ type model struct {
 	refreshInterval time.Duration
 }
 
-func InitialModel(cfg *config.Config, client service.DockerClient) tea.Model {
+func InitialModel(cfg *config.Config, client client.Client) tea.Model {
 	ctx := context.Background()
-	containers, containersErr := client.Containers().List(ctx)
-	images, imagesErr := client.Images().List(ctx)
-	volumes, volumesErr := client.Volumes().List(ctx)
+	containersList, containersErr := client.Containers().List(ctx)
+	imagesList, imagesErr := client.Images().List(ctx)
+	volumesList, volumesErr := client.Volumes().List(ctx)
 
 	var initErr string
 	for _, err := range []error{containersErr, imagesErr, volumesErr} {
@@ -98,11 +102,11 @@ func InitialModel(cfg *config.Config, client service.DockerClient) tea.Model {
 		imagesKeys:      keys.Keys.ImageKeyMap(),
 		containerKeys:   keys.Keys.ContainerKeyMap(),
 		volumeKeys:      keys.Keys.VolumeKeyMap(),
-		header:          components.NewHeader(),
-		containerList:   components.NewContainerList(containers, client.Containers()),
-		imageList:       components.NewImageList(images, client),
-		volumeList:      components.NewVolumeList(volumes, client.Volumes()),
-		statusBar:       components.NewStatusBar(),
+		header:          header.New(),
+		containerList:   containers.New(containersList, client.Containers()),
+		imageList:       images.New(imagesList, client),
+		volumeList:      volumes.New(volumesList, client.Volumes()),
+		statusBar:       statusbar.New(),
 		initErr:         initErr,
 		refreshInterval: refreshInterval,
 	}
@@ -228,13 +232,13 @@ func (m *model) View() string {
 	var listKeyMap *keys.ViewKeyMap
 
 	switch m.header.ActiveView() {
-	case components.ViewContainers:
+	case header.ViewContainers:
 		listView = m.containerList.View()
 		listKeyMap = m.containerKeys
-	case components.ViewImages:
+	case header.ViewImages:
 		listView = m.imageList.View()
 		listKeyMap = m.imagesKeys
-	case components.ViewVolumes:
+	case header.ViewVolumes:
 		listView = m.volumeList.View()
 		listKeyMap = m.volumeKeys
 	}
@@ -261,11 +265,11 @@ func (m *model) View() string {
 func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.header.ActiveView() {
-	case components.ViewContainers:
+	case header.ViewContainers:
 		cmd = m.containerList.Update(msg)
-	case components.ViewImages:
+	case header.ViewImages:
 		cmd = m.imageList.Update(msg)
-	case components.ViewVolumes:
+	case header.ViewVolumes:
 		cmd = m.volumeList.Update(msg)
 	}
 	return m, cmd

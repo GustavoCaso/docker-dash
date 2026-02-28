@@ -1,4 +1,4 @@
-package components
+package header
 
 import (
 	"github.com/charmbracelet/lipgloss"
@@ -42,8 +42,8 @@ type Header struct {
 	width       int
 }
 
-// NewHeader creates a new header with all sections.
-func NewHeader() *Header {
+// New creates a new header with all sections.
+func New() *Header {
 	return &Header{
 		logo: theme.IconDocker + "  Docker Dash",
 		items: []headerItem{

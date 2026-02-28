@@ -1,14 +1,12 @@
-package service_test
+package client
 
 import (
 	"context"
 	"testing"
-
-	"github.com/GustavoCaso/docker-dash/internal/service"
 )
 
 func TestMockClient_Ping(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	err := client.Ping(context.Background())
@@ -18,7 +16,7 @@ func TestMockClient_Ping(t *testing.T) {
 }
 
 func TestMockClient_ContainerList(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	containers, err := client.Containers().List(context.Background())
@@ -32,7 +30,7 @@ func TestMockClient_ContainerList(t *testing.T) {
 }
 
 func TestMockClient_ImageList(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	images, err := client.Images().List(context.Background())
@@ -46,7 +44,7 @@ func TestMockClient_ImageList(t *testing.T) {
 }
 
 func TestMockClient_VolumeList(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	volumes, err := client.Volumes().List(context.Background())
@@ -60,7 +58,7 @@ func TestMockClient_VolumeList(t *testing.T) {
 }
 
 func TestMockClient_VolumeFileTree(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	volumes, err := client.Volumes().List(context.Background())
@@ -94,7 +92,7 @@ func TestMockClient_VolumeFileTree(t *testing.T) {
 }
 
 func TestMockClient_VolumeFileTree_PostgresData(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	ft, err := client.Volumes().FileTree(context.Background(), "postgres_data")
@@ -116,7 +114,7 @@ func TestMockClient_VolumeFileTree_PostgresData(t *testing.T) {
 }
 
 func TestMockClient_VolumeFileTree_NginxConfig(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	ft, err := client.Volumes().FileTree(context.Background(), "nginx_config")
@@ -138,7 +136,7 @@ func TestMockClient_VolumeFileTree_NginxConfig(t *testing.T) {
 }
 
 func TestMockClient_VolumeFileTree_UnusedVolume(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	// app_data has UsedCount=0 — should still be browsable
@@ -157,7 +155,7 @@ func TestMockClient_VolumeFileTree_UnusedVolume(t *testing.T) {
 }
 
 func TestMockClient_VolumeFileTree_NotFound(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	_, err := client.Volumes().FileTree(context.Background(), "nonexistent_volume")
@@ -167,7 +165,7 @@ func TestMockClient_VolumeFileTree_NotFound(t *testing.T) {
 }
 
 func TestMockClient_ContainerExec(t *testing.T) {
-	client := service.NewMockClient()
+	client := NewMockClient()
 	defer client.Close()
 
 	containers, err := client.Containers().List(context.Background())

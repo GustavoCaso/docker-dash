@@ -1,4 +1,4 @@
-package components
+package helpers
 
 import (
 	"testing"
@@ -18,7 +18,7 @@ func TestShortID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := shortID(tt.id)
+			got := ShortID(tt.id)
 			if got != tt.want {
 				t.Errorf("shortID(%q) = %q, want %q", tt.id, got, tt.want)
 			}
@@ -41,9 +41,9 @@ func TestFormatSize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := formatSize(tt.bytes)
+			got := FormatSize(tt.bytes)
 			if got != tt.want {
-				t.Errorf("formatSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+				t.Errorf("FormatSize(%d) = %q, want %q", tt.bytes, got, tt.want)
 			}
 		})
 	}
@@ -64,7 +64,7 @@ func TestTruncateCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := truncateCommand(tt.cmd, tt.maxLen)
+			got := TruncateCommand(tt.cmd, tt.maxLen)
 			if got != tt.want {
 				t.Errorf("truncateCommand(%q, %d) = %q, want %q", tt.cmd, tt.maxLen, got, tt.want)
 			}

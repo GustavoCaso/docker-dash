@@ -1,4 +1,4 @@
-package service
+package client
 
 import (
 	"archive/tar"
@@ -39,7 +39,7 @@ type dockerClient struct {
 //   - cfg.Host is ssh:// AND identity_file set → custom SSH dialer with key file auth
 //   - cfg.Host is ssh:// AND no identity_file → custom SSH dialer with SSH agent auth
 //   - cfg.Host is anything else (tcp://, unix://) → client.WithHost directly
-func NewDockerClientFromConfig(cfg config.DockerConfig) (DockerClient, error) {
+func NewDockerClientFromConfig(cfg config.DockerConfig) (Client, error) {
 	opts := []client.Opt{
 		client.WithAPIVersionNegotiation(),
 	}
@@ -633,6 +633,3 @@ func (s *volumeService) getVolumeUsage(ctx context.Context, volumeName string) (
 func timeFromUnix(unix int64) time.Time {
 	return time.Unix(unix, 0)
 }
-
-// Ensure dockerClient implements DockerClient.
-var _ DockerClient = (*dockerClient)(nil)
