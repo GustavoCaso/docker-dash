@@ -15,7 +15,6 @@ Switching between the terminal and a Docker GUI breaks flow. `docker-dash` gives
 - Start, stop, restart, and remove containers
 - Exec into running containers
 - Filter and inspect image layers
-- Falls back to mock data when no Docker daemon is available
 
 ## Install
 
