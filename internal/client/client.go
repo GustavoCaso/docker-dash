@@ -1,11 +1,11 @@
-package service
+package client
 
 import (
 	"context"
 )
 
-// DockerClient provides access to Docker services.
-type DockerClient interface {
+// Client provides the interface.
+type Client interface {
 	Containers() ContainerService
 	Images() ImageService
 	Volumes() VolumeService

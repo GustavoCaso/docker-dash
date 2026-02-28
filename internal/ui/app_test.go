@@ -8,12 +8,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
+	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
-	"github.com/GustavoCaso/docker-dash/internal/service"
 )
 
 func TestFullOutput(t *testing.T) {
-	m := InitialModel(&config.Config{}, service.NewMockClient())
+	m := InitialModel(&config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	tm.Send(tea.KeyMsg{
@@ -24,7 +24,7 @@ func TestFullOutput(t *testing.T) {
 }
 
 func TestExecPanel(t *testing.T) {
-	m := InitialModel(&config.Config{}, service.NewMockClient())
+	m := InitialModel(&config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -52,7 +52,7 @@ func TestExecPanel(t *testing.T) {
 }
 
 func TestContainerStatsOnStoppedContainer(t *testing.T) {
-	m := InitialModel(&config.Config{}, service.NewMockClient())
+	m := InitialModel(&config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch to Containers view
@@ -71,7 +71,7 @@ func TestContainerStatsOnStoppedContainer(t *testing.T) {
 }
 
 func TestVolumesView(t *testing.T) {
-	m := InitialModel(&config.Config{}, service.NewMockClient())
+	m := InitialModel(&config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -94,7 +94,7 @@ func TestAutoRefreshInvalidInterval(t *testing.T) {
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "not-a-duration"},
 	}
-	m := InitialModel(cfg, service.NewMockClient())
+	m := InitialModel(cfg, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Invalid interval should surface as an error banner
@@ -108,7 +108,7 @@ func TestAutoRefreshValidInterval(t *testing.T) {
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "500ms"},
 	}
-	m := InitialModel(cfg, service.NewMockClient())
+	m := InitialModel(cfg, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// UI should still render normally with a valid interval configured

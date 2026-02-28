@@ -1,4 +1,4 @@
-package components
+package images
 
 import (
 	"context"
@@ -12,12 +12,14 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
+
+const listSplitRatio = 0.4
 
 // imagesLoadedMsg is sent when images have been loaded asynchronously.
 type imagesLoadedMsg struct {
@@ -40,7 +42,7 @@ type imageRemovedMsg struct {
 
 // imageItem implements list.Item interface.
 type imageItem struct {
-	image service.Image
+	image client.Image
 }
 
 func (i imageItem) ID() string    { return i.image.ID }
@@ -53,12 +55,12 @@ func (i imageItem) Description() string {
 }
 func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
-// ImageList wraps bubbles/list.
-type ImageList struct {
+// List wraps bubbles/list.
+type List struct {
 	list             list.Model
 	viewport         viewport.Model
-	imageService     service.ImageService
-	containerService service.ContainerService
+	imageService     client.ImageService
+	containerService client.ContainerService
 	width, height    int
 	showLayers       bool
 	loading          bool
@@ -66,8 +68,8 @@ type ImageList struct {
 	spinner          spinner.Model
 }
 
-// NewImageList creates a new image list.
-func NewImageList(images []service.Image, client service.DockerClient) *ImageList {
+// New creates a new image list.
+func New(images []client.Image, client client.Client) *List {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
 		items[i] = imageItem{image: img}
@@ -84,7 +86,7 @@ func NewImageList(images []service.Image, client service.DockerClient) *ImageLis
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	il := &ImageList{
+	il := &List{
 		list:             l,
 		viewport:         vp,
 		imageService:     client.Images(),
@@ -97,7 +99,7 @@ func NewImageList(images []service.Image, client service.DockerClient) *ImageLis
 }
 
 // SetSize sets dimensions.
-func (i *ImageList) SetSize(width, height int) {
+func (i *List) SetSize(width, height int) {
 	i.width = width
 	i.height = height
 
@@ -119,7 +121,7 @@ func (i *ImageList) SetSize(width, height int) {
 }
 
 // Update handles messages.
-func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
+func (i *List) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
 	// Handle spinner ticks while loading
@@ -244,7 +246,7 @@ func (i *ImageList) Update(msg tea.Msg) tea.Cmd {
 }
 
 // View renders the list.
-func (i *ImageList) View() string {
+func (i *List) View() string {
 	listContent := i.list.View()
 
 	// Overlay spinner in bottom right corner when loading
@@ -271,7 +273,7 @@ func (i *ImageList) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
-func (i *ImageList) extendFilterHelpCommand() tea.Cmd {
+func (i *List) extendFilterHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
 			key.NewBinding(
@@ -282,7 +284,7 @@ func (i *ImageList) extendFilterHelpCommand() tea.Cmd {
 	}
 }
 
-func (i *ImageList) deleteImageCmd() tea.Cmd {
+func (i *List) deleteImageCmd() tea.Cmd {
 	svc := i.imageService
 	items := i.list.Items()
 	idx := i.list.Index()
@@ -303,7 +305,7 @@ func (i *ImageList) deleteImageCmd() tea.Cmd {
 	}
 }
 
-func (i *ImageList) updateImagesCmd() tea.Cmd {
+func (i *List) updateImagesCmd() tea.Cmd {
 	svc := i.imageService
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -319,7 +321,7 @@ func (i *ImageList) updateImagesCmd() tea.Cmd {
 	}
 }
 
-func (i *ImageList) createContainerCmdAndRun() tea.Cmd {
+func (i *List) createContainerCmdAndRun() tea.Cmd {
 	svc := i.containerService
 	items := i.list.Items()
 	idx := i.list.Index()
@@ -341,7 +343,7 @@ func (i *ImageList) createContainerCmdAndRun() tea.Cmd {
 }
 
 // updateDetails updates the viewport content based on selected image.
-func (i *ImageList) updateDetails() {
+func (i *List) updateDetails() {
 	selected := i.list.SelectedItem()
 	if selected == nil {
 		i.viewport.SetContent("No image selected")

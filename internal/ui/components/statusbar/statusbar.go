@@ -1,4 +1,4 @@
-package components
+package statusbar
 
 import (
 	"github.com/charmbracelet/bubbles/help"
@@ -14,8 +14,8 @@ type StatusBar struct {
 	height int
 }
 
-// NewStatusBar creates a new status bar.
-func NewStatusBar() *StatusBar {
+// New creates a new status bar.
+func New() *StatusBar {
 	h := help.New()
 	return &StatusBar{help: h}
 }

@@ -1,4 +1,4 @@
-package components
+package containers
 
 import (
 	"context"
@@ -19,7 +19,8 @@ import (
 	"github.com/NimbleMarkets/ntcharts/canvas/runes"
 	"github.com/NimbleMarkets/ntcharts/linechart/streamlinechart"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/helpers"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -35,7 +36,7 @@ type containersLoadedMsg struct {
 // containersTreeLoadedMsg is sent when containers have been loaded asynchronously.
 type containersTreeLoadedMsg struct {
 	error    error
-	fileTree service.ContainerFileTree
+	fileTree client.ContainerFileTree
 }
 
 // containerActionMsg is sent when a container action completes.
@@ -53,7 +54,7 @@ type execOutputMsg struct {
 }
 
 type execSessionStartedMsg struct {
-	session *service.ExecSession
+	session *client.ExecSession
 }
 
 // statsOutputMsg is sent when stats output is received.
@@ -70,7 +71,7 @@ type statsOutputMsg struct {
 }
 
 type statsSessionStartedMsg struct {
-	session *service.StatsSession
+	session *client.StatsSession
 }
 
 // logsOutputMsg is sent when logs output is received from the background reader.
@@ -80,7 +81,7 @@ type logsOutputMsg struct {
 }
 
 type logsSessionStartedMsg struct {
-	session *service.LogsSession
+	session *client.LogsSession
 }
 
 type execCloseMsg struct{}
@@ -92,7 +93,7 @@ type detailsMsg struct {
 
 // containerItem implements list.Item interface.
 type containerItem struct {
-	container service.Container
+	container client.Container
 }
 
 func (c containerItem) ID() string    { return c.container.ID }
@@ -101,7 +102,7 @@ func (c containerItem) Description() string {
 	stateIcon := theme.GetContainerStatusIcon(string(c.container.State))
 	stateStyle := theme.GetContainerStatusStyle(string(c.container.State))
 	state := stateStyle.Render(stateIcon + " " + string(c.container.State))
-	return state + " " + c.container.Image + " " + shortID(c.ID())
+	return state + " " + c.container.Image + " " + helpers.ShortID(c.ID())
 }
 func (c containerItem) FilterValue() string { return c.container.Name }
 
@@ -113,36 +114,36 @@ const (
 	netIOChartLines  = 2     // lines reserved for net/io chart label and legend
 )
 
-// ContainerList wraps bubbles/list for displaying containers.
-type ContainerList struct {
+// List wraps bubbles/list for displaying containers.
+type List struct {
 	list                    list.Model
 	isFilter                bool
 	viewport                viewport.Model
-	service                 service.ContainerService
+	service                 client.ContainerService
 	width, height           int
 	showDetails             bool
 	showLogs                bool
-	logsSession             *service.LogsSession
+	logsSession             *client.LogsSession
 	logsOutput              string
 	showFileTree            bool
 	loading                 bool
 	spinner                 spinner.Model
 	showExec                bool
-	execSession             *service.ExecSession
+	execSession             *client.ExecSession
 	execInput               textinput.Model
 	execHistory             []string
 	execHistoryCurrentIndex int
 	execOutput              string
 	showStats               bool
-	statsSession            *service.StatsSession
+	statsSession            *client.StatsSession
 	cpuStreamlinechart      streamlinechart.Model
 	memStreamlinechart      streamlinechart.Model
 	networkStreamlinechart  streamlinechart.Model
 	ioStreamlinechart       streamlinechart.Model
 }
 
-// NewContainerList creates a new container list.
-func NewContainerList(containers []service.Container, svc service.ContainerService) *ContainerList {
+// New creates a new container list.
+func New(containers []client.Container, svc client.ContainerService) *List {
 	items := make([]list.Item, len(containers))
 	for i, c := range containers {
 		items[i] = containerItem{container: c}
@@ -162,7 +163,7 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 	ti := textinput.New()
 	ti.Prompt = "$ "
 
-	cl := &ContainerList{
+	cl := &List{
 		list:        l,
 		viewport:    vp,
 		service:     svc,
@@ -205,7 +206,7 @@ func NewContainerList(containers []service.Container, svc service.ContainerServi
 }
 
 // SetSize sets dimensions.
-func (c *ContainerList) SetSize(width, height int) {
+func (c *List) SetSize(width, height int) {
 	c.width = width
 	c.height = height
 
@@ -240,7 +241,7 @@ func (c *ContainerList) SetSize(width, height int) {
 // Update handles messages.
 //
 //nolint:gocyclo // Update routes all container list events; splitting would scatter event handling logic
-func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
+func (c *List) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
 	// Handle spinner ticks while loading
@@ -290,7 +291,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 
 		return tea.Batch(append(cmds, func() tea.Msg {
 			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Container %s %s", shortID(msg.ID), msg.Action),
+				Message: fmt.Sprintf("Container %s %s", helpers.ShortID(msg.ID), msg.Action),
 				IsError: false,
 			}
 		})...)
@@ -436,7 +437,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 			if !ok {
 				return nil
 			}
-			if cItem.container.State != service.StateRunning {
+			if cItem.container.State != client.StateRunning {
 				return func() tea.Msg {
 					return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
 				}
@@ -470,7 +471,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				if !ok {
 					return nil
 				}
-				if cItem.container.State != service.StateRunning {
+				if cItem.container.State != client.StateRunning {
 					return func() tea.Msg {
 						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
 					}
@@ -491,7 +492,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 				if !ok {
 					return nil
 				}
-				if cItem.container.State != service.StateRunning {
+				if cItem.container.State != client.StateRunning {
 					return func() tea.Msg {
 						return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
 					}
@@ -546,7 +547,7 @@ func (c *ContainerList) Update(msg tea.Msg) tea.Cmd {
 }
 
 // View renders the list.
-func (c *ContainerList) View() string {
+func (c *List) View() string {
 	c.SetSize(c.width, c.height)
 	listContent := c.list.View()
 
@@ -578,7 +579,7 @@ func (c *ContainerList) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
-func (c *ContainerList) handleExecInut(msg tea.KeyMsg) tea.Cmd {
+func (c *List) handleExecInut(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.Keys.Esc):
 		return tea.Batch(c.closeExecSessionMsg(), func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
@@ -644,11 +645,11 @@ func (c *ContainerList) handleExecInut(msg tea.KeyMsg) tea.Cmd {
 	}
 }
 
-func (c *ContainerList) clearViewPort() {
+func (c *List) clearViewPort() {
 	c.viewport.SetContent("")
 }
 
-func (c *ContainerList) clearDetails() {
+func (c *List) clearDetails() {
 	c.showLogs = false
 	c.showDetails = false
 	c.showFileTree = false
@@ -659,7 +660,7 @@ func (c *ContainerList) clearDetails() {
 	c.clearViewPort()
 }
 
-func (c *ContainerList) detailsCmd() tea.Cmd {
+func (c *List) detailsCmd() tea.Cmd {
 	return func() tea.Msg {
 		selected := c.list.SelectedItem()
 		if selected == nil {
@@ -679,7 +680,7 @@ func (c *ContainerList) detailsCmd() tea.Cmd {
 		content.WriteString("═══════════════════════\n\n")
 
 		// Basic info
-		fmt.Fprintf(&content, "ID:      %s\n", shortID(container.ID))
+		fmt.Fprintf(&content, "ID:      %s\n", helpers.ShortID(container.ID))
 		fmt.Fprintf(&content, "Image:   %s\n", container.Image)
 		fmt.Fprintf(&content, "Status:  %s\n", container.Status)
 
@@ -712,7 +713,7 @@ func (c *ContainerList) detailsCmd() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) deleteContainerCmd() tea.Cmd {
+func (c *List) deleteContainerCmd() tea.Cmd {
 	svc := c.service
 	items := c.list.Items()
 	idx := c.list.Index()
@@ -732,7 +733,7 @@ func (c *ContainerList) deleteContainerCmd() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) toggleContainerCmd() tea.Cmd {
+func (c *List) toggleContainerCmd() tea.Cmd {
 	svc := c.service
 	items := c.list.Items()
 	idx := c.list.Index()
@@ -750,7 +751,7 @@ func (c *ContainerList) toggleContainerCmd() tea.Cmd {
 		ctx := context.Background()
 		var err error
 		var action string
-		if container.State == service.StateRunning {
+		if container.State == client.StateRunning {
 			action = "stopping"
 			err = svc.Stop(ctx, container.ID)
 		} else {
@@ -761,7 +762,7 @@ func (c *ContainerList) toggleContainerCmd() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) restartContainerCmd() tea.Cmd {
+func (c *List) restartContainerCmd() tea.Cmd {
 	svc := c.service
 	items := c.list.Items()
 	idx := c.list.Index()
@@ -781,7 +782,7 @@ func (c *ContainerList) restartContainerCmd() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) updateContainersCmd() tea.Cmd {
+func (c *List) updateContainersCmd() tea.Cmd {
 	svc := c.service
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -797,7 +798,7 @@ func (c *ContainerList) updateContainersCmd() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) fetchFileTreeInformation(containerID string) tea.Cmd {
+func (c *List) fetchFileTreeInformation(containerID string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		fileTree, err := c.service.FileTree(ctx, containerID)
@@ -808,11 +809,11 @@ func (c *ContainerList) fetchFileTreeInformation(containerID string) tea.Cmd {
 	}
 }
 
-func (c *ContainerList) startLogsSession(containerID string) tea.Cmd {
+func (c *List) startLogsSession(containerID string) tea.Cmd {
 	svc := c.service
 	return func() tea.Msg {
 		ctx := context.Background()
-		session, err := svc.Logs(ctx, containerID, service.LogOptions{Follow: true})
+		session, err := svc.Logs(ctx, containerID, client.LogOptions{Follow: true})
 		if err != nil {
 			return logsOutputMsg{err: err}
 		}
@@ -820,7 +821,7 @@ func (c *ContainerList) startLogsSession(containerID string) tea.Cmd {
 	}
 }
 
-func (c *ContainerList) startExecSession(containerID string) tea.Cmd {
+func (c *List) startExecSession(containerID string) tea.Cmd {
 	svc := c.service
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -832,7 +833,7 @@ func (c *ContainerList) startExecSession(containerID string) tea.Cmd {
 	}
 }
 
-func (c *ContainerList) startStatsSession(containerID string) tea.Cmd {
+func (c *List) startStatsSession(containerID string) tea.Cmd {
 	svc := c.service
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -844,7 +845,7 @@ func (c *ContainerList) startStatsSession(containerID string) tea.Cmd {
 	}
 }
 
-func (c *ContainerList) closeStatsSession() {
+func (c *List) closeStatsSession() {
 	c.showStats = false
 	if c.statsSession != nil {
 		c.statsSession.Close()
@@ -853,7 +854,7 @@ func (c *ContainerList) closeStatsSession() {
 	c.clearViewPort()
 }
 
-func (c *ContainerList) extendExecHelpCommand() tea.Cmd {
+func (c *List) extendExecHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
 			key.NewBinding(
@@ -876,7 +877,7 @@ func (c *ContainerList) extendExecHelpCommand() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) extendFilterHelpCommand() tea.Cmd {
+func (c *List) extendFilterHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
 			key.NewBinding(
@@ -887,7 +888,7 @@ func (c *ContainerList) extendFilterHelpCommand() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) closeExec() {
+func (c *List) closeExec() {
 	c.showExec = false
 	c.execInput.Blur()
 	if c.execSession != nil {
@@ -900,7 +901,7 @@ func (c *ContainerList) closeExec() {
 	c.execOutput = ""
 }
 
-func (c *ContainerList) closeLogs() {
+func (c *List) closeLogs() {
 	c.showLogs = false
 	if c.logsSession != nil {
 		c.logsSession.Close()
@@ -910,7 +911,7 @@ func (c *ContainerList) closeLogs() {
 	c.logsOutput = ""
 }
 
-func (c *ContainerList) readExecOutput() tea.Cmd {
+func (c *List) readExecOutput() tea.Cmd {
 	session := c.execSession
 	if session == nil {
 		return nil
@@ -925,7 +926,7 @@ func (c *ContainerList) readExecOutput() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) readStatsOutput() tea.Cmd {
+func (c *List) readStatsOutput() tea.Cmd {
 	session := c.statsSession
 	if session == nil {
 		return nil
@@ -988,7 +989,7 @@ func (c *ContainerList) readStatsOutput() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) readLogsOutput() tea.Cmd {
+func (c *List) readLogsOutput() tea.Cmd {
 	session := c.logsSession
 	if session == nil {
 		return nil
@@ -1003,7 +1004,7 @@ func (c *ContainerList) readLogsOutput() tea.Cmd {
 	}
 }
 
-func (c *ContainerList) closeExecSessionMsg() tea.Cmd {
+func (c *List) closeExecSessionMsg() tea.Cmd {
 	return func() tea.Msg {
 		return execCloseMsg{}
 	}

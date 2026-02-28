@@ -1,24 +1,25 @@
-package components
+package images
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
-	"github.com/GustavoCaso/docker-dash/internal/service"
+	"github.com/GustavoCaso/docker-dash/internal/client"
 )
 
 type imageListModel struct {
-	list *ImageList
+	list *List
 }
 
-func newImageListModel() imageListModel {
-	client := service.NewMockClient()
+func newModel() imageListModel {
+	client := client.NewMockClient()
 	images, _ := client.Images().List(context.Background())
-	il := NewImageList(images, client)
+	il := New(images, client)
 	il.SetSize(120, 40)
 	return imageListModel{list: il}
 }
@@ -38,14 +39,14 @@ func (m imageListModel) View() string {
 }
 
 func TestImageListRendersItems(t *testing.T) {
-	tm := teatest.NewTestModel(t, newImageListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
 func TestImageListLayersToggle(t *testing.T) {
-	tm := teatest.NewTestModel(t, newImageListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx")
 	// Select an image
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
@@ -59,7 +60,7 @@ func TestImageListLayersToggle(t *testing.T) {
 }
 
 func TestImageListDelete(t *testing.T) {
-	tm := teatest.NewTestModel(t, newImageListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx")
 	// Select an image
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
@@ -71,7 +72,7 @@ func TestImageListDelete(t *testing.T) {
 }
 
 func TestImageListRefresh(t *testing.T) {
-	tm := teatest.NewTestModel(t, newImageListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx")
 	// Refresh
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
@@ -85,7 +86,7 @@ func TestImageListRefresh(t *testing.T) {
 }
 
 func TestImageListRunContainer(t *testing.T) {
-	tm := teatest.NewTestModel(t, newImageListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx")
 	// Select an image
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
@@ -97,4 +98,11 @@ func TestImageListRunContainer(t *testing.T) {
 	waitFor(t, tm, "nginx")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
+	t.Helper()
+	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
+		return strings.Contains(string(b), s)
+	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }

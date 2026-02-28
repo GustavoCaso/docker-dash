@@ -1,4 +1,4 @@
-package components
+package header
 
 import (
 	"strings"
@@ -8,14 +8,14 @@ import (
 )
 
 func TestHeaderNewDefaults(t *testing.T) {
-	h := NewHeader()
+	h := New()
 	if h.ActiveView() != ViewImages {
 		t.Errorf("expected initial ActiveView to be ViewImages, got %v", h.ActiveView())
 	}
 }
 
 func TestHeaderMoveRight(t *testing.T) {
-	h := NewHeader()
+	h := New()
 
 	if h.ActiveView() != ViewImages {
 		t.Fatalf("expected ViewImages at start, got %v", h.ActiveView())
@@ -38,7 +38,7 @@ func TestHeaderMoveRight(t *testing.T) {
 }
 
 func TestHeaderMoveLeft(t *testing.T) {
-	h := NewHeader()
+	h := New()
 
 	h.MoveLeft()
 	if h.ActiveView() != ViewVolumes {
@@ -57,7 +57,7 @@ func TestHeaderMoveLeft(t *testing.T) {
 }
 
 func TestHeaderViewContainsSectionNames(t *testing.T) {
-	h := NewHeader()
+	h := New()
 	h.SetWidth(120)
 
 	output := h.View()
@@ -70,7 +70,7 @@ func TestHeaderViewContainsSectionNames(t *testing.T) {
 }
 
 func TestHeaderViewContainsDockerIcon(t *testing.T) {
-	h := NewHeader()
+	h := New()
 	h.SetWidth(120)
 
 	output := h.View()

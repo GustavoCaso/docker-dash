@@ -414,7 +414,7 @@ linters:
           - staticcheck
           - revive
           - govet
-      - path: internal/service/mock.go
+      - path: internal/client/mock.go
         linters:
           - revive
           - mnd

@@ -1,4 +1,4 @@
-package components
+package statusbar
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestStatusBarSetKeyMap(t *testing.T) {
-	sb := NewStatusBar()
+	sb := New()
 	sb.SetSize(80, 1)
 	sb.SetKeyMap(keys.Keys.HeaderKeyMap())
 
