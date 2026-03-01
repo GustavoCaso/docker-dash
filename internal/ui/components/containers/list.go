@@ -21,6 +21,7 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/helpers"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -74,16 +75,6 @@ type statsSessionStartedMsg struct {
 	session *client.StatsSession
 }
 
-// logsOutputMsg is sent when logs output is received from the background reader.
-type logsOutputMsg struct {
-	output string
-	err    error
-}
-
-type logsSessionStartedMsg struct {
-	session *client.LogsSession
-}
-
 type execCloseMsg struct{}
 
 type detailsMsg struct {
@@ -121,10 +112,9 @@ type List struct {
 	viewport                viewport.Model
 	service                 client.ContainerService
 	width, height           int
+	activePanel             panel.Panel
+	logsPanel               panel.Panel
 	showDetails             bool
-	showLogs                bool
-	logsSession             *client.LogsSession
-	logsOutput              string
 	showFileTree            bool
 	loading                 bool
 	spinner                 spinner.Model
@@ -168,6 +158,7 @@ func New(containers []client.Container, svc client.ContainerService) *List {
 		viewport:    vp,
 		service:     svc,
 		spinner:     sp,
+		logsPanel:   NewLogsPanel(svc),
 		execInput:   ti,
 		execHistory: []string{},
 		cpuStreamlinechart: streamlinechart.New(
@@ -213,7 +204,7 @@ func (c *List) SetSize(width, height int) {
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if c.showDetails || c.showLogs || c.showFileTree || c.showExec || c.showStats {
+	if c.showDetails || c.showFileTree || c.showExec || c.showStats || c.activePanel != nil {
 		// Split view: 40% list, 60% details
 		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
@@ -232,6 +223,9 @@ func (c *List) SetSize(width, height int) {
 		c.memStreamlinechart.Resize(chartWidth, cpuMemChartHeight)
 		c.networkStreamlinechart.Resize(chartWidth, netIOChartHeight)
 		c.ioStreamlinechart.Resize(chartWidth, netIOChartHeight)
+		if c.activePanel != nil {
+			c.activePanel.SetSize(width, height)
+		}
 	} else {
 		// Full width list when viewport is hidden
 		c.list.SetSize(width-listX, height-listY)
@@ -369,23 +363,6 @@ func (c *List) Update(msg tea.Msg) tea.Cmd {
 		}
 		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(msg.output))
 		return nil
-	case logsSessionStartedMsg:
-		c.logsSession = msg.session
-		return c.readLogsOutput()
-	case logsOutputMsg:
-		if msg.err != nil {
-			if c.logsSession == nil {
-				return nil // session was closed manually, ignore
-			}
-			c.closeLogs()
-			return func() tea.Msg {
-				return message.ShowBannerMsg{Message: fmt.Sprintf("Logs session error. Err: %s", msg.err), IsError: true}
-			}
-		}
-		c.logsOutput += msg.output
-		c.viewport.SetContent(lipgloss.NewStyle().Width(c.viewport.Width).Render(c.logsOutput))
-		c.viewport.GotoBottom()
-		return c.readLogsOutput()
 	case execCloseMsg:
 		c.closeExec()
 		return func() tea.Msg {
@@ -422,10 +399,9 @@ func (c *List) Update(msg tea.Msg) tea.Cmd {
 			c.loading = true
 			return tea.Batch(c.spinner.Tick, c.updateContainersCmd())
 		case key.Matches(msg, keys.Keys.ContainerLogs):
-			c.showLogs = !c.showLogs
-
-			if !c.showLogs {
-				c.closeLogs()
+			if c.activePanel != nil && c.activePanel == c.logsPanel {
+				c.logsPanel.Close()
+				c.activePanel = nil
 				return nil
 			}
 
@@ -442,8 +418,9 @@ func (c *List) Update(msg tea.Msg) tea.Cmd {
 					return message.ShowBannerMsg{Message: "Container is not running", IsError: true}
 				}
 			}
-			return tea.Batch(c.startLogsSession(cItem.container.ID))
 
+			c.activePanel = c.logsPanel
+			return c.logsPanel.Init(cItem.container.ID)
 		case key.Matches(msg, keys.Keys.FileTree):
 			c.showFileTree = !c.showFileTree
 			if c.showFileTree {
@@ -543,6 +520,10 @@ func (c *List) Update(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, inputCmd)
 	}
 
+	if c.activePanel != nil {
+		cmds = append(cmds, c.activePanel.Update(msg))
+	}
+
 	return tea.Batch(cmds...)
 }
 
@@ -562,11 +543,16 @@ func (c *List) View() string {
 		Render(listContent)
 
 	// Only show viewport when details are toggled on
-	if !c.showDetails && !c.showLogs && !c.showFileTree && !c.showExec && !c.showStats {
+	if c.activePanel == nil && !c.showDetails && !c.showFileTree && !c.showExec && !c.showStats {
 		return listView
 	}
 
 	detailContent := c.viewport.View()
+
+	if c.activePanel != nil {
+		detailContent = c.activePanel.View()
+		c.viewport.SetContent(detailContent)
+	}
 	if c.showExec {
 		inputView := c.execInput.View()
 		detailContent = lipgloss.JoinVertical(lipgloss.Left, detailContent, inputView)
@@ -574,6 +560,7 @@ func (c *List) View() string {
 
 	detailView := theme.ListStyle.
 		Width(c.viewport.Width).
+		Height(c.viewport.Height).
 		Render(detailContent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
@@ -650,12 +637,14 @@ func (c *List) clearViewPort() {
 }
 
 func (c *List) clearDetails() {
-	c.showLogs = false
 	c.showDetails = false
 	c.showFileTree = false
 	c.showExec = false
 	c.showStats = false
-	c.logsOutput = ""
+	if c.activePanel != nil {
+		c.activePanel.Close()
+		c.activePanel = nil
+	}
 	c.execOutput = ""
 	c.clearViewPort()
 }
@@ -809,18 +798,6 @@ func (c *List) fetchFileTreeInformation(containerID string) tea.Cmd {
 	}
 }
 
-func (c *List) startLogsSession(containerID string) tea.Cmd {
-	svc := c.service
-	return func() tea.Msg {
-		ctx := context.Background()
-		session, err := svc.Logs(ctx, containerID, client.LogOptions{Follow: true})
-		if err != nil {
-			return logsOutputMsg{err: err}
-		}
-		return logsSessionStartedMsg{session: session}
-	}
-}
-
 func (c *List) startExecSession(containerID string) tea.Cmd {
 	svc := c.service
 	return func() tea.Msg {
@@ -901,16 +878,6 @@ func (c *List) closeExec() {
 	c.execOutput = ""
 }
 
-func (c *List) closeLogs() {
-	c.showLogs = false
-	if c.logsSession != nil {
-		c.logsSession.Close()
-		c.logsSession = nil
-	}
-	c.clearViewPort()
-	c.logsOutput = ""
-}
-
 func (c *List) readExecOutput() tea.Cmd {
 	session := c.execSession
 	if session == nil {
@@ -986,21 +953,6 @@ func (c *List) readStatsOutput() tea.Cmd {
 			ioRead:           ioRead,
 			ioWrite:          ioWrite,
 		}
-	}
-}
-
-func (c *List) readLogsOutput() tea.Cmd {
-	session := c.logsSession
-	if session == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		buf := make([]byte, readBufSize)
-		n, err := session.Reader.Read(buf)
-		if err != nil {
-			return logsOutputMsg{err: err}
-		}
-		return logsOutputMsg{output: string(buf[:n])}
 	}
 }
 
