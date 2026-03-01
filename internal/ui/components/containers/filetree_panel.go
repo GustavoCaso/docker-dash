@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -18,13 +19,12 @@ type containersTreeLoadedMsg struct {
 }
 
 type filetreePanel struct {
-	service client.ContainerService
-	content string
-	width   int
+	service  client.ContainerService
+	viewport viewport.Model
 }
 
 func NewFileTreePanel(svc client.ContainerService) panel.Panel {
-	return &filetreePanel{service: svc}
+	return &filetreePanel{service: svc, viewport: viewport.New(0, 0)}
 }
 
 func (f *filetreePanel) Init(containerID string) tea.Cmd {
@@ -32,32 +32,37 @@ func (f *filetreePanel) Init(containerID string) tea.Cmd {
 }
 
 func (f *filetreePanel) Update(msg tea.Msg) tea.Cmd {
-	treeMsg, ok := msg.(containersTreeLoadedMsg)
-	if !ok {
-		return nil
-	}
-	if treeMsg.error != nil {
-		return func() tea.Msg {
-			return message.ShowBannerMsg{
-				Message: treeMsg.error.Error(),
-				IsError: true,
+	switch msg := msg.(type) {
+	case containersTreeLoadedMsg:
+		if msg.error != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: msg.error.Error(),
+					IsError: true,
+				}
 			}
 		}
+		f.viewport.SetContent(msg.fileTree.Tree.String())
+		return nil
 	}
-	f.content = treeMsg.fileTree.Tree.String()
-	return nil
+
+	var cmd tea.Cmd
+	f.viewport, cmd = f.viewport.Update(msg)
+
+	return cmd
 }
 
 func (f *filetreePanel) View() string {
-	return f.content
+	return f.viewport.View()
 }
 
 func (f *filetreePanel) Close() {
-	f.content = ""
+	f.viewport.SetContent("")
 }
 
-func (f *filetreePanel) SetSize(width, _ int) {
-	f.width = width
+func (f *filetreePanel) SetSize(width, height int) {
+	f.viewport.Width = width
+	f.viewport.Height = height
 }
 
 func (f *filetreePanel) fetchCmd(containerID string) tea.Cmd {

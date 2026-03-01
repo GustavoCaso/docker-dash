@@ -325,10 +325,6 @@ func (c *List) Update(msg tea.Msg) tea.Cmd {
 			c.list, listCmd = c.list.Update(msg)
 			c.clearDetails()
 			return listCmd
-		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
-			var vpCmd tea.Cmd
-			c.viewport, vpCmd = c.viewport.Update(msg)
-			return vpCmd
 		case key.Matches(msg, keys.Keys.Filter):
 			c.isFilter = !c.isFilter
 			var listCmd tea.Cmd
@@ -337,7 +333,7 @@ func (c *List) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
-	// Send the remaining of msg to both panels
+	// Send the remaining of msg to models and active panel
 	var listCmd tea.Cmd
 	c.list, listCmd = c.list.Update(msg)
 	cmds = append(cmds, listCmd)
