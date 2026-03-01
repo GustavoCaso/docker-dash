@@ -46,6 +46,13 @@ func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }
 
+func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
+	t.Helper()
+	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
+		return !strings.Contains(string(b), s)
+	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
+}
+
 func TestContainerListRendersItems(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
@@ -73,6 +80,27 @@ func TestContainerListLogsToggle(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 	// Show logs
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+
+	waitFor(t, tm, "Starting application")
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContainerListLogsClosedOnNavigation(t *testing.T) {
+	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "nginx-proxy")
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Open logs on the selected container.
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+
+	waitFor(t, tm, "Starting application")
+
+	// Navigate to a different container must close the panel.
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+
+	waitForNot(t, tm, "Starting application")
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
@@ -103,6 +131,7 @@ func TestContainerListDelete(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
+
 func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
@@ -195,6 +224,31 @@ func TestContainerListExecClearWithWhitespace(t *testing.T) {
 	}
 
 	cl.execSession.Close()
+}
+
+func TestClearDetailsClosesActivePanel(t *testing.T) {
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	cl := New(containers, dockerClient.Containers())
+	cl.SetSize(120, 40)
+
+	pr, pw := io.Pipe()
+	lp := cl.logsPanel.(*logsPanel)
+	lp.logsSession = client.NewLogsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
+	lp.logsOutput = "some logs"
+	cl.activePanel = cl.logsPanel
+
+	cl.clearDetails()
+
+	if cl.activePanel != nil {
+		t.Error("clearDetails() should nil out activePanel")
+	}
+	if lp.logsSession != nil {
+		t.Error("clearDetails() should close the logsPanel session")
+	}
+	if lp.logsOutput != "" {
+		t.Errorf("clearDetails() should clear logsOutput, got %q", lp.logsOutput)
+	}
 }
 
 func TestFormatBytes(t *testing.T) {
