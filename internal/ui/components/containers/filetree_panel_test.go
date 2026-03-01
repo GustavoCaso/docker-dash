@@ -64,14 +64,14 @@ func TestFileTreePanelUpdateWithError(t *testing.T) {
 	}
 }
 
-func TestFileTreePanelCloseResetsContent(t *testing.T) {
+func TestFileTreePanelCloseResetsViewPort(t *testing.T) {
 	p := newTestFileTreePanel()
-	p.content = "some file tree content"
+	p.viewport.SetContent("some file tree content")
 
 	p.Close()
 
-	if p.content != "" {
-		t.Errorf("Close() should clear content, got %q", p.content)
+	if p.viewport.View() != "" {
+		t.Errorf("Close() should clear viewport, got %q", p.viewport.View())
 	}
 }
 
@@ -81,9 +81,10 @@ func TestFileTreePanelCloseIsIdempotent(t *testing.T) {
 	p.Close() // must not panic
 }
 
-func TestFileTreePanelViewReturnsContent(t *testing.T) {
+func TestFileTreePanelViewReturnsViewPort(t *testing.T) {
 	p := newTestFileTreePanel()
-	p.content = "hello tree"
+	p.SetSize(80, 40)
+	p.viewport.SetContent("hello tree")
 
 	if !strings.Contains(p.View(), "hello tree") {
 		t.Errorf("View() = %q, want to contain 'hello tree'", p.View())
@@ -94,7 +95,11 @@ func TestFileTreePanelSetSizeStoresWidth(t *testing.T) {
 	p := newTestFileTreePanel()
 	p.SetSize(100, 50)
 
-	if p.width != 100 {
-		t.Errorf("SetSize should store width=100, got %d", p.width)
+	if p.viewport.Width != 100 {
+		t.Errorf("SetSize should store width=100, got %d", p.viewport.Width)
+	}
+
+	if p.viewport.Height != 50 {
+		t.Errorf("SetSize should store height=50, got %d", p.viewport.Height)
 	}
 }
