@@ -32,17 +32,17 @@ func (f *filetreePanel) Init(containerID string) tea.Cmd {
 }
 
 func (f *filetreePanel) Update(msg tea.Msg) tea.Cmd {
-	switch msg := msg.(type) {
-	case containersTreeLoadedMsg:
-		if msg.error != nil {
+	treeMsg, ok := msg.(containersTreeLoadedMsg)
+	if ok {
+		if treeMsg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
-					Message: msg.error.Error(),
+					Message: treeMsg.error.Error(),
 					IsError: true,
 				}
 			}
 		}
-		f.viewport.SetContent(msg.fileTree.Tree.String())
+		f.viewport.SetContent(treeMsg.fileTree.Tree.String())
 		return nil
 	}
 
