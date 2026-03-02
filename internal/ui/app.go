@@ -10,14 +10,14 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/containers"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/header"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/images"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/statusbar"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/volumes"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/containers"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/images"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/volumes"
 )
 
 type bannerType int
@@ -51,24 +51,24 @@ var (
 )
 
 type model struct {
-	cfg             *config.Config
-	client          client.Client
-	header          *header.Header
-	containerList   *containers.List
-	imageList       *images.List
-	volumeList      *volumes.List
-	statusBar       *statusbar.StatusBar
-	keys            *keys.KeyMap
-	imagesKeys      *keys.ViewKeyMap
-	containerKeys   *keys.ViewKeyMap
-	volumeKeys      *keys.ViewKeyMap
-	activeKeys      *keys.ViewKeyMap
-	width           int
-	height          int
-	bannerMsg       string
-	bannerKind      bannerType
-	initErr         string
-	refreshInterval time.Duration
+	cfg              *config.Config
+	client           client.Client
+	header           *header.Header
+	containerSection *containers.Section
+	imageSection     *images.Section
+	volumeSection    *volumes.Section
+	statusBar        *statusbar.StatusBar
+	keys             *keys.KeyMap
+	imagesKeys       *keys.ViewKeyMap
+	containerKeys    *keys.ViewKeyMap
+	volumeKeys       *keys.ViewKeyMap
+	activeKeys       *keys.ViewKeyMap
+	width            int
+	height           int
+	bannerMsg        string
+	bannerKind       bannerType
+	initErr          string
+	refreshInterval  time.Duration
 }
 
 func InitialModel(cfg *config.Config, client client.Client) tea.Model {
@@ -96,19 +96,19 @@ func InitialModel(cfg *config.Config, client client.Client) tea.Model {
 	}
 
 	return &model{
-		cfg:             cfg,
-		client:          client,
-		keys:            keys.Keys,
-		imagesKeys:      keys.Keys.ImageKeyMap(),
-		containerKeys:   keys.Keys.ContainerKeyMap(),
-		volumeKeys:      keys.Keys.VolumeKeyMap(),
-		header:          header.New(),
-		containerList:   containers.New(containersList, client.Containers()),
-		imageList:       images.New(imagesList, client),
-		volumeList:      volumes.New(volumesList, client.Volumes()),
-		statusBar:       statusbar.New(),
-		initErr:         initErr,
-		refreshInterval: refreshInterval,
+		cfg:              cfg,
+		client:           client,
+		keys:             keys.Keys,
+		imagesKeys:       keys.Keys.ImageKeyMap(),
+		containerKeys:    keys.Keys.ContainerKeyMap(),
+		volumeKeys:       keys.Keys.VolumeKeyMap(),
+		header:           header.New(),
+		containerSection: containers.New(containersList, client.Containers()),
+		imageSection:     images.New(imagesList, client),
+		volumeSection:    volumes.New(volumesList, client.Volumes()),
+		statusBar:        statusbar.New(),
+		initErr:          initErr,
+		refreshInterval:  refreshInterval,
 	}
 }
 
@@ -145,9 +145,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		contentHeight := msg.Height - statusBarHeight - headerHeight
 
-		m.containerList.SetSize(msg.Width, contentHeight)
-		m.imageList.SetSize(msg.Width, contentHeight)
-		m.volumeList.SetSize(msg.Width, contentHeight)
+		m.containerSection.SetSize(msg.Width, contentHeight)
+		m.imageSection.SetSize(msg.Width, contentHeight)
+		m.volumeSection.SetSize(msg.Width, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
 	case message.ShowBannerMsg:
@@ -233,13 +233,13 @@ func (m *model) View() string {
 
 	switch m.header.ActiveView() {
 	case header.ViewContainers:
-		listView = m.containerList.View()
+		listView = m.containerSection.View()
 		listKeyMap = m.containerKeys
 	case header.ViewImages:
-		listView = m.imageList.View()
+		listView = m.imageSection.View()
 		listKeyMap = m.imagesKeys
 	case header.ViewVolumes:
-		listView = m.volumeList.View()
+		listView = m.volumeSection.View()
 		listKeyMap = m.volumeKeys
 	}
 
@@ -266,20 +266,20 @@ func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.header.ActiveView() {
 	case header.ViewContainers:
-		cmd = m.containerList.Update(msg)
+		cmd = m.containerSection.Update(msg)
 	case header.ViewImages:
-		cmd = m.imageList.Update(msg)
+		cmd = m.imageSection.Update(msg)
 	case header.ViewVolumes:
-		cmd = m.volumeList.Update(msg)
+		cmd = m.volumeSection.Update(msg)
 	}
 	return m, cmd
 }
 
 func (m *model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds := []tea.Cmd{
-		m.containerList.Update(msg),
-		m.imageList.Update(msg),
-		m.volumeList.Update(msg),
+		m.containerSection.Update(msg),
+		m.imageSection.Update(msg),
+		m.volumeSection.Update(msg),
 	}
 	return m, tea.Batch(cmds...)
 }

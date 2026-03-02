@@ -12,30 +12,30 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/client"
 )
 
-type imageListModel struct {
-	list *List
+type imageSectionModel struct {
+	section *Section
 }
 
-func newModel() imageListModel {
+func newModel() imageSectionModel {
 	client := client.NewMockClient()
 	images, _ := client.Images().List(context.Background())
-	il := New(images, client)
-	il.SetSize(120, 40)
-	return imageListModel{list: il}
+	section := New(images, client)
+	section.SetSize(120, 40)
+	return imageSectionModel{section: section}
 }
 
-func (m imageListModel) Init() tea.Cmd { return nil }
+func (m imageSectionModel) Init() tea.Cmd { return nil }
 
-func (m imageListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m imageSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
 	}
-	cmd := m.list.Update(msg)
+	cmd := m.section.Update(msg)
 	return m, cmd
 }
 
-func (m imageListModel) View() string {
-	return m.list.View()
+func (m imageSectionModel) View() string {
+	return m.section.View()
 }
 
 func TestImageListRendersItems(t *testing.T) {

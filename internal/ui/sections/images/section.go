@@ -55,8 +55,8 @@ func (i imageItem) Description() string {
 }
 func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
-// List wraps bubbles/list.
-type List struct {
+// Section wraps bubbles/list.
+type Section struct {
 	list             list.Model
 	viewport         viewport.Model
 	imageService     client.ImageService
@@ -68,8 +68,8 @@ type List struct {
 	spinner          spinner.Model
 }
 
-// New creates a new image list.
-func New(images []client.Image, client client.Client) *List {
+// New creates a new image section.
+func New(images []client.Image, client client.Client) *Section {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
 		items[i] = imageItem{image: img}
@@ -86,7 +86,7 @@ func New(images []client.Image, client client.Client) *List {
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	il := &List{
+	il := &Section{
 		list:             l,
 		viewport:         vp,
 		imageService:     client.Images(),
@@ -99,41 +99,41 @@ func New(images []client.Image, client client.Client) *List {
 }
 
 // SetSize sets dimensions.
-func (i *List) SetSize(width, height int) {
-	i.width = width
-	i.height = height
+func (s *Section) SetSize(width, height int) {
+	s.width = width
+	s.height = height
 
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if i.showLayers {
+	if s.showLayers {
 		// Split view: 40% list, 60% details
 		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
 
-		i.list.SetSize(listWidth-listX, height-listY)
-		i.viewport.Width = detailWidth - listX
-		i.viewport.Height = height - listY
+		s.list.SetSize(listWidth-listX, height-listY)
+		s.viewport.Width = detailWidth - listX
+		s.viewport.Height = height - listY
 	} else {
 		// Full width list when viewport is hidden
-		i.list.SetSize(width-listX, height-listY)
+		s.list.SetSize(width-listX, height-listY)
 	}
 }
 
 // Update handles messages.
-func (i *List) Update(msg tea.Msg) tea.Cmd {
+func (s *Section) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
 	// Handle spinner ticks while loading
-	if i.loading {
+	if s.loading {
 		var spinnerCmd tea.Cmd
-		i.spinner, spinnerCmd = i.spinner.Update(msg)
+		s.spinner, spinnerCmd = s.spinner.Update(msg)
 		cmds = append(cmds, spinnerCmd)
 	}
 
 	switch msg := msg.(type) {
 	case imagesLoadedMsg:
-		i.loading = false
+		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -142,7 +142,7 @@ func (i *List) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		cmd := i.list.SetItems(msg.items)
+		cmd := s.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case imageRemovedMsg:
@@ -154,7 +154,7 @@ func (i *List) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		i.list.RemoveItem(msg.Idx)
+		s.list.RemoveItem(msg.Idx)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Image %s deleted", shortID(msg.ID)),
@@ -162,7 +162,7 @@ func (i *List) Update(msg tea.Msg) tea.Cmd {
 			}
 		}
 	case containerRunMsg:
-		i.loading = false
+		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -192,14 +192,14 @@ func (i *List) Update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(banner, refreshComponents)
 
 	case tea.KeyMsg:
-		if i.isFilter {
+		if s.isFilter {
 			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd
-			i.list, listCmd = i.list.Update(msg)
+			s.list, listCmd = s.list.Update(msg)
 			filterCmds = append(filterCmds, listCmd)
 
 			if key.Matches(msg, keys.Keys.Esc) {
-				i.isFilter = !i.isFilter
+				s.isFilter = !s.isFilter
 				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
 			}
 			return tea.Batch(filterCmds...)
@@ -207,73 +207,73 @@ func (i *List) Update(msg tea.Msg) tea.Cmd {
 
 		switch {
 		case key.Matches(msg, keys.Keys.ImageLayers):
-			i.showLayers = !i.showLayers
-			i.SetSize(i.width, i.height) // Recalculate layout
+			s.showLayers = !s.showLayers
+			s.SetSize(s.width, s.height) // Recalculate layout
 			return nil
 		case key.Matches(msg, keys.Keys.Refresh):
-			i.loading = true
-			return tea.Batch(i.spinner.Tick, i.updateImagesCmd())
+			s.loading = true
+			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
 		case key.Matches(msg, keys.Keys.Delete):
-			return i.deleteImageCmd()
+			return s.deleteImageCmd()
 		case key.Matches(msg, keys.Keys.CreateAndRunContainer):
-			return i.createContainerCmdAndRun()
+			return s.createContainerCmdAndRun()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
-			i.list, listCmd = i.list.Update(msg)
+			s.list, listCmd = s.list.Update(msg)
 			return listCmd
 		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
 			var vpCmd tea.Cmd
-			i.viewport, vpCmd = i.viewport.Update(msg)
+			s.viewport, vpCmd = s.viewport.Update(msg)
 			return vpCmd
 		case key.Matches(msg, keys.Keys.Filter):
-			i.isFilter = !i.isFilter
+			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
-			i.list, listCmd = i.list.Update(msg)
-			return tea.Batch(listCmd, i.extendFilterHelpCommand())
+			s.list, listCmd = s.list.Update(msg)
+			return tea.Batch(listCmd, s.extendFilterHelpCommand())
 		}
 	}
 
 	// Send the remaining of msg to both panels
 	var listCmd tea.Cmd
-	i.list, listCmd = i.list.Update(msg)
+	s.list, listCmd = s.list.Update(msg)
 	cmds = append(cmds, listCmd)
 
 	var vpCmd tea.Cmd
-	i.viewport, vpCmd = i.viewport.Update(msg)
+	s.viewport, vpCmd = s.viewport.Update(msg)
 	cmds = append(cmds, vpCmd)
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the list.
-func (i *List) View() string {
-	listContent := i.list.View()
+func (s *Section) View() string {
+	listContent := s.list.View()
 
 	// Overlay spinner in bottom right corner when loading
-	if i.loading {
-		spinnerText := i.spinner.View() + " Refreshing..."
-		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, i.list.Width())
+	if s.loading {
+		spinnerText := s.spinner.View() + " Refreshing..."
+		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, s.list.Width())
 	}
 
 	listView := theme.ListStyle.
-		Width(i.list.Width()).
+		Width(s.list.Width()).
 		Render(listContent)
 
 	// Only show list when layers is not enabled
-	if !i.showLayers {
+	if !s.showLayers {
 		return listView
 	}
 
-	i.updateDetails()
+	s.updateDetails()
 
 	detailView := theme.ListStyle.
-		Width(i.viewport.Width).
-		Render(i.viewport.View())
+		Width(s.viewport.Width).
+		Render(s.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
-func (i *List) extendFilterHelpCommand() tea.Cmd {
+func (s *Section) extendFilterHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
 			key.NewBinding(
@@ -284,10 +284,10 @@ func (i *List) extendFilterHelpCommand() tea.Cmd {
 	}
 }
 
-func (i *List) deleteImageCmd() tea.Cmd {
-	svc := i.imageService
-	items := i.list.Items()
-	idx := i.list.Index()
+func (s *Section) deleteImageCmd() tea.Cmd {
+	svc := s.imageService
+	items := s.list.Items()
+	idx := s.list.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -305,8 +305,8 @@ func (i *List) deleteImageCmd() tea.Cmd {
 	}
 }
 
-func (i *List) updateImagesCmd() tea.Cmd {
-	svc := i.imageService
+func (s *Section) updateImagesCmd() tea.Cmd {
+	svc := s.imageService
 	return func() tea.Msg {
 		ctx := context.Background()
 		images, err := svc.List(ctx)
@@ -321,10 +321,10 @@ func (i *List) updateImagesCmd() tea.Cmd {
 	}
 }
 
-func (i *List) createContainerCmdAndRun() tea.Cmd {
-	svc := i.containerService
-	items := i.list.Items()
-	idx := i.list.Index()
+func (s *Section) createContainerCmdAndRun() tea.Cmd {
+	svc := s.containerService
+	items := s.list.Items()
+	idx := s.list.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -333,7 +333,7 @@ func (i *List) createContainerCmdAndRun() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	i.loading = true
+	s.loading = true
 	return func() tea.Msg {
 		ctx := context.Background()
 		containerID, err := svc.Run(ctx, dockerImage.image)
@@ -343,10 +343,10 @@ func (i *List) createContainerCmdAndRun() tea.Cmd {
 }
 
 // updateDetails updates the viewport content based on selected image.
-func (i *List) updateDetails() {
-	selected := i.list.SelectedItem()
+func (s *Section) updateDetails() {
+	selected := s.list.SelectedItem()
 	if selected == nil {
-		i.viewport.SetContent("No image selected")
+		s.viewport.SetContent("No image selected")
 		return
 	}
 
@@ -375,7 +375,7 @@ func (i *List) updateDetails() {
 		}
 	}
 
-	i.viewport.SetContent(content.String())
+	s.viewport.SetContent(content.String())
 }
 
 const shortIDLength = 12 // length of shortened container/image IDs
