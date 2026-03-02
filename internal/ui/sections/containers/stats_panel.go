@@ -172,12 +172,14 @@ func (s *statsPanel) View() string {
 	return s.lastView
 }
 
-func (s *statsPanel) Close() {
+func (s *statsPanel) Close() tea.Cmd {
 	if s.session != nil {
 		s.session.Close()
 		s.session = nil
 	}
 	s.lastView = ""
+
+	return nil
 }
 
 func (s *statsPanel) SetSize(width, height int) {

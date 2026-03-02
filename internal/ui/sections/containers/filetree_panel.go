@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
@@ -28,7 +30,7 @@ func NewFileTreePanel(svc client.ContainerService) panel.Panel {
 }
 
 func (f *filetreePanel) Init(containerID string) tea.Cmd {
-	return f.fetchCmd(containerID)
+	return tea.Batch(f.fetchCmd(containerID), f.extendHelpCmd())
 }
 
 func (f *filetreePanel) Update(msg tea.Msg) tea.Cmd {
@@ -56,8 +58,9 @@ func (f *filetreePanel) View() string {
 	return f.viewport.View()
 }
 
-func (f *filetreePanel) Close() {
+func (f *filetreePanel) Close() tea.Cmd {
 	f.viewport.SetContent("")
+	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
 
 func (f *filetreePanel) SetSize(width, height int) {
@@ -74,5 +77,14 @@ func (f *filetreePanel) fetchCmd(containerID string) tea.Cmd {
 			return containersTreeLoadedMsg{error: fmt.Errorf("error getting the file tree: %w", err)}
 		}
 		return containersTreeLoadedMsg{fileTree: fileTree}
+	}
+}
+
+func (f *filetreePanel) extendHelpCmd() tea.Cmd {
+	return func() tea.Msg {
+		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			keys.Keys.ScrollUp,
+			keys.Keys.ScrollDown,
+		}}
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
@@ -20,12 +22,29 @@ func TestFileTreePanelInitFetchesTree(t *testing.T) {
 		t.Fatal("Init() returned nil cmd")
 	}
 	msg := cmd()
-	treeMsg, ok := msg.(containersTreeLoadedMsg)
+	batch, ok := msg.(tea.BatchMsg)
 	if !ok {
-		t.Fatalf("Init() cmd returned %T, want containersTreeLoadedMsg", msg)
+		t.Fatalf("Init() cmd returned %T, want tea.BatchMsg", msg)
 	}
-	if treeMsg.error != nil {
-		t.Fatalf("unexpected error: %v", treeMsg.error)
+	containersTreeLoaded := false
+	extendCmd := false
+
+	for _, cmd := range batch {
+		msg := cmd()
+		switch msg.(type) {
+		case containersTreeLoadedMsg:
+			containersTreeLoaded = true
+		case message.AddContextualKeyBindingsMsg:
+			extendCmd = true
+		}
+	}
+
+	if !containersTreeLoaded {
+		t.Fatal("Init() not returned containersTreeLoadedMsg msg")
+	}
+
+	if !extendCmd {
+		t.Fatal("Init() not returned AddContextualKeyBindingsMsg msg")
 	}
 }
 

@@ -102,7 +102,7 @@ func (e *execPanel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, e.viewport.View(), e.input.View())
 }
 
-func (e *execPanel) Close() {
+func (e *execPanel) Close() tea.Cmd {
 	e.input.Blur()
 	if e.session != nil {
 		e.session.Close()
@@ -112,6 +112,8 @@ func (e *execPanel) Close() {
 	e.history = []string{}
 	e.historyIdx = 0
 	e.viewport.SetContent("")
+
+	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
 
 func (e *execPanel) SetSize(width, height int) {

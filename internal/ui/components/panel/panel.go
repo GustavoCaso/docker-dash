@@ -6,6 +6,6 @@ type Panel interface {
 	Init(containerID string) tea.Cmd
 	Update(msg tea.Msg) tea.Cmd
 	View() string
-	Close()
+	Close() tea.Cmd
 	SetSize(width, height int)
 }
