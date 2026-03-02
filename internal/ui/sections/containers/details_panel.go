@@ -8,8 +8,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/helpers"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
+	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -78,7 +78,7 @@ func formatDetails(container *client.Container) string {
 	fmt.Fprintf(&content, "Container: %s\n", container.Name)
 	content.WriteString("═══════════════════════\n\n")
 
-	fmt.Fprintf(&content, "ID:      %s\n", helpers.ShortID(container.ID))
+	fmt.Fprintf(&content, "ID:      %s\n", helper.ShortID(container.ID))
 	fmt.Fprintf(&content, "Image:   %s\n", container.Image)
 	fmt.Fprintf(&content, "Status:  %s\n", container.Status)
 

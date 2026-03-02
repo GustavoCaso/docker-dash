@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/helpers"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -50,7 +49,7 @@ func (v volumeItem) Title() string { return v.volume.Name }
 func (v volumeItem) Description() string {
 	var parts []string
 	parts = append(parts, v.volume.Driver)
-	parts = append(parts, helpers.FormatSize(v.volume.Size))
+	parts = append(parts, helper.FormatSize(v.volume.Size))
 	if v.volume.UsedCount > 0 {
 		inUse := theme.StatusRunningStyle.Render("● in use")
 		parts = append(parts, inUse)
@@ -61,8 +60,8 @@ func (v volumeItem) Description() string {
 }
 func (v volumeItem) FilterValue() string { return v.volume.Name }
 
-// List wraps bubbles/list for displaying volumes.
-type List struct {
+// Section wraps bubbles/list for displaying volumes.
+type Section struct {
 	list          list.Model
 	isFilter      bool
 	viewport      viewport.Model
@@ -74,7 +73,7 @@ type List struct {
 }
 
 // New creates a new volume list.
-func New(volumes []client.Volume, svc client.VolumeService) *List {
+func New(volumes []client.Volume, svc client.VolumeService) *Section {
 	items := make([]list.Item, len(volumes))
 	for i, v := range volumes {
 		items[i] = volumeItem{volume: v}
@@ -91,7 +90,7 @@ func New(volumes []client.Volume, svc client.VolumeService) *List {
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	return &List{
+	return &Section{
 		list:          l,
 		viewport:      vp,
 		volumeService: svc,
@@ -100,37 +99,37 @@ func New(volumes []client.Volume, svc client.VolumeService) *List {
 }
 
 // SetSize sets dimensions.
-func (v *List) SetSize(width, height int) {
-	v.width = width
-	v.height = height
+func (s *Section) SetSize(width, height int) {
+	s.width = width
+	s.height = height
 
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if v.showFileTree {
+	if s.showFileTree {
 		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
 
-		v.list.SetSize(listWidth-listX, height-listY)
-		v.viewport.Width = detailWidth - listX
-		v.viewport.Height = height - listY
+		s.list.SetSize(listWidth-listX, height-listY)
+		s.viewport.Width = detailWidth - listX
+		s.viewport.Height = height - listY
 	} else {
-		v.list.SetSize(width-listX, height-listY)
+		s.list.SetSize(width-listX, height-listY)
 	}
 }
 
 // Update handles messages.
-func (v *List) Update(msg tea.Msg) tea.Cmd {
+func (s *Section) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
-	if v.loading {
+	if s.loading {
 		var spinnerCmd tea.Cmd
-		v.spinner, spinnerCmd = v.spinner.Update(msg)
+		s.spinner, spinnerCmd = s.spinner.Update(msg)
 		cmds = append(cmds, spinnerCmd)
 	}
 
 	switch msg := msg.(type) {
 	case volumesLoadedMsg:
-		v.loading = false
+		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -139,11 +138,11 @@ func (v *List) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		cmd := v.list.SetItems(msg.items)
+		cmd := s.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case volumeTreeLoadedMsg:
-		v.loading = false
+		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -152,7 +151,7 @@ func (v *List) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		v.viewport.SetContent(lipgloss.NewStyle().Width(v.viewport.Width).Render(msg.fileTree.Tree.String()))
+		s.viewport.SetContent(lipgloss.NewStyle().Width(s.viewport.Width).Render(msg.fileTree.Tree.String()))
 		return nil
 	case volumeRemovedMsg:
 		if msg.Error != nil {
@@ -163,7 +162,7 @@ func (v *List) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		v.list.RemoveItem(msg.Idx)
+		s.list.RemoveItem(msg.Idx)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Volume %s deleted", msg.Name),
@@ -171,14 +170,14 @@ func (v *List) Update(msg tea.Msg) tea.Cmd {
 			}
 		}
 	case tea.KeyMsg:
-		if v.isFilter {
+		if s.isFilter {
 			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd
-			v.list, listCmd = v.list.Update(msg)
+			s.list, listCmd = s.list.Update(msg)
 			filterCmds = append(filterCmds, listCmd)
 
 			if key.Matches(msg, keys.Keys.Esc) {
-				v.isFilter = !v.isFilter
+				s.isFilter = !s.isFilter
 				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
 			}
 			return tea.Batch(filterCmds...)
@@ -186,7 +185,7 @@ func (v *List) Update(msg tea.Msg) tea.Cmd {
 
 		switch {
 		case key.Matches(msg, keys.Keys.FileTree):
-			selected := v.list.SelectedItem()
+			selected := s.list.SelectedItem()
 			if selected == nil {
 				return nil
 			}
@@ -195,73 +194,73 @@ func (v *List) Update(msg tea.Msg) tea.Cmd {
 				return nil
 			}
 			vol := vItem.volume
-			v.showFileTree = !v.showFileTree
-			if v.showFileTree {
-				v.loading = true
-				v.SetSize(v.width, v.height)
-				v.viewport.SetContent("")
-				return tea.Batch(v.spinner.Tick, v.fetchFileTreeCmd(vol.Name))
+			s.showFileTree = !s.showFileTree
+			if s.showFileTree {
+				s.loading = true
+				s.SetSize(s.width, s.height)
+				s.viewport.SetContent("")
+				return tea.Batch(s.spinner.Tick, s.fetchFileTreeCmd(vol.Name))
 			}
-			v.SetSize(v.width, v.height)
+			s.SetSize(s.width, s.height)
 			return nil
 		case key.Matches(msg, keys.Keys.Refresh):
-			v.loading = true
-			return tea.Batch(v.spinner.Tick, v.updateVolumesCmd())
+			s.loading = true
+			return tea.Batch(s.spinner.Tick, s.updateVolumesCmd())
 		case key.Matches(msg, keys.Keys.Delete):
-			return v.deleteVolumeCmd()
+			return s.deleteVolumeCmd()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
-			v.list, listCmd = v.list.Update(msg)
+			s.list, listCmd = s.list.Update(msg)
 			return listCmd
 		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
 			var vpCmd tea.Cmd
-			v.viewport, vpCmd = v.viewport.Update(msg)
+			s.viewport, vpCmd = s.viewport.Update(msg)
 			return vpCmd
 		case key.Matches(msg, keys.Keys.Filter):
-			v.isFilter = !v.isFilter
+			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
-			v.list, listCmd = v.list.Update(msg)
-			return tea.Batch(listCmd, v.extendFilterHelpCommand())
+			s.list, listCmd = s.list.Update(msg)
+			return tea.Batch(listCmd, s.extendFilterHelpCommand())
 		}
 	}
 
 	var listCmd tea.Cmd
-	v.list, listCmd = v.list.Update(msg)
+	s.list, listCmd = s.list.Update(msg)
 	cmds = append(cmds, listCmd)
 
 	var vpCmd tea.Cmd
-	v.viewport, vpCmd = v.viewport.Update(msg)
+	s.viewport, vpCmd = s.viewport.Update(msg)
 	cmds = append(cmds, vpCmd)
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the list.
-func (v *List) View() string {
-	listContent := v.list.View()
+func (s *Section) View() string {
+	listContent := s.list.View()
 
-	if v.loading {
-		spinnerText := v.spinner.View() + " Loading..."
-		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, v.list.Width())
+	if s.loading {
+		spinnerText := s.spinner.View() + " Loading..."
+		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, s.list.Width())
 	}
 
 	listView := theme.ListStyle.
-		Width(v.list.Width()).
+		Width(s.list.Width()).
 		Render(listContent)
 
-	if !v.showFileTree {
+	if !s.showFileTree {
 		return listView
 	}
 
 	detailView := theme.ListStyle.
-		Width(v.viewport.Width).
-		Render(v.viewport.View())
+		Width(s.viewport.Width).
+		Render(s.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
-func (v *List) fetchFileTreeCmd(volumeName string) tea.Cmd {
-	svc := v.volumeService
+func (s *Section) fetchFileTreeCmd(volumeName string) tea.Cmd {
+	svc := s.volumeService
 	return func() tea.Msg {
 		ctx := context.Background()
 		fileTree, err := svc.FileTree(ctx, volumeName)
@@ -272,8 +271,8 @@ func (v *List) fetchFileTreeCmd(volumeName string) tea.Cmd {
 	}
 }
 
-func (v *List) updateVolumesCmd() tea.Cmd {
-	svc := v.volumeService
+func (s *Section) updateVolumesCmd() tea.Cmd {
+	svc := s.volumeService
 	return func() tea.Msg {
 		ctx := context.Background()
 		volumes, err := svc.List(ctx)
@@ -288,10 +287,10 @@ func (v *List) updateVolumesCmd() tea.Cmd {
 	}
 }
 
-func (v *List) deleteVolumeCmd() tea.Cmd {
-	svc := v.volumeService
-	items := v.list.Items()
-	idx := v.list.Index()
+func (s *Section) deleteVolumeCmd() tea.Cmd {
+	svc := s.volumeService
+	items := s.list.Items()
+	idx := s.list.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -309,7 +308,7 @@ func (v *List) deleteVolumeCmd() tea.Cmd {
 	}
 }
 
-func (v *List) extendFilterHelpCommand() tea.Cmd {
+func (s *Section) extendFilterHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
 			key.NewBinding(

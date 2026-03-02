@@ -13,30 +13,30 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/client"
 )
 
-type containerListModel struct {
-	list *List
+type containerSectionModel struct {
+	section *Section
 }
 
-func newContainerListModel() containerListModel {
+func newContainerSectionModel() containerSectionModel {
 	client := client.NewMockClient()
 	containers, _ := client.Containers().List(context.Background())
-	cl := New(containers, client.Containers())
-	cl.SetSize(120, 40)
-	return containerListModel{list: cl}
+	section := New(containers, client.Containers())
+	section.SetSize(120, 40)
+	return containerSectionModel{section: section}
 }
 
-func (m containerListModel) Init() tea.Cmd { return nil }
+func (m containerSectionModel) Init() tea.Cmd { return nil }
 
-func (m containerListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m containerSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
 	}
-	cmd := m.list.Update(msg)
+	cmd := m.section.Update(msg)
 	return m, cmd
 }
 
-func (m containerListModel) View() string {
-	return m.list.View()
+func (m containerSectionModel) View() string {
+	return m.section.View()
 }
 
 func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
@@ -54,14 +54,14 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 }
 
 func TestContainerListRendersItems(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
 func TestContainerListDetailsToggle(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	// Select a container
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
@@ -75,7 +75,7 @@ func TestContainerListDetailsToggle(t *testing.T) {
 }
 
 func TestContainerListLogsToggle(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 	// Show logs
@@ -88,7 +88,7 @@ func TestContainerListLogsToggle(t *testing.T) {
 }
 
 func TestContainerListLogsClosedOnNavigation(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 
@@ -107,7 +107,7 @@ func TestContainerListLogsClosedOnNavigation(t *testing.T) {
 }
 
 func TestContainerListStartStop(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 	// Toggle start/stop
@@ -118,7 +118,7 @@ func TestContainerListStartStop(t *testing.T) {
 }
 
 func TestContainerListDelete(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	// Navigate to last container (old-container)
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
@@ -133,7 +133,7 @@ func TestContainerListDelete(t *testing.T) {
 }
 
 func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 	// Open stats on running container
@@ -149,7 +149,7 @@ func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
 }
 
 func TestContainerListRefresh(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerListModel(), teatest.WithInitialTermSize(120, 40))
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	// Refresh - send key and give time for the async command to process
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
