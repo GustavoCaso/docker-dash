@@ -18,6 +18,24 @@ type Container struct {
 	Created time.Time
 	Ports   []PortMapping
 	Mounts  []Mount
+
+	// Networking
+	Hostname    string
+	NetworkMode string
+	Networks    []NetworkInfo
+
+	// Runtime config
+	Cmd        []string
+	Entrypoint []string
+	WorkingDir string
+	Env        []string
+	Labels     map[string]string
+
+	// Resource limits
+	MemoryLimit   int64  // bytes; 0 = unlimited
+	CPUShares     int64  // relative weight; 0 = default (1024)
+	RestartPolicy string // e.g. "no", "always", "unless-stopped", "on-failure:3"
+	Privileged    bool
 }
 
 type ContainerFileTree struct {
@@ -49,6 +67,14 @@ type Mount struct {
 	Type        string // "volume", "bind", "tmpfs"
 	Source      string
 	Destination string
+}
+
+// NetworkInfo holds a container's attachment to a single Docker network.
+type NetworkInfo struct {
+	Name      string
+	IPAddress string
+	Gateway   string
+	Aliases   []string
 }
 
 // Layer represents a Docker image layer.

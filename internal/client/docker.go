@@ -221,12 +221,79 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 		state = StateRestarting
 	}
 
+	var created time.Time
+	created, err = time.Parse(time.RFC3339Nano, c.Created)
+	if err != nil {
+		return nil, fmt.Errorf("parsing container created time: %w", err)
+	}
+
+	ports := make([]PortMapping, 0)
+	for port, bindings := range c.NetworkSettings.Ports {
+		containerPort, containerPortErr := strconv.ParseUint(port.Port(), 10, 16)
+		if containerPortErr != nil {
+			continue
+		}
+		for _, b := range bindings {
+			hostPort, hostPortErr := strconv.ParseUint(b.HostPort, 10, 16)
+			if hostPortErr != nil {
+				continue
+			}
+			ports = append(ports, PortMapping{
+				HostPort:      uint16(hostPort),
+				ContainerPort: uint16(containerPort),
+				Protocol:      port.Proto(),
+			})
+		}
+	}
+
+	mounts := make([]Mount, len(c.Mounts))
+	for i, m := range c.Mounts {
+		mounts[i] = Mount{
+			Type:        string(m.Type),
+			Source:      m.Source,
+			Destination: m.Destination,
+		}
+	}
+
+	networks := make([]NetworkInfo, 0, len(c.NetworkSettings.Networks))
+	for name, n := range c.NetworkSettings.Networks {
+		networks = append(networks, NetworkInfo{
+			Name:      name,
+			IPAddress: n.IPAddress,
+			Gateway:   n.Gateway,
+			Aliases:   n.Aliases,
+		})
+	}
+
+	restartPolicy := string(c.HostConfig.RestartPolicy.Name)
+	if c.HostConfig.RestartPolicy.MaximumRetryCount > 0 {
+		restartPolicy = fmt.Sprintf("%s:%d", restartPolicy, c.HostConfig.RestartPolicy.MaximumRetryCount)
+	}
+
 	return &Container{
-		ID:     c.ID,
-		Name:   strings.TrimPrefix(c.Name, "/"),
-		Image:  c.Config.Image,
-		Status: c.State.Status,
-		State:  state,
+		ID:      c.ID,
+		Name:    strings.TrimPrefix(c.Name, "/"),
+		Image:   c.Config.Image,
+		Status:  c.State.Status,
+		State:   state,
+		Created: created,
+		Ports:   ports,
+		Mounts:  mounts,
+		// Networking
+		Hostname:    c.Config.Hostname,
+		NetworkMode: string(c.HostConfig.NetworkMode),
+		Networks:    networks,
+		// Runtime config
+		Cmd:        c.Config.Cmd,
+		Entrypoint: c.Config.Entrypoint,
+		WorkingDir: c.Config.WorkingDir,
+		Env:        c.Config.Env,
+		Labels:     c.Config.Labels,
+		// Resource limits
+		MemoryLimit:   c.HostConfig.Memory,
+		CPUShares:     c.HostConfig.CPUShares,
+		RestartPolicy: restartPolicy,
+		Privileged:    c.HostConfig.Privileged,
 	}, nil
 }
 
