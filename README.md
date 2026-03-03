@@ -1,6 +1,6 @@
 # docker-dash
 
-A terminal UI for managing Docker containers, images, and volumes — without leaving your terminal.
+A terminal UI for managing Docker containers, images, volumes, and networks — without leaving your terminal.
 
 <img src="./assets/overview.gif" />
 
@@ -10,7 +10,7 @@ Switching between the terminal and a Docker GUI breaks flow. `docker-dash` gives
 
 ## Features
 
-- Browse and manage containers, images, and volumes
+- Browse and manage containers, images, volumes, and networks
 - View container logs and details interactively
 - Start, stop, restart, and remove containers
 - Exec into running containers
@@ -100,6 +100,13 @@ CLI flags take precedence over values in the config file.
 |------------|--------------|
 | `d`        | Delete volume|
 | `t`        | Show files   |
+
+**Networks**
+
+| Key        | Action         |
+|------------|----------------|
+| `d`        | Network details|
+| `D`        | Delete network |
 
 **Global**
 

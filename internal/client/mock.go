@@ -16,6 +16,7 @@ type MockClient struct {
 	containers *mockContainerService
 	images     *mockImageService
 	volumes    *mockVolumeService
+	networks   *mockNetworkService
 }
 
 // NewMockClient creates a new mock Docker client with sample data.
@@ -24,12 +25,14 @@ func NewMockClient() *MockClient {
 		containers: newMockContainerService(),
 		images:     newMockImageService(),
 		volumes:    newMockVolumeService(),
+		networks:   newMockNetworkService(),
 	}
 }
 
 func (c *MockClient) Containers() ContainerService   { return c.containers }
 func (c *MockClient) Images() ImageService           { return c.images }
 func (c *MockClient) Volumes() VolumeService         { return c.volumes }
+func (c *MockClient) Networks() NetworkService       { return c.networks }
 func (c *MockClient) Ping(ctx context.Context) error { return nil }
 func (c *MockClient) Close() error                   { return nil }
 
@@ -432,4 +435,78 @@ func (s *mockVolumeService) FileTree(ctx context.Context, name string) (VolumeFi
 		}
 	}
 	return VolumeFileTree{}, fmt.Errorf("volume not found: %s", name)
+}
+
+// mockNetworkService provides mock network data.
+type mockNetworkService struct {
+	networks []Network
+}
+
+func newMockNetworkService() *mockNetworkService {
+	now := time.Now()
+	return &mockNetworkService{
+		networks: []Network{
+			{
+				ID:       "abc123def456abc1",
+				Name:     "bridge",
+				Driver:   "bridge",
+				Scope:    "local",
+				Internal: false,
+				Created:  now.Add(-72 * time.Hour),
+				ConnectedContainers: []NetworkContainer{
+					{Name: "nginx-proxy", IPv4Address: "172.17.0.2/16", MacAddress: "02:42:ac:11:00:02"},
+					{Name: "api-server", IPv4Address: "172.17.0.3/16", MacAddress: "02:42:ac:11:00:03"},
+					{Name: "postgres-db", IPv4Address: "172.17.0.4/16", MacAddress: "02:42:ac:11:00:04"},
+				},
+				IPAM: NetworkIPAM{Subnet: "172.17.0.0/16", Gateway: "172.17.0.1"},
+			},
+			{
+				ID:                  "def456ghi789def4",
+				Name:                "host",
+				Driver:              "host",
+				Scope:               "local",
+				Internal:            false,
+				Created:             now.Add(-72 * time.Hour),
+				ConnectedContainers: []NetworkContainer{},
+				IPAM:                NetworkIPAM{},
+			},
+			{
+				ID:                  "ghi789jkl012ghi7",
+				Name:                "none",
+				Driver:              "null",
+				Scope:               "local",
+				Internal:            false,
+				Created:             now.Add(-72 * time.Hour),
+				ConnectedContainers: []NetworkContainer{},
+				IPAM:                NetworkIPAM{},
+			},
+			{
+				ID:       "jkl012mno345jkl0",
+				Name:     "app-network",
+				Driver:   "bridge",
+				Scope:    "local",
+				Internal: false,
+				Created:  now.Add(-24 * time.Hour),
+				ConnectedContainers: []NetworkContainer{
+					{Name: "api-server", IPv4Address: "172.20.0.2/16", MacAddress: "02:42:ac:14:00:02"},
+					{Name: "postgres-db", IPv4Address: "172.20.0.3/16", MacAddress: "02:42:ac:14:00:03"},
+				},
+				IPAM: NetworkIPAM{Subnet: "172.20.0.0/16", Gateway: "172.20.0.1"},
+			},
+		},
+	}
+}
+
+func (s *mockNetworkService) List(ctx context.Context) ([]Network, error) {
+	return s.networks, nil
+}
+
+func (s *mockNetworkService) Remove(ctx context.Context, id string) error {
+	for i, n := range s.networks {
+		if n.ID == id || n.Name == id {
+			s.networks = append(s.networks[:i], s.networks[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("network not found: %s", id)
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
@@ -30,6 +31,7 @@ type dockerClient struct {
 	containers *containerService
 	images     *imageService
 	volumes    *volumeService
+	networks   *networkService
 }
 
 // NewDockerClientFromConfig creates a dockerClient using settings from cfg.
@@ -80,6 +82,7 @@ func NewDockerClientFromConfig(cfg config.DockerConfig) (Client, error) {
 	c.containers = &containerService{cli: cli}
 	c.images = &imageService{cli: cli}
 	c.volumes = &volumeService{cli: cli}
+	c.networks = &networkService{cli: cli}
 	return c, nil
 }
 
@@ -91,6 +94,7 @@ func isSSHHost(host string) bool {
 func (c *dockerClient) Containers() ContainerService { return c.containers }
 func (c *dockerClient) Images() ImageService         { return c.images }
 func (c *dockerClient) Volumes() VolumeService       { return c.volumes }
+func (c *dockerClient) Networks() NetworkService     { return c.networks }
 
 func (c *dockerClient) Ping(ctx context.Context) error {
 	_, err := c.cli.Ping(ctx)
@@ -627,6 +631,58 @@ func (s *volumeService) getVolumeUsage(ctx context.Context, volumeName string) (
 		ids[i] = c.ID
 	}
 	return ids, nil
+}
+
+// Local Network Service.
+type networkService struct {
+	cli *client.Client
+}
+
+func (s *networkService) List(ctx context.Context) ([]Network, error) {
+	networks, err := s.cli.NetworkList(ctx, network.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]Network, len(networks))
+	for i, n := range networks {
+		inspectResponse, inspectErr := s.cli.NetworkInspect(ctx, n.ID, network.InspectOptions{})
+
+		if inspectErr != nil {
+			return nil, inspectErr
+		}
+
+		subnet := ""
+		gateway := ""
+		if len(n.IPAM.Config) > 0 {
+			subnet = inspectResponse.IPAM.Config[0].Subnet
+			gateway = inspectResponse.IPAM.Config[0].Gateway
+		}
+		connected := make([]NetworkContainer, 0, len(inspectResponse.Containers))
+		for _, c := range inspectResponse.Containers {
+			connected = append(connected, NetworkContainer{
+				Name:        c.Name,
+				IPv4Address: c.IPv4Address,
+				IPv6Address: c.IPv6Address,
+				MacAddress:  c.MacAddress,
+			})
+		}
+		result[i] = Network{
+			ID:                  n.ID,
+			Name:                n.Name,
+			Driver:              n.Driver,
+			Scope:               n.Scope,
+			Internal:            n.Internal,
+			Created:             n.Created,
+			ConnectedContainers: connected,
+			IPAM:                NetworkIPAM{Subnet: subnet, Gateway: gateway},
+		}
+	}
+	return result, nil
+}
+
+func (s *networkService) Remove(ctx context.Context, id string) error {
+	return s.cli.NetworkRemove(ctx, id)
 }
 
 // timeFromUnix converts Unix timestamp to time.Time.
