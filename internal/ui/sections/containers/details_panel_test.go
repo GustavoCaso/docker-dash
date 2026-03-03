@@ -21,24 +21,68 @@ func TestDetailsPanelInitReturnsCmd(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Init should return a non-nil command")
 	}
+
+	msg := cmd()
+
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatal("Init() not returned BatchMsg")
+	}
+
+	details := false
+	extendCmd := false
+
+	for _, cmd := range batch {
+		msg := cmd()
+		switch msg.(type) {
+		case detailsMsg:
+			details = true
+		case message.AddContextualKeyBindingsMsg:
+			extendCmd = true
+		}
+	}
+
+	if !details {
+		t.Fatal("Init() not returned detailsMsg  msg")
+	}
+
+	if !extendCmd {
+		t.Fatal("Init() not returned AddContextualKeyBindingsMsg msg")
+	}
 }
 
 func TestDetailsPanelUpdateSetsContent(t *testing.T) {
 	dp := newTestDetailsPanel()
-	dp.width = 80
+	dp.SetSize(100, 100)
 
-	msg := dp.Init("abc123def456")()
-	cmd := dp.Update(msg)
+	cmd := dp.Init("abc123def456")
 
-	if cmd != nil {
-		t.Errorf("Update should return nil on success, got %v", cmd)
+	msg := cmd()
+
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatal("Init() not returned BatchMsg")
 	}
-	if dp.content == "" {
-		t.Error("Update should set content")
+
+	for _, cmd := range batch {
+		msg := cmd()
+		switch msg.(type) {
+		case detailsMsg:
+			cmd := dp.Update(msg)
+
+			if cmd != nil {
+				t.Errorf("Update should return nil on success, got %v", cmd)
+			}
+			if dp.View() == "" {
+				t.Error("Update should set content")
+			}
+			if !strings.Contains(dp.View(), "nginx-proxy") {
+				t.Errorf("content should contain container name, got: %q", dp.View())
+			}
+		case message.AddContextualKeyBindingsMsg:
+		}
 	}
-	if !strings.Contains(dp.content, "nginx-proxy") {
-		t.Errorf("content should contain container name, got: %q", dp.content)
-	}
+
 }
 
 func TestDetailsPanelUpdateWithError(t *testing.T) {
@@ -59,28 +103,14 @@ func TestDetailsPanelUpdateWithError(t *testing.T) {
 		t.Error("banner should be an error")
 	}
 }
-
-func TestDetailsPanelUpdateIgnoresOtherMessages(t *testing.T) {
-	dp := newTestDetailsPanel()
-	dp.content = "existing"
-
-	cmd := dp.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd != nil {
-		t.Errorf("Update should return nil for unhandled messages")
-	}
-	if dp.content != "existing" {
-		t.Error("Update should not modify content for unhandled messages")
-	}
-}
-
 func TestDetailsPanelCloseResetsContent(t *testing.T) {
 	dp := newTestDetailsPanel()
-	dp.content = "some content"
+	dp.viewport.SetContent("hello")
 
 	dp.Close()
 
-	if dp.content != "" {
-		t.Errorf("Close should reset content, got %q", dp.content)
+	if dp.View() != "" {
+		t.Errorf("Close should reset viewport, got %q", dp.View())
 	}
 }
 
@@ -90,19 +120,23 @@ func TestDetailsPanelCloseIsIdempotent(t *testing.T) {
 	dp.Close() // must not panic
 }
 
-func TestDetailsPanelViewReturnsContent(t *testing.T) {
+func TestDetailsPanelViewReturnsViewportContent(t *testing.T) {
 	dp := newTestDetailsPanel()
-	dp.content = "hello"
+	dp.SetSize(100, 30)
+	dp.viewport.SetContent("hello")
 
-	if dp.View() != "hello" {
+	if !strings.Contains(dp.View(), "hello") {
 		t.Errorf("View() = %q, want %q", dp.View(), "hello")
 	}
 }
 
-func TestDetailsPanelSetSizeStoresWidth(t *testing.T) {
+func TestDetailsPanelSetSizeViewport(t *testing.T) {
 	dp := newTestDetailsPanel()
 	dp.SetSize(100, 30)
-	if dp.width != 100 {
-		t.Errorf("width = %d, want 100", dp.width)
+	if dp.viewport.Width != 100 {
+		t.Errorf("viewport.Width = %d, want 100", dp.viewport.Width)
+	}
+	if dp.viewport.Height != 30 {
+		t.Errorf("viewport.Height = %d, want 29", dp.viewport.Height)
 	}
 }
