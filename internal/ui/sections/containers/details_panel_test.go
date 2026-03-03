@@ -82,7 +82,6 @@ func TestDetailsPanelUpdateSetsContent(t *testing.T) {
 		case message.AddContextualKeyBindingsMsg:
 		}
 	}
-
 }
 
 func TestDetailsPanelUpdateWithError(t *testing.T) {

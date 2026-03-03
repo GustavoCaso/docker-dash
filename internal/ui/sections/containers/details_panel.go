@@ -52,7 +52,6 @@ func (d *detailsPanel) Update(msg tea.Msg) tea.Cmd {
 	d.viewport, cmd = d.viewport.Update(msg)
 
 	return cmd
-
 }
 
 func (d *detailsPanel) View() string {
