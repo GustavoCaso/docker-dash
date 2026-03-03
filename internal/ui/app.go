@@ -17,6 +17,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/containers"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/images"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/networks"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/volumes"
 )
 
@@ -57,11 +58,13 @@ type model struct {
 	containerSection *containers.Section
 	imageSection     *images.Section
 	volumeSection    *volumes.Section
+	networkSection   *networks.Section
 	statusBar        *statusbar.StatusBar
 	keys             *keys.KeyMap
 	imagesKeys       *keys.ViewKeyMap
 	containerKeys    *keys.ViewKeyMap
 	volumeKeys       *keys.ViewKeyMap
+	networkKeys      *keys.ViewKeyMap
 	activeKeys       *keys.ViewKeyMap
 	width            int
 	height           int
@@ -76,9 +79,10 @@ func InitialModel(cfg *config.Config, client client.Client) tea.Model {
 	containersList, containersErr := client.Containers().List(ctx)
 	imagesList, imagesErr := client.Images().List(ctx)
 	volumesList, volumesErr := client.Volumes().List(ctx)
+	networksList, networksErr := client.Networks().List(ctx)
 
 	var initErr string
-	for _, err := range []error{containersErr, imagesErr, volumesErr} {
+	for _, err := range []error{containersErr, imagesErr, volumesErr, networksErr} {
 		if err != nil {
 			initErr = "Failed to load data: " + err.Error()
 			break
@@ -102,10 +106,12 @@ func InitialModel(cfg *config.Config, client client.Client) tea.Model {
 		imagesKeys:       keys.Keys.ImageKeyMap(),
 		containerKeys:    keys.Keys.ContainerKeyMap(),
 		volumeKeys:       keys.Keys.VolumeKeyMap(),
+		networkKeys:      keys.Keys.NetworkKeyMap(),
 		header:           header.New(),
 		containerSection: containers.New(containersList, client.Containers()),
 		imageSection:     images.New(imagesList, client),
 		volumeSection:    volumes.New(volumesList, client.Volumes()),
+		networkSection:   networks.New(networksList, client.Networks()),
 		statusBar:        statusbar.New(),
 		initErr:          initErr,
 		refreshInterval:  refreshInterval,
@@ -148,6 +154,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.containerSection.SetSize(msg.Width, contentHeight)
 		m.imageSection.SetSize(msg.Width, contentHeight)
 		m.volumeSection.SetSize(msg.Width, contentHeight)
+		m.networkSection.SetSize(msg.Width, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
 	case message.ShowBannerMsg:
@@ -241,6 +248,9 @@ func (m *model) View() string {
 	case header.ViewVolumes:
 		listView = m.volumeSection.View()
 		listKeyMap = m.volumeKeys
+	case header.ViewNetworks:
+		listView = m.networkSection.View()
+		listKeyMap = m.networkKeys
 	}
 
 	m.activeKeys = listKeyMap
@@ -271,6 +281,8 @@ func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd = m.imageSection.Update(msg)
 	case header.ViewVolumes:
 		cmd = m.volumeSection.Update(msg)
+	case header.ViewNetworks:
+		cmd = m.networkSection.Update(msg)
 	}
 	return m, cmd
 }
@@ -280,6 +292,7 @@ func (m *model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.containerSection.Update(msg),
 		m.imageSection.Update(msg),
 		m.volumeSection.Update(msg),
+		m.networkSection.Update(msg),
 	}
 	return m, tea.Batch(cmds...)
 }

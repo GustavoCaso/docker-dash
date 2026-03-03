@@ -36,7 +36,7 @@ const (
 	IconContainer = "\uf4b7" // Container/cube icon
 	IconImage     = "\ue7ba" // Layers/image icon
 	IconVolume    = "\uf0a0" // Hard drive/volume icon
-	IconNetwork   = "\uf6ff" // Network icon
+	IconNetwork   = "\uef09" // Network icon
 
 	// Contianer Status icons.
 	IconRunning = "\uf04b" // Play icon (running)

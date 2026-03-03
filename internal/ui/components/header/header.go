@@ -13,6 +13,7 @@ const (
 	ViewContainers View = iota
 	ViewImages
 	ViewVolumes
+	ViewNetworks
 )
 
 func (v View) String() string {
@@ -23,6 +24,8 @@ func (v View) String() string {
 		return "Images"
 	case ViewVolumes:
 		return "Volumes"
+	case ViewNetworks:
+		return "Networks"
 	default:
 		return "Unknown"
 	}
@@ -50,6 +53,7 @@ func New() *Header {
 			{icon: theme.IconImage, label: "Images", view: ViewImages},
 			{icon: theme.IconContainer, label: "Containers", view: ViewContainers},
 			{icon: theme.IconVolume, label: "Volumes", view: ViewVolumes},
+			{icon: theme.IconNetwork, label: "Networks", view: ViewNetworks},
 		},
 		activeIndex: 0,
 	}

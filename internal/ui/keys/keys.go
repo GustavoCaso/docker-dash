@@ -30,6 +30,9 @@ type KeyMap struct {
 	ContainerExec      key.Binding
 	ContainerStats     key.Binding
 
+	NetworkInfo   key.Binding
+	NetworkDelete key.Binding
+
 	Help key.Binding
 	Quit key.Binding
 }
@@ -127,6 +130,14 @@ var Keys = &KeyMap{
 		key.WithKeys("S"),
 		key.WithHelp("S", "container stats"),
 	),
+	NetworkInfo: key.NewBinding(
+		key.WithKeys("d"),
+		key.WithHelp("d", "info"),
+	),
+	NetworkDelete: key.NewBinding(
+		key.WithKeys("D"),
+		key.WithHelp("D", "delete network"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "help"),
@@ -202,6 +213,18 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.FileTree},
+			{k.Filter, k.Help, k.Quit},
+		},
+	}
+}
+
+func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
+	return &ViewKeyMap{
+		short: k.navigationKeys(),
+		full: [][]key.Binding{
+			{k.Left, k.Right},
+			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.NetworkInfo, k.NetworkDelete},
 			{k.Filter, k.Help, k.Quit},
 		},
 	}

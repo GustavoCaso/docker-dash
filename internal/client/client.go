@@ -9,6 +9,7 @@ type Client interface {
 	Containers() ContainerService
 	Images() ImageService
 	Volumes() VolumeService
+	Networks() NetworkService
 	Ping(ctx context.Context) error
 	Close() error
 }
@@ -40,4 +41,10 @@ type VolumeService interface {
 	List(ctx context.Context) ([]Volume, error)
 	Remove(ctx context.Context, name string, force bool) error
 	FileTree(ctx context.Context, name string) (VolumeFileTree, error)
+}
+
+// NetworkService manages Docker networks.
+type NetworkService interface {
+	List(ctx context.Context) ([]Network, error)
+	Remove(ctx context.Context, id string) error
 }

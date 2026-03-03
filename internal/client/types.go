@@ -93,6 +93,24 @@ type Volume struct {
 	UsedCount int
 }
 
+// NetworkIPAM holds IPAM configuration for a network.
+type NetworkIPAM struct {
+	Subnet  string
+	Gateway string
+}
+
+// Network represents a Docker network.
+type Network struct {
+	ID         string
+	Name       string
+	Driver     string
+	Scope      string
+	Internal   bool
+	Created    time.Time
+	Containers int // number of connected containers
+	IPAM       NetworkIPAM
+}
+
 // LogOptions configures log streaming.
 type LogOptions struct {
 	Follow     bool
