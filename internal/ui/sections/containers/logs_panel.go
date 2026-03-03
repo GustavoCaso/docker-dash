@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
+	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
@@ -36,7 +38,7 @@ func NewLogsPanel(client client.ContainerService) panel.Panel {
 }
 
 func (l *logsPanel) Init(containerID string) tea.Cmd {
-	return l.init(containerID)
+	return tea.Batch(l.init(containerID), l.extendHelpCmd())
 }
 
 func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
@@ -73,12 +75,14 @@ func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
 func (l *logsPanel) View() string {
 	return l.logsOutput
 }
-func (l *logsPanel) Close() {
+func (l *logsPanel) Close() tea.Cmd {
 	if l.logsSession != nil {
 		l.logsSession.Close()
 		l.logsSession = nil
 	}
 	l.logsOutput = ""
+
+	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
 func (l *logsPanel) SetSize(_, _ int) {}
 
@@ -106,5 +110,14 @@ func (l *logsPanel) init(containerID string) tea.Cmd {
 			return logsOutputMsg{err: err}
 		}
 		return logsSessionStartedMsg{session: session}
+	}
+}
+
+func (l *logsPanel) extendHelpCmd() tea.Cmd {
+	return func() tea.Msg {
+		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			keys.Keys.ScrollUp,
+			keys.Keys.ScrollDown,
+		}}
 	}
 }

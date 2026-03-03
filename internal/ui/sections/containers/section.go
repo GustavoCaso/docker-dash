@@ -213,9 +213,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		switch {
 		case key.Matches(msg, keys.Keys.ContainerInfo):
 			if s.activePanel == s.detailsPanel {
-				s.detailsPanel.Close()
+				cmd := s.detailsPanel.Close()
 				s.activePanel = nil
-				return nil
+				return cmd
 			}
 			selected := s.list.SelectedItem()
 			if selected == nil {
@@ -232,9 +232,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(s.spinner.Tick, s.updateContainersCmd())
 		case key.Matches(msg, keys.Keys.ContainerLogs):
 			if s.activePanel != nil && s.activePanel == s.logsPanel {
-				s.logsPanel.Close()
+				cmd := s.logsPanel.Close()
 				s.activePanel = nil
-				return nil
+				return cmd
 			}
 
 			selected := s.list.SelectedItem()
@@ -255,9 +255,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return s.logsPanel.Init(cItem.container.ID)
 		case key.Matches(msg, keys.Keys.FileTree):
 			if s.activePanel == s.filetreePanel {
-				s.filetreePanel.Close()
+				cmd := s.filetreePanel.Close()
 				s.activePanel = nil
-				return nil
+				return cmd
 			}
 			selected := s.list.SelectedItem()
 			if selected == nil {
@@ -272,9 +272,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(s.spinner.Tick, s.filetreePanel.Init(cItem.container.ID))
 		case key.Matches(msg, keys.Keys.ContainerStats):
 			if s.activePanel == s.statsPanel {
-				s.statsPanel.Close()
+				cmd := s.statsPanel.Close()
 				s.activePanel = nil
-				return nil
+				return cmd
 			}
 			selected := s.list.SelectedItem()
 			if selected == nil {
@@ -294,9 +294,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(s.spinner.Tick, s.statsPanel.Init(cItem.container.ID))
 		case key.Matches(msg, keys.Keys.ContainerExec):
 			if s.activePanel == s.execPanel {
-				s.activePanel.Close()
+				cmd := s.activePanel.Close()
 				s.activePanel = nil
-				return nil
+				return cmd
 			}
 			selected := s.list.SelectedItem()
 			if selected == nil {
@@ -322,8 +322,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			s.clearDetails()
-			return listCmd
+			return tea.Batch(listCmd, s.clearDetails())
 		case key.Matches(msg, keys.Keys.Filter):
 			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
@@ -383,12 +382,15 @@ func (s *Section) clearViewPort() {
 	s.viewport.SetContent("")
 }
 
-func (s *Section) clearDetails() {
+func (s *Section) clearDetails() tea.Cmd {
+	var cmd tea.Cmd
 	if s.activePanel != nil {
-		s.activePanel.Close()
+		cmd = s.activePanel.Close()
 		s.activePanel = nil
 	}
 	s.clearViewPort()
+
+	return cmd
 }
 
 func (s *Section) deleteContainerCmd() tea.Cmd {

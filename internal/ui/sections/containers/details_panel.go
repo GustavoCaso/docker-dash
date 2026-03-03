@@ -52,8 +52,9 @@ func (d *detailsPanel) View() string {
 	return d.content
 }
 
-func (d *detailsPanel) Close() {
+func (d *detailsPanel) Close() tea.Cmd {
 	d.content = ""
+	return nil
 }
 
 func (d *detailsPanel) SetSize(width, _ int) {

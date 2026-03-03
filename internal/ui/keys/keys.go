@@ -35,7 +35,7 @@ type KeyMap struct {
 }
 
 func (k *KeyMap) navigationKeys() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.ScrollUp, k.ScrollDown, k.Filter}
+	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.Filter}
 }
 
 var Keys = &KeyMap{

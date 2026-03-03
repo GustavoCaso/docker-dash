@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
@@ -18,14 +20,30 @@ func TestLogsPanelInitStartsSession(t *testing.T) {
 	p := newTestLogsPanel()
 	cmd := p.Init("abc123def456")
 	msg := cmd()
-	sessionMsg, ok := msg.(logsSessionStartedMsg)
+	batch, ok := msg.(tea.BatchMsg)
 	if !ok {
-		t.Fatalf("Init() cmd returned %T, want logsSessionStartedMsg", msg)
+		t.Fatalf("Init() cmd returned %T, want tea.BatchMsg", msg)
 	}
-	if sessionMsg.session == nil {
-		t.Error("logsSessionStartedMsg.session is nil")
+	logsSessionStarted := false
+	extendCmd := false
+
+	for _, cmd := range batch {
+		msg := cmd()
+		switch msg.(type) {
+		case logsSessionStartedMsg:
+			logsSessionStarted = true
+		case message.AddContextualKeyBindingsMsg:
+			extendCmd = true
+		}
 	}
-	sessionMsg.session.Close()
+
+	if !logsSessionStarted {
+		t.Fatal("Init() not returned logsSessionStartedMsg msg")
+	}
+
+	if !extendCmd {
+		t.Fatal("Init() not returned AddContextualKeyBindingsMsg msg")
+	}
 }
 
 func TestLogsPanelUpdateOnSessionStartedStoresSession(t *testing.T) {
