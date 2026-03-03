@@ -646,21 +646,36 @@ func (s *networkService) List(ctx context.Context) ([]Network, error) {
 
 	result := make([]Network, len(networks))
 	for i, n := range networks {
+		inspectResponse, inspectErr := s.cli.NetworkInspect(ctx, n.ID, network.InspectOptions{})
+
+		if inspectErr != nil {
+			return nil, inspectErr
+		}
+
 		subnet := ""
 		gateway := ""
 		if len(n.IPAM.Config) > 0 {
-			subnet = n.IPAM.Config[0].Subnet
-			gateway = n.IPAM.Config[0].Gateway
+			subnet = inspectResponse.IPAM.Config[0].Subnet
+			gateway = inspectResponse.IPAM.Config[0].Gateway
+		}
+		connected := make([]NetworkContainer, 0, len(inspectResponse.Containers))
+		for _, c := range inspectResponse.Containers {
+			connected = append(connected, NetworkContainer{
+				Name:        c.Name,
+				IPv4Address: c.IPv4Address,
+				IPv6Address: c.IPv6Address,
+				MacAddress:  c.MacAddress,
+			})
 		}
 		result[i] = Network{
-			ID:         n.ID,
-			Name:       n.Name,
-			Driver:     n.Driver,
-			Scope:      n.Scope,
-			Internal:   n.Internal,
-			Created:    n.Created,
-			Containers: len(n.Containers),
-			IPAM:       NetworkIPAM{Subnet: subnet, Gateway: gateway},
+			ID:                  n.ID,
+			Name:                n.Name,
+			Driver:              n.Driver,
+			Scope:               n.Scope,
+			Internal:            n.Internal,
+			Created:             n.Created,
+			ConnectedContainers: connected,
+			IPAM:                NetworkIPAM{Subnet: subnet, Gateway: gateway},
 		}
 	}
 	return result, nil

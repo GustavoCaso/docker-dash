@@ -47,8 +47,8 @@ func (n networkItem) Description() string {
 	var parts []string
 	parts = append(parts, n.network.Driver)
 	parts = append(parts, n.network.Scope)
-	if n.network.Containers > 0 {
-		inUse := theme.StatusRunningStyle.Render(fmt.Sprintf("● %d connected", n.network.Containers))
+	if len(n.network.ConnectedContainers) > 0 {
+		inUse := theme.StatusRunningStyle.Render(fmt.Sprintf("● %d connected", len(n.network.ConnectedContainers)))
 		parts = append(parts, inUse)
 	} else {
 		parts = append(parts, "unused")
@@ -277,8 +277,26 @@ func (s *Section) updateDetails() {
 		fmt.Fprintf(&content, "%s%s\n", label.Render("Gateway"), value.Render(n.IPAM.Gateway))
 	}
 
-	fmt.Fprintf(&content, "%s%s\n", label.Render("Containers"), value.Render(strconv.Itoa(n.Containers)))
-	fmt.Fprintf(&content, "%s%s\n", label.Render("Created"), value.Render(n.Created.Format(time.RFC3339)))
+	fmt.Fprintf(&content, "%s%s\n", label.Render("Containers"), value.Render(strconv.Itoa(len(n.ConnectedContainers))))
+
+	if len(n.ConnectedContainers) > 0 {
+		content.WriteString("\n")
+		content.WriteString(label.Render("Connected Containers"))
+		content.WriteString("\n")
+		for _, c := range n.ConnectedContainers {
+			ip := c.IPv4Address
+			if ip == "" {
+				ip = c.IPv6Address
+			}
+			if ip == "" {
+				fmt.Fprintf(&content, "  %s\n", value.Render(c.Name))
+			} else {
+				fmt.Fprintf(&content, "  %s  %s\n", value.Render(c.Name), label.Render(ip))
+			}
+		}
+	}
+
+	fmt.Fprintf(&content, "\n%s%s\n", label.Render("Created"), value.Render(n.Created.Format(time.RFC3339)))
 
 	s.viewport.SetContent(content.String())
 }

@@ -99,16 +99,24 @@ type NetworkIPAM struct {
 	Gateway string
 }
 
+// NetworkContainer represents a container endpoint connected to a network.
+type NetworkContainer struct {
+	Name        string
+	IPv4Address string
+	IPv6Address string
+	MacAddress  string
+}
+
 // Network represents a Docker network.
 type Network struct {
-	ID         string
-	Name       string
-	Driver     string
-	Scope      string
-	Internal   bool
-	Created    time.Time
-	Containers int // number of connected containers
-	IPAM       NetworkIPAM
+	ID                  string
+	Name                string
+	Driver              string
+	Scope               string
+	Internal            bool
+	Created             time.Time
+	ConnectedContainers []NetworkContainer
+	IPAM                NetworkIPAM
 }
 
 // LogOptions configures log streaming.
