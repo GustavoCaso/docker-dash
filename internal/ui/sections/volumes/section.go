@@ -259,6 +259,15 @@ func (s *Section) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
+// Reset reset internal state to when a component isfirst initialized.
+func (s *Section) Reset() tea.Cmd {
+	s.isFilter = false
+	s.showFileTree = false
+	s.viewport.SetContent("")
+	s.SetSize(s.width, s.height)
+	return nil
+}
+
 func (s *Section) fetchFileTreeCmd(volumeName string) tea.Cmd {
 	svc := s.volumeService
 	return func() tea.Msg {

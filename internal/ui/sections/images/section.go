@@ -247,6 +247,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the list.
 func (s *Section) View() string {
+	s.SetSize(s.width, s.height)
+
 	listContent := s.list.View()
 
 	// Overlay spinner in bottom right corner when loading
@@ -271,6 +273,15 @@ func (s *Section) View() string {
 		Render(s.viewport.View())
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
+}
+
+// Reset reset internal state to when a component isfirst initialized.
+func (s *Section) Reset() tea.Cmd {
+	s.isFilter = false
+	s.showLayers = false
+	s.viewport.SetContent("")
+	s.SetSize(s.width, s.height)
+	return nil
 }
 
 func (s *Section) extendFilterHelpCommand() tea.Cmd {

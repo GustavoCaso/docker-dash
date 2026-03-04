@@ -38,6 +38,10 @@ func (m networkSectionModel) View() string {
 	return m.section.View()
 }
 
+func (m networkSectionModel) Reset() tea.Cmd {
+	return m.section.Reset()
+}
+
 func TestNetworkListRendersItems(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "bridge")
@@ -76,6 +80,26 @@ func TestNetworkListRefresh(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 	waitFor(t, tm, "bridge")
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestNetworkReset(t *testing.T) {
+	model := newModel()
+	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "bridge")
+	// Details
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	waitFor(t, tm, "Network:")
+
+	model.Reset()
+
+	view := model.View()
+
+	if strings.Contains(view, "bridge:") {
+		t.Errorf("Reset should reset viewport. Found: %s", view)
+	}
+
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }

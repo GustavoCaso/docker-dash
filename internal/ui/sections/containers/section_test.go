@@ -39,6 +39,10 @@ func (m containerSectionModel) View() string {
 	return m.section.View()
 }
 
+func (m containerSectionModel) Reset() tea.Cmd {
+	return m.section.Reset()
+}
+
 func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
 	t.Helper()
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
@@ -82,6 +86,28 @@ func TestContainerListLogsToggle(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
 
 	waitFor(t, tm, "Starting application")
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContainerReset(t *testing.T) {
+	model := newContainerSectionModel()
+	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "nginx-proxy")
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Show logs
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+
+	waitFor(t, tm, "Starting application")
+
+	model.Reset()
+
+	view := model.View()
+
+	if strings.Contains(view, "Starting application") {
+		t.Errorf("Reset should reset viewport. Found: %s", view)
+	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))

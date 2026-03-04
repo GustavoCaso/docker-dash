@@ -378,6 +378,18 @@ func (s *Section) View() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
+// Reset reset internal state to when a component isfirst initialized.
+func (s *Section) Reset() tea.Cmd {
+	var cmd tea.Cmd
+	s.isFilter = false
+	if s.activePanel != nil {
+		cmd = s.activePanel.Close()
+	}
+	s.viewport.SetContent("")
+	s.SetSize(s.width, s.height)
+	return cmd
+}
+
 func (s *Section) clearViewPort() {
 	s.viewport.SetContent("")
 }

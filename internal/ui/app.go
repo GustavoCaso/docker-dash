@@ -15,6 +15,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/containers"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/images"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/networks"
@@ -55,10 +56,10 @@ type model struct {
 	cfg              *config.Config
 	client           client.Client
 	header           *header.Header
-	containerSection *containers.Section
-	imageSection     *images.Section
-	volumeSection    *volumes.Section
-	networkSection   *networks.Section
+	containerSection sections.Section
+	imageSection     sections.Section
+	volumeSection    sections.Section
+	networkSection   sections.Section
 	statusBar        *statusbar.StatusBar
 	keys             *keys.KeyMap
 	imagesKeys       *keys.ViewKeyMap
@@ -198,11 +199,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Left):
+			section := m.activeSection()
 			m.header.MoveLeft()
-			return m, nil
+			return m, section.Reset()
 		case key.Matches(msg, m.keys.Right):
+			section := m.activeSection()
 			m.header.MoveRight()
-			return m, nil
+			return m, section.Reset()
 		case key.Matches(msg, m.keys.Refresh):
 			return m.forwardMessageToActive(msg)
 		case key.Matches(msg, m.keys.RefreshAll):
@@ -273,17 +276,9 @@ func (m *model) View() string {
 }
 
 func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	switch m.header.ActiveView() {
-	case header.ViewContainers:
-		cmd = m.containerSection.Update(msg)
-	case header.ViewImages:
-		cmd = m.imageSection.Update(msg)
-	case header.ViewVolumes:
-		cmd = m.volumeSection.Update(msg)
-	case header.ViewNetworks:
-		cmd = m.networkSection.Update(msg)
-	}
+	section := m.activeSection()
+	cmd := section.Update(msg)
+
 	return m, cmd
 }
 
@@ -295,4 +290,19 @@ func (m *model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.networkSection.Update(msg),
 	}
 	return m, tea.Batch(cmds...)
+}
+
+func (m *model) activeSection() sections.Section {
+	var section sections.Section
+	switch m.header.ActiveView() {
+	case header.ViewContainers:
+		section = m.containerSection
+	case header.ViewImages:
+		section = m.imageSection
+	case header.ViewVolumes:
+		section = m.volumeSection
+	case header.ViewNetworks:
+		section = m.networkSection
+	}
+	return section
 }

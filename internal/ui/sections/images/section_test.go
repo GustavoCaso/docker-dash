@@ -38,6 +38,10 @@ func (m imageSectionModel) View() string {
 	return m.section.View()
 }
 
+func (m imageSectionModel) Reset() tea.Cmd {
+	return m.section.Reset()
+}
+
 func TestImageListRendersItems(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx")
@@ -55,6 +59,28 @@ func TestImageListLayersToggle(t *testing.T) {
 	waitFor(t, tm, "Layers for")
 	// Hide layers
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestImageReset(t *testing.T) {
+	model := newModel()
+	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "nginx")
+	// Select an image
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Show layers
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	waitFor(t, tm, "Layers for")
+
+	model.Reset()
+
+	view := model.View()
+
+	if strings.Contains(view, "Layers for") {
+		t.Errorf("Reset should reset viewport. Found: %s", view)
+	}
+
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
