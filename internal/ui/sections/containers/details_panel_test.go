@@ -1,6 +1,7 @@
 package containers
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -12,7 +13,7 @@ import (
 )
 
 func newTestDetailsPanel() *detailsPanel {
-	return NewDetailsPanel(client.NewMockClient().Containers()).(*detailsPanel)
+	return NewDetailsPanel(context.Background(), client.NewMockClient().Containers()).(*detailsPanel)
 }
 
 func TestDetailsPanelInitReturnsCmd(t *testing.T) {

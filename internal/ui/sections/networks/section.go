@@ -59,6 +59,7 @@ func (n networkItem) FilterValue() string { return n.network.Name }
 
 // Section wraps bubbles/list for displaying networks.
 type Section struct {
+	ctx            context.Context
 	list           list.Model
 	isFilter       bool
 	viewport       viewport.Model
@@ -70,7 +71,7 @@ type Section struct {
 }
 
 // New creates a new network section.
-func New(networks []client.Network, svc client.NetworkService) *Section {
+func New(ctx context.Context, networks []client.Network, svc client.NetworkService) *Section {
 	items := make([]list.Item, len(networks))
 	for i, n := range networks {
 		items[i] = networkItem{network: n}
@@ -88,6 +89,7 @@ func New(networks []client.Network, svc client.NetworkService) *Section {
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	s := &Section{
+		ctx:            ctx,
 		list:           l,
 		viewport:       vp,
 		networkService: svc,
@@ -311,9 +313,9 @@ func (s *Section) updateDetails() {
 }
 
 func (s *Section) updateNetworksCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.networkService
 	return func() tea.Msg {
-		ctx := context.Background()
 		networks, err := svc.List(ctx)
 		if err != nil {
 			return networksLoadedMsg{error: err}
@@ -327,6 +329,7 @@ func (s *Section) updateNetworksCmd() tea.Cmd {
 }
 
 func (s *Section) deleteNetworkCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.networkService
 	items := s.list.Items()
 	idx := s.list.Index()
@@ -340,7 +343,6 @@ func (s *Section) deleteNetworkCmd() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		ctx := context.Background()
 		err := svc.Remove(ctx, item.network.ID)
 		return networkRemovedMsg{ID: item.network.ID, Name: item.network.Name, Idx: idx, Error: err}
 	}

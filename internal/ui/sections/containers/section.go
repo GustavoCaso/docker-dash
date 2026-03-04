@@ -55,6 +55,7 @@ const (
 
 // Section wraps bubbles/list for displaying containers.
 type Section struct {
+	ctx           context.Context
 	list          list.Model
 	isFilter      bool
 	viewport      viewport.Model
@@ -71,7 +72,7 @@ type Section struct {
 }
 
 // New creates a new container list.
-func New(containers []client.Container, svc client.ContainerService) *Section {
+func New(ctx context.Context, containers []client.Container, svc client.ContainerService) *Section {
 	items := make([]list.Item, len(containers))
 	for i, c := range containers {
 		items[i] = containerItem{container: c}
@@ -89,15 +90,16 @@ func New(containers []client.Container, svc client.ContainerService) *Section {
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	cl := &Section{
+		ctx:           ctx,
 		list:          l,
 		viewport:      vp,
 		service:       svc,
 		spinner:       sp,
-		logsPanel:     NewLogsPanel(svc),
-		filetreePanel: NewFileTreePanel(svc),
-		execPanel:     NewExecPanel(svc),
-		statsPanel:    NewStatsPanel(svc),
-		detailsPanel:  NewDetailsPanel(svc),
+		logsPanel:     NewLogsPanel(ctx, svc),
+		filetreePanel: NewFileTreePanel(ctx, svc),
+		execPanel:     NewExecPanel(ctx, svc),
+		statsPanel:    NewStatsPanel(ctx, svc),
+		detailsPanel:  NewDetailsPanel(ctx, svc),
 	}
 
 	return cl
@@ -406,6 +408,7 @@ func (s *Section) clearDetails() tea.Cmd {
 }
 
 func (s *Section) deleteContainerCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.service
 	items := s.list.Items()
 	idx := s.list.Index()
@@ -419,13 +422,13 @@ func (s *Section) deleteContainerCmd() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		ctx := context.Background()
 		err := svc.Remove(ctx, ci.ID(), true)
 		return containerActionMsg{ID: ci.ID(), Action: "deleting", Idx: idx, Error: err}
 	}
 }
 
 func (s *Section) toggleContainerCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.service
 	items := s.list.Items()
 	idx := s.list.Index()
@@ -440,7 +443,6 @@ func (s *Section) toggleContainerCmd() tea.Cmd {
 
 	container := ci.container
 	return func() tea.Msg {
-		ctx := context.Background()
 		var err error
 		var action string
 		if container.State == client.StateRunning {
@@ -468,8 +470,7 @@ func (s *Section) restartContainerCmd() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		ctx := context.Background()
-		err := svc.Restart(ctx, ci.ID())
+		err := svc.Restart(s.ctx, ci.ID())
 		return containerActionMsg{ID: ci.ID(), Action: "restarting", Idx: idx, Error: err}
 	}
 }
@@ -477,8 +478,7 @@ func (s *Section) restartContainerCmd() tea.Cmd {
 func (s *Section) updateContainersCmd() tea.Cmd {
 	svc := s.service
 	return func() tea.Msg {
-		ctx := context.Background()
-		containers, err := svc.List(ctx)
+		containers, err := svc.List(s.ctx)
 		if err != nil {
 			return containersLoadedMsg{error: err}
 		}

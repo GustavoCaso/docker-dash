@@ -20,7 +20,7 @@ type containerSectionModel struct {
 func newContainerSectionModel() containerSectionModel {
 	client := client.NewMockClient()
 	containers, _ := client.Containers().List(context.Background())
-	section := New(containers, client.Containers())
+	section := New(context.Background(), containers, client.Containers())
 	section.SetSize(120, 40)
 	return containerSectionModel{section: section}
 }
@@ -191,7 +191,7 @@ func TestContainerListRefresh(t *testing.T) {
 func TestClearDetailsClosesActivePanel(t *testing.T) {
 	dockerClient := client.NewMockClient()
 	containers, _ := dockerClient.Containers().List(context.Background())
-	cl := New(containers, dockerClient.Containers())
+	cl := New(context.Background(), containers, dockerClient.Containers())
 	cl.SetSize(120, 40)
 
 	pr, pw := io.Pipe()

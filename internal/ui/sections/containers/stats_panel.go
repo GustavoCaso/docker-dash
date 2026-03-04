@@ -54,6 +54,7 @@ type statsSessionStartedMsg struct {
 }
 
 type statsPanel struct {
+	ctx          context.Context
 	service      client.ContainerService
 	session      *client.StatsSession
 	cpuChart     streamlinechart.Model
@@ -65,8 +66,9 @@ type statsPanel struct {
 	height       int
 }
 
-func NewStatsPanel(svc client.ContainerService) panel.Panel {
+func NewStatsPanel(ctx context.Context, svc client.ContainerService) panel.Panel {
 	return &statsPanel{
+		ctx:     ctx,
 		service: svc,
 		cpuChart: streamlinechart.New(
 			1, 1,
@@ -195,9 +197,9 @@ func (s *statsPanel) SetSize(width, height int) {
 }
 
 func (s *statsPanel) startSession(containerID string) tea.Cmd {
+	ctx := s.ctx
 	svc := s.service
 	return func() tea.Msg {
-		ctx := context.Background()
 		session, err := svc.Stats(ctx, containerID)
 		if err != nil {
 			return statsOutputMsg{err: err}

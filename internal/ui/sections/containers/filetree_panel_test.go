@@ -1,6 +1,7 @@
 package containers
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -12,7 +13,7 @@ import (
 )
 
 func newTestFileTreePanel() *filetreePanel {
-	return NewFileTreePanel(client.NewMockClient().Containers()).(*filetreePanel)
+	return NewFileTreePanel(context.Background(), client.NewMockClient().Containers()).(*filetreePanel)
 }
 
 func TestFileTreePanelInitFetchesTree(t *testing.T) {
