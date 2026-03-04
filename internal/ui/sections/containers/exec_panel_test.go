@@ -1,6 +1,7 @@
 package containers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"strings"
@@ -13,7 +14,7 @@ import (
 )
 
 func newTestExecPanel() *execPanel {
-	return NewExecPanel(client.NewMockClient().Containers()).(*execPanel)
+	return NewExecPanel(context.Background(), client.NewMockClient().Containers()).(*execPanel)
 }
 
 func TestExecPanelInitStartsSession(t *testing.T) {

@@ -57,6 +57,7 @@ func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 
 // Section wraps bubbles/list.
 type Section struct {
+	ctx              context.Context
 	list             list.Model
 	viewport         viewport.Model
 	imageService     client.ImageService
@@ -69,7 +70,7 @@ type Section struct {
 }
 
 // New creates a new image section.
-func New(images []client.Image, client client.Client) *Section {
+func New(ctx context.Context, images []client.Image, client client.Client) *Section {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
 		items[i] = imageItem{image: img}
@@ -87,6 +88,7 @@ func New(images []client.Image, client client.Client) *Section {
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	il := &Section{
+		ctx:              ctx,
 		list:             l,
 		viewport:         vp,
 		imageService:     client.Images(),
@@ -296,6 +298,7 @@ func (s *Section) extendFilterHelpCommand() tea.Cmd {
 }
 
 func (s *Section) deleteImageCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.imageService
 	items := s.list.Items()
 	idx := s.list.Index()
@@ -309,7 +312,6 @@ func (s *Section) deleteImageCmd() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		ctx := context.Background()
 		err := svc.Remove(ctx, dockerImage.ID(), true)
 
 		return imageRemovedMsg{ID: dockerImage.ID(), Idx: idx, Error: err}
@@ -317,9 +319,9 @@ func (s *Section) deleteImageCmd() tea.Cmd {
 }
 
 func (s *Section) updateImagesCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.imageService
 	return func() tea.Msg {
-		ctx := context.Background()
 		images, err := svc.List(ctx)
 		if err != nil {
 			return imagesLoadedMsg{error: err}
@@ -345,8 +347,8 @@ func (s *Section) createContainerCmdAndRun() tea.Cmd {
 		return nil
 	}
 	s.loading = true
+	ctx := s.ctx
 	return func() tea.Msg {
-		ctx := context.Background()
 		containerID, err := svc.Run(ctx, dockerImage.image)
 
 		return containerRunMsg{containerID: containerID, error: err}

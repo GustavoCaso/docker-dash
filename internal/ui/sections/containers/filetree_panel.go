@@ -21,12 +21,13 @@ type containersTreeLoadedMsg struct {
 }
 
 type filetreePanel struct {
+	ctx      context.Context
 	service  client.ContainerService
 	viewport viewport.Model
 }
 
-func NewFileTreePanel(svc client.ContainerService) panel.Panel {
-	return &filetreePanel{service: svc, viewport: viewport.New(0, 0)}
+func NewFileTreePanel(ctx context.Context, svc client.ContainerService) panel.Panel {
+	return &filetreePanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0)}
 }
 
 func (f *filetreePanel) Init(containerID string) tea.Cmd {
@@ -69,9 +70,9 @@ func (f *filetreePanel) SetSize(width, height int) {
 }
 
 func (f *filetreePanel) fetchCmd(containerID string) tea.Cmd {
+	ctx := f.ctx
 	svc := f.service
 	return func() tea.Msg {
-		ctx := context.Background()
 		fileTree, err := svc.FileTree(ctx, containerID)
 		if err != nil {
 			return containersTreeLoadedMsg{error: fmt.Errorf("error getting the file tree: %w", err)}

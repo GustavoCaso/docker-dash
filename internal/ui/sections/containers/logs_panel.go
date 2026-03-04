@@ -16,6 +16,7 @@ import (
 )
 
 type logsPanel struct {
+	ctx         context.Context
 	logsSession *client.LogsSession
 	logsOutput  string
 	client      client.ContainerService
@@ -31,8 +32,9 @@ type logsSessionStartedMsg struct {
 	session *client.LogsSession
 }
 
-func NewLogsPanel(client client.ContainerService) panel.Panel {
+func NewLogsPanel(ctx context.Context, client client.ContainerService) panel.Panel {
 	return &logsPanel{
+		ctx:    ctx,
 		client: client,
 	}
 }

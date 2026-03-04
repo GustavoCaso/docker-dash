@@ -62,6 +62,7 @@ func (v volumeItem) FilterValue() string { return v.volume.Name }
 
 // Section wraps bubbles/list for displaying volumes.
 type Section struct {
+	ctx           context.Context
 	list          list.Model
 	isFilter      bool
 	viewport      viewport.Model
@@ -73,7 +74,7 @@ type Section struct {
 }
 
 // New creates a new volume list.
-func New(volumes []client.Volume, svc client.VolumeService) *Section {
+func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService) *Section {
 	items := make([]list.Item, len(volumes))
 	for i, v := range volumes {
 		items[i] = volumeItem{volume: v}
@@ -91,6 +92,7 @@ func New(volumes []client.Volume, svc client.VolumeService) *Section {
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	return &Section{
+		ctx:           ctx,
 		list:          l,
 		viewport:      vp,
 		volumeService: svc,
@@ -269,9 +271,9 @@ func (s *Section) Reset() tea.Cmd {
 }
 
 func (s *Section) fetchFileTreeCmd(volumeName string) tea.Cmd {
+	ctx := s.ctx
 	svc := s.volumeService
 	return func() tea.Msg {
-		ctx := context.Background()
 		fileTree, err := svc.FileTree(ctx, volumeName)
 		if err != nil {
 			return volumeTreeLoadedMsg{error: fmt.Errorf("error getting volume file tree: %s", err.Error())}
@@ -281,9 +283,9 @@ func (s *Section) fetchFileTreeCmd(volumeName string) tea.Cmd {
 }
 
 func (s *Section) updateVolumesCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.volumeService
 	return func() tea.Msg {
-		ctx := context.Background()
 		volumes, err := svc.List(ctx)
 		if err != nil {
 			return volumesLoadedMsg{error: err}
@@ -297,6 +299,7 @@ func (s *Section) updateVolumesCmd() tea.Cmd {
 }
 
 func (s *Section) deleteVolumeCmd() tea.Cmd {
+	ctx := s.ctx
 	svc := s.volumeService
 	items := s.list.Items()
 	idx := s.list.Index()
@@ -311,7 +314,6 @@ func (s *Section) deleteVolumeCmd() tea.Cmd {
 	}
 
 	return func() tea.Msg {
-		ctx := context.Background()
 		err := svc.Remove(ctx, vi.volume.Name, true)
 		return volumeRemovedMsg{Name: vi.volume.Name, Idx: idx, Error: err}
 	}

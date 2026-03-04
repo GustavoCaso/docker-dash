@@ -1,6 +1,7 @@
 package containers
 
 import (
+	"context"
 	"errors"
 	"io"
 	"testing"
@@ -10,7 +11,7 @@ import (
 )
 
 func newTestStatsPanel() *statsPanel {
-	return NewStatsPanel(client.NewMockClient().Containers()).(*statsPanel)
+	return NewStatsPanel(context.Background(), client.NewMockClient().Containers()).(*statsPanel)
 }
 
 func TestStatsPanelInitStartsSession(t *testing.T) {

@@ -19,7 +19,7 @@ type imageSectionModel struct {
 func newModel() imageSectionModel {
 	client := client.NewMockClient()
 	images, _ := client.Images().List(context.Background())
-	section := New(images, client)
+	section := New(context.Background(), images, client)
 	section.SetSize(120, 40)
 	return imageSectionModel{section: section}
 }

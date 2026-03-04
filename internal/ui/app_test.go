@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 )
 
 func TestFullOutput(t *testing.T) {
-	m := InitialModel(&config.Config{}, client.NewMockClient())
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	tm.Send(tea.KeyMsg{
@@ -24,7 +25,7 @@ func TestFullOutput(t *testing.T) {
 }
 
 func TestExecPanel(t *testing.T) {
-	m := InitialModel(&config.Config{}, client.NewMockClient())
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -52,7 +53,7 @@ func TestExecPanel(t *testing.T) {
 }
 
 func TestContainerStatsOnStoppedContainer(t *testing.T) {
-	m := InitialModel(&config.Config{}, client.NewMockClient())
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch to Containers view
@@ -71,7 +72,7 @@ func TestContainerStatsOnStoppedContainer(t *testing.T) {
 }
 
 func TestContainerLogsOnStoppedContainer(t *testing.T) {
-	m := InitialModel(&config.Config{}, client.NewMockClient())
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch to Containers view
@@ -90,7 +91,7 @@ func TestContainerLogsOnStoppedContainer(t *testing.T) {
 }
 
 func TestSwitchingSectionResetActiveView(t *testing.T) {
-	m := InitialModel(&config.Config{}, client.NewMockClient())
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch to Containers view
@@ -108,7 +109,7 @@ func TestSwitchingSectionResetActiveView(t *testing.T) {
 }
 
 func TestVolumesView(t *testing.T) {
-	m := InitialModel(&config.Config{}, client.NewMockClient())
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -131,7 +132,7 @@ func TestAutoRefreshInvalidInterval(t *testing.T) {
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "not-a-duration"},
 	}
-	m := InitialModel(cfg, client.NewMockClient())
+	m := InitialModel(context.Background(), cfg, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Invalid interval should surface as an error banner
@@ -145,7 +146,7 @@ func TestAutoRefreshValidInterval(t *testing.T) {
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "500ms"},
 	}
-	m := InitialModel(cfg, client.NewMockClient())
+	m := InitialModel(context.Background(), cfg, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// UI should still render normally with a valid interval configured

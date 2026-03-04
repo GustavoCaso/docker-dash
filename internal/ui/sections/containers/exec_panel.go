@@ -32,6 +32,7 @@ type execSessionStartedMsg struct {
 type execCloseMsg struct{}
 
 type execPanel struct {
+	ctx        context.Context
 	service    client.ContainerService
 	session    *client.ExecSession
 	viewport   viewport.Model
@@ -42,11 +43,12 @@ type execPanel struct {
 	width      int
 }
 
-func NewExecPanel(svc client.ContainerService) panel.Panel {
+func NewExecPanel(ctx context.Context, svc client.ContainerService) panel.Panel {
 	ti := textinput.New()
 	ti.Prompt = "$ "
 	vp := viewport.New(0, 0)
 	return &execPanel{
+		ctx:      ctx,
 		service:  svc,
 		input:    ti,
 		viewport: vp,
@@ -187,9 +189,9 @@ func (e *execPanel) handleKeyInput(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (e *execPanel) startSession(containerID string) tea.Cmd {
+	ctx := e.ctx
 	svc := e.service
 	return func() tea.Msg {
-		ctx := context.Background()
 		session, err := svc.Exec(ctx, containerID)
 		if err != nil {
 			return execOutputMsg{err: err}

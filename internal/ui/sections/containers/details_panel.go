@@ -23,13 +23,14 @@ type detailsMsg struct {
 }
 
 type detailsPanel struct {
+	ctx      context.Context
 	service  client.ContainerService
 	viewport viewport.Model
 }
 
 // NewDetailsPanel creates a new panel.Panel that fetches and renders container details.
-func NewDetailsPanel(svc client.ContainerService) panel.Panel {
-	return &detailsPanel{service: svc, viewport: viewport.New(0, 0)}
+func NewDetailsPanel(ctx context.Context, svc client.ContainerService) panel.Panel {
+	return &detailsPanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0)}
 }
 
 func (d *detailsPanel) Init(containerID string) tea.Cmd {
@@ -69,9 +70,9 @@ func (d *detailsPanel) SetSize(width, height int) {
 }
 
 func (d *detailsPanel) fetchCmd(containerID string) tea.Cmd {
+	ctx := d.ctx
 	svc := d.service
 	return func() tea.Msg {
-		ctx := context.Background()
 		container, err := svc.Get(ctx, containerID)
 		if err != nil {
 			return detailsMsg{err: fmt.Errorf("error getting container details: %w", err)}

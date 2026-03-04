@@ -46,6 +46,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Override refresh intervalconfiguration with %s\n", *refreshConfig)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Build Docker client from config
 	dockerClient := setupDockerClient(cfg.Docker)
 	if dockerClient == nil {
@@ -53,12 +55,13 @@ func main() {
 	}
 
 	p := tea.NewProgram(
-		ui.InitialModel(cfg, dockerClient),
+		ui.InitialModel(ctx, cfg, dockerClient),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
 
 	_, runErr := p.Run()
+	cancel()
 	if closeErr := dockerClient.Close(); closeErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to close Docker client: %v\n", closeErr)
 	}
