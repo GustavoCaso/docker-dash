@@ -89,6 +89,24 @@ func TestContainerLogsOnStoppedContainer(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestSwitchingSectionResetActiveView(t *testing.T) {
+	m := InitialModel(&config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+	// Switch to Containers view
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	waitForString(t, tm, "Layers")
+	// Swicth section
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	// Swicth back
+	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
+	waitFor(t, tm, func(b []byte) bool {
+		return !strings.Contains(string(b), "Layers")
+	})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func TestVolumesView(t *testing.T) {
 	m := InitialModel(&config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
@@ -144,6 +162,16 @@ func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
 		func(b []byte) bool {
 			return strings.Contains(string(b), s)
 		},
+		teatest.WithCheckInterval(time.Millisecond*100),
+		teatest.WithDuration(time.Second*10),
+	)
+}
+
+func waitFor(t *testing.T, tm *teatest.TestModel, f func(b []byte) bool) {
+	teatest.WaitFor(
+		t,
+		tm.Output(),
+		f,
 		teatest.WithCheckInterval(time.Millisecond*100),
 		teatest.WithDuration(time.Second*10),
 	)
