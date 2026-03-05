@@ -3,7 +3,6 @@ package images
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -13,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -51,7 +51,7 @@ func (i imageItem) Description() string {
 	stateIcon := theme.GetImageStatusIcon(i.image.Containers)
 	stateStyle := theme.GetImageStatusStyle(i.image.Containers)
 	state := stateStyle.Render(stateIcon)
-	return state + " " + formatSize(i.image.Size)
+	return state + " " + helper.FormatSize(i.image.Size)
 }
 func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
@@ -62,8 +62,9 @@ type Section struct {
 	viewport         viewport.Model
 	imageService     client.ImageService
 	containerService client.ContainerService
+	layersPanel      panel.Panel
+	activePanel      panel.Panel
 	width, height    int
-	showLayers       bool
 	loading          bool
 	isFilter         bool
 	spinner          spinner.Model
@@ -81,8 +82,6 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(true)
 
-	vp := viewport.New(0, 0)
-
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -90,12 +89,12 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 	il := &Section{
 		ctx:              ctx,
 		list:             l,
-		viewport:         vp,
+		viewport:         viewport.New(0, 0),
 		imageService:     client.Images(),
 		containerService: client.Containers(),
+		layersPanel:      NewLayersPanel(ctx, client.Images()),
 		spinner:          sp,
 	}
-	il.updateDetails()
 
 	return il
 }
@@ -108,7 +107,7 @@ func (s *Section) SetSize(width, height int) {
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if s.showLayers {
+	if s.activePanel != nil {
 		// Split view: 40% list, 60% details
 		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
@@ -116,6 +115,7 @@ func (s *Section) SetSize(width, height int) {
 		s.list.SetSize(listWidth-listX, height-listY)
 		s.viewport.Width = detailWidth - listX
 		s.viewport.Height = height - listY
+		s.activePanel.SetSize(s.viewport.Width, s.viewport.Height)
 	} else {
 		// Full width list when viewport is hidden
 		s.list.SetSize(width-listX, height-listY)
@@ -159,7 +159,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		s.list.RemoveItem(msg.Idx)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Image %s deleted", shortID(msg.ID)),
+				Message: fmt.Sprintf("Image %s deleted", helper.ShortID(msg.ID)),
 				IsError: false,
 			}
 		}
@@ -176,7 +176,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 		banner := func() tea.Msg {
 			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Container %s created", shortID(msg.containerID)),
+				Message: fmt.Sprintf("Container %s created", helper.ShortID(msg.containerID)),
 				IsError: false,
 			}
 		}
@@ -209,9 +209,21 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 		switch {
 		case key.Matches(msg, keys.Keys.ImageLayers):
-			s.showLayers = !s.showLayers
-			s.SetSize(s.width, s.height) // Recalculate layout
-			return nil
+			if s.activePanel == s.layersPanel {
+				cmd := s.layersPanel.Close()
+				s.activePanel = nil
+				return cmd
+			}
+			selected := s.list.SelectedItem()
+			if selected == nil {
+				return nil
+			}
+			item, ok := selected.(imageItem)
+			if !ok {
+				return nil
+			}
+			s.activePanel = s.layersPanel
+			return s.layersPanel.Init(item.ID())
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
@@ -222,11 +234,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			return listCmd
-		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
-			var vpCmd tea.Cmd
-			s.viewport, vpCmd = s.viewport.Update(msg)
-			return vpCmd
+			return tea.Batch(listCmd, s.clearDetails())
 		case key.Matches(msg, keys.Keys.Filter):
 			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
@@ -236,13 +244,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	// Send the remaining of msg to both panels
-	var listCmd tea.Cmd
-	s.list, listCmd = s.list.Update(msg)
-	cmds = append(cmds, listCmd)
-
-	var vpCmd tea.Cmd
-	s.viewport, vpCmd = s.viewport.Update(msg)
-	cmds = append(cmds, vpCmd)
+	if s.activePanel != nil {
+		cmds = append(cmds, s.activePanel.Update(msg))
+	}
 
 	return tea.Batch(cmds...)
 }
@@ -264,26 +268,31 @@ func (s *Section) View() string {
 		Render(listContent)
 
 	// Only show list when layers is not enabled
-	if !s.showLayers {
+	if s.activePanel == nil {
 		return listView
 	}
 
-	s.updateDetails()
+	detailContent := s.activePanel.View()
+	s.viewport.SetContent(detailContent)
 
 	detailView := theme.ListStyle.
 		Width(s.viewport.Width).
-		Render(s.viewport.View())
+		Height(s.viewport.Height).
+		Render(detailContent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
 // Reset reset internal state to when a component isfirst initialized.
 func (s *Section) Reset() tea.Cmd {
+	var cmd tea.Cmd
 	s.isFilter = false
-	s.showLayers = false
 	s.viewport.SetContent("")
 	s.SetSize(s.width, s.height)
-	return nil
+	if s.activePanel != nil {
+		cmd = s.activePanel.Close()
+	}
+	return cmd
 }
 
 func (s *Section) extendFilterHelpCommand() tea.Cmd {
@@ -355,81 +364,13 @@ func (s *Section) createContainerCmdAndRun() tea.Cmd {
 	}
 }
 
-// updateDetails updates the viewport content based on selected image.
-func (s *Section) updateDetails() {
-	selected := s.list.SelectedItem()
-	if selected == nil {
-		s.viewport.SetContent("No image selected")
-		return
+func (s *Section) clearDetails() tea.Cmd {
+	var cmd tea.Cmd
+	if s.activePanel != nil {
+		cmd = s.activePanel.Close()
+		s.activePanel = nil
 	}
+	s.viewport.SetContent("")
 
-	item, ok := selected.(imageItem)
-	if !ok {
-		return
-	}
-	img := item.image
-
-	var content strings.Builder
-
-	// Header
-	fmt.Fprintf(&content, "Layers for %s:%s\n", img.Repo, img.Tag)
-	content.WriteString("═══════════════════════\n\n")
-
-	const maxLayerCmdLen = 50 // max chars to show for a layer command
-	if len(img.Layers) == 0 {
-		content.WriteString("No layer information available\n")
-	} else {
-		for idx, layer := range img.Layers {
-			cmd := truncateCommand(layer.Command, maxLayerCmdLen)
-			fmt.Fprintf(&content, "%2d. %s\n", idx+1, cmd)
-			fmt.Fprintf(&content, "    Size: %-10s  ID: %s\n\n",
-				formatSize(layer.Size),
-				shortID(layer.ID))
-		}
-	}
-
-	s.viewport.SetContent(content.String())
-}
-
-const shortIDLength = 12 // length of shortened container/image IDs
-
-// shortID returns first 12 characters of an ID.
-func shortID(id string) string {
-	// Remove sha256: prefix if present
-	id = strings.TrimPrefix(id, "sha256:")
-	if len(id) > shortIDLength {
-		return id[:shortIDLength]
-	}
-	return id
-}
-
-// truncateCommand shortens a command string.
-func truncateCommand(cmd string, maxLen int) string {
-	// Clean up common prefixes
-	cmd = strings.TrimPrefix(cmd, "/bin/sh -c ")
-	cmd = strings.TrimPrefix(cmd, "#(nop) ")
-	cmd = strings.TrimSpace(cmd)
-
-	if len(cmd) > maxLen {
-		return cmd[:maxLen-3] + "..."
-	}
 	return cmd
-}
-
-func formatSize(bytes int64) string {
-	const (
-		kb = 1024
-		mb = kb * 1024
-		gb = mb * 1024
-	)
-	switch {
-	case bytes >= gb:
-		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
-	case bytes >= mb:
-		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
-	case bytes >= kb:
-		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
-	default:
-		return fmt.Sprintf("%d B", bytes)
-	}
 }
