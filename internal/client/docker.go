@@ -470,9 +470,23 @@ func (s *imageService) List(ctx context.Context) ([]Image, error) {
 
 	result := make([]Image, len(images))
 	for i, img := range images {
-		imageData, getErr := s.Get(ctx, img.ID)
-		if getErr != nil {
-			return result, getErr
+		repo := none
+		tag := none
+		if len(img.RepoTags) > 0 {
+			parts := strings.SplitN(img.RepoTags[0], ":", repoTagParts)
+			repo = parts[0]
+			if len(parts) > 1 {
+				tag = parts[1]
+			}
+		}
+
+		imageData := Image{
+			ID:       img.ID,
+			Repo:     repo,
+			Tag:      tag,
+			Size:     img.Size,
+			Created:  time.Unix(img.Created, 0),
+			Dangling: len(img.RepoTags) == 0 || repo == none && tag == none,
 		}
 		imageData.Containers = img.Containers
 		result[i] = imageData
