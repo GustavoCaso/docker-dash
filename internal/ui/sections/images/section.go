@@ -33,6 +33,12 @@ type containerRunMsg struct {
 	error       error
 }
 
+// imagesPrunedMsg is sent when an image prune completes.
+type imagesPrunedMsg struct {
+	report client.PruneReport
+	err    error
+}
+
 // imageRemovedMsg is sent when an image deletion completes.
 type imageRemovedMsg struct {
 	ID    string
@@ -147,6 +153,23 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		cmd := s.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
+	case imagesPrunedMsg:
+		if msg.err != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: "Error pruning images: " + msg.err.Error(),
+					IsError: true,
+				}
+			}
+		}
+		summary := fmt.Sprintf(
+			"Pruned %d images, reclaimed %s",
+			msg.report.ItemsDeleted,
+			helper.FormatSize(int64(msg.report.SpaceReclaimed)),
+		)
+		return tea.Batch(s.updateImagesCmd(), func() tea.Msg {
+			return message.ShowBannerMsg{Message: summary, IsError: false}
+		})
 	case imageRemovedMsg:
 		if msg.Error != nil {
 			return func() tea.Msg {
@@ -227,6 +250,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
+		case key.Matches(msg, keys.Keys.Prune):
+			return s.confirmImagePrune()
 		case key.Matches(msg, keys.Keys.Delete):
 			return s.confirmImageDelete()
 		case key.Matches(msg, keys.Keys.CreateAndRunContainer):
@@ -373,6 +398,25 @@ func (s *Section) clearDetails() tea.Cmd {
 	s.viewport.SetContent("")
 
 	return cmd
+}
+
+func (s *Section) pruneImagesCmd() tea.Cmd {
+	ctx, svc := s.ctx, s.imageService
+	return func() tea.Msg {
+		report, err := svc.Prune(ctx, client.PruneOptions{All: true})
+		return imagesPrunedMsg{report: report, err: err}
+	}
+}
+
+func (s *Section) confirmImagePrune() tea.Cmd {
+	pruneCmd := s.pruneImagesCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Prune Images",
+			Body:      "Remove all unused images (including non-dangling)?",
+			OnConfirm: pruneCmd,
+		}
+	}
 }
 
 func (s *Section) confirmImageDelete() tea.Cmd {

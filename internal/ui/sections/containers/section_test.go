@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
 type containerSectionModel struct {
@@ -30,6 +31,9 @@ func (m containerSectionModel) Init() tea.Cmd { return nil }
 func (m containerSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
+	}
+	if confirmMsg, ok := msg.(message.ShowConfirmationMsg); ok {
+		return m, confirmMsg.OnConfirm
 	}
 	cmd := m.section.Update(msg)
 	return m, cmd
@@ -211,6 +215,18 @@ func TestClearDetailsClosesActivePanel(t *testing.T) {
 	if lp.logsOutput != "" {
 		t.Errorf("clearDetails() should clear logsOutput, got %q", lp.logsOutput)
 	}
+}
+
+func TestContainerListPrune(t *testing.T) {
+	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "old-container") // stopped container present initially
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	waitForNot(t, tm, "old-container") // stopped container pruned
+	waitFor(t, tm, "nginx-proxy")      // running containers remain
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
 func TestFormatBytes(t *testing.T) {

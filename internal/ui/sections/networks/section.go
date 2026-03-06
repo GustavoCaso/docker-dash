@@ -28,6 +28,12 @@ type networksLoadedMsg struct {
 	items []list.Item
 }
 
+// networksPrunedMsg is sent when a network prune completes.
+type networksPrunedMsg struct {
+	report client.PruneReport
+	err    error
+}
+
 // networkRemovedMsg is sent when a network deletion completes.
 type networkRemovedMsg struct {
 	ID    string
@@ -140,6 +146,19 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		cmd := s.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
+	case networksPrunedMsg:
+		if msg.err != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: "Error pruning networks: " + msg.err.Error(),
+					IsError: true,
+				}
+			}
+		}
+		summary := fmt.Sprintf("Pruned %d networks", msg.report.ItemsDeleted)
+		return tea.Batch(s.updateNetworksCmd(), func() tea.Msg {
+			return message.ShowBannerMsg{Message: summary, IsError: false}
+		})
 	case networkRemovedMsg:
 		if msg.Error != nil {
 			return func() tea.Msg {
@@ -190,6 +209,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateNetworksCmd())
+		case key.Matches(msg, keys.Keys.Prune):
+			return s.confirmNetworkPrune()
 		case key.Matches(msg, keys.Keys.NetworkDelete):
 			return s.confirmNetworkDelete()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
@@ -294,6 +315,25 @@ func (s *Section) deleteNetworkCmd() tea.Cmd {
 	return func() tea.Msg {
 		err := svc.Remove(ctx, item.network.ID)
 		return networkRemovedMsg{ID: item.network.ID, Name: item.network.Name, Idx: idx, Error: err}
+	}
+}
+
+func (s *Section) pruneNetworksCmd() tea.Cmd {
+	ctx, svc := s.ctx, s.networkService
+	return func() tea.Msg {
+		report, err := svc.Prune(ctx, client.PruneOptions{})
+		return networksPrunedMsg{report: report, err: err}
+	}
+}
+
+func (s *Section) confirmNetworkPrune() tea.Cmd {
+	pruneCmd := s.pruneNetworksCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Prune Networks",
+			Body:      "Remove all unused networks?",
+			OnConfirm: pruneCmd,
+		}
 	}
 }
 

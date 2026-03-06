@@ -28,6 +28,12 @@ type volumesLoadedMsg struct {
 	items []list.Item
 }
 
+// volumesPrunedMsg is sent when a volume prune completes.
+type volumesPrunedMsg struct {
+	report client.PruneReport
+	err    error
+}
+
 // volumeRemovedMsg is sent when a volume deletion completes.
 type volumeRemovedMsg struct {
 	Name  string
@@ -153,6 +159,23 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return s.activePanel.Update(msg)
 		}
 		return nil
+	case volumesPrunedMsg:
+		if msg.err != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: "Error pruning volumes: " + msg.err.Error(),
+					IsError: true,
+				}
+			}
+		}
+		summary := fmt.Sprintf(
+			"Pruned %d volumes, reclaimed %s",
+			msg.report.ItemsDeleted,
+			helper.FormatSize(int64(msg.report.SpaceReclaimed)),
+		)
+		return tea.Batch(s.updateVolumesCmd(), func() tea.Msg {
+			return message.ShowBannerMsg{Message: summary, IsError: false}
+		})
 	case volumeRemovedMsg:
 		if msg.Error != nil {
 			return func() tea.Msg {
@@ -206,6 +229,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateVolumesCmd())
+		case key.Matches(msg, keys.Keys.Prune):
+			return s.confirmVolumePrune()
 		case key.Matches(msg, keys.Keys.Delete):
 			return s.confirmVolumeDelete()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
@@ -327,6 +352,25 @@ func (s *Section) extendFilterHelpCommand() tea.Cmd {
 				key.WithHelp("esc", "exit"),
 			),
 		}}
+	}
+}
+
+func (s *Section) pruneVolumesCmd() tea.Cmd {
+	ctx, svc := s.ctx, s.volumeService
+	return func() tea.Msg {
+		report, err := svc.Prune(ctx, client.PruneOptions{All: true})
+		return volumesPrunedMsg{report: report, err: err}
+	}
+}
+
+func (s *Section) confirmVolumePrune() tea.Cmd {
+	pruneCmd := s.pruneVolumesCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Prune Volumes",
+			Body:      "Remove all unused volumes (including named)?",
+			OnConfirm: pruneCmd,
+		}
 	}
 }
 

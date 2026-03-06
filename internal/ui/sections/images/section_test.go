@@ -130,9 +130,28 @@ func TestImageListRunContainer(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestImageListPrune(t *testing.T) {
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "<none>:<none>") // dangling image present initially
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	waitForNot(t, tm, "<none>:<none>") // dangling image pruned
+	waitFor(t, tm, "nginx")            // non-dangling images remain
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
 	t.Helper()
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
 		return strings.Contains(string(b), s)
+	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
+}
+
+func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
+	t.Helper()
+	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
+		return !strings.Contains(string(b), s)
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }

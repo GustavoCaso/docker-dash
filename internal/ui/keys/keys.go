@@ -33,6 +33,8 @@ type KeyMap struct {
 	NetworkInfo   key.Binding
 	NetworkDelete key.Binding
 
+	Prune key.Binding
+
 	Help key.Binding
 	Quit key.Binding
 }
@@ -138,6 +140,10 @@ var Keys = &KeyMap{
 		key.WithKeys("D"),
 		key.WithHelp("D", "delete network"),
 	),
+	Prune: key.NewBinding(
+		key.WithKeys("P"),
+		key.WithHelp("P", "prune"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "help"),
@@ -188,7 +194,7 @@ func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.ImageLayers, k.CreateAndRunContainer},
-			{k.Filter, k.Help, k.Quit},
+			{k.Prune, k.Filter, k.Help, k.Quit},
 		},
 	}
 }
@@ -201,7 +207,7 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.ContainerDelete, k.ContainerInfo, k.ContainerLogs, k.ContainerStartStop},
 			{k.ContainerStats, k.ContainerRestart, k.ContainerExec, k.FileTree},
-			{k.Filter, k.Help, k.Quit},
+			{k.Prune, k.Filter, k.Help, k.Quit},
 		},
 	}
 }
@@ -213,7 +219,7 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.FileTree},
-			{k.Filter, k.Help, k.Quit},
+			{k.Prune, k.Filter, k.Help, k.Quit},
 		},
 	}
 }
@@ -225,7 +231,7 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 			{k.Left, k.Right},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.NetworkInfo, k.NetworkDelete},
-			{k.Filter, k.Help, k.Quit},
+			{k.Prune, k.Filter, k.Help, k.Quit},
 		},
 	}
 }

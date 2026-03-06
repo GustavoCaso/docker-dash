@@ -25,6 +25,12 @@ type containersLoadedMsg struct {
 	items []list.Item
 }
 
+// containersPrunedMsg is sent when a container prune completes.
+type containersPrunedMsg struct {
+	report client.PruneReport
+	err    error
+}
+
 // containerActionMsg is sent when a container action completes.
 type containerActionMsg struct {
 	ID     string
@@ -153,6 +159,23 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return s.activePanel.Update(msg)
 		}
 		return nil
+	case containersPrunedMsg:
+		if msg.err != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: "Error pruning containers: " + msg.err.Error(),
+					IsError: true,
+				}
+			}
+		}
+		summary := fmt.Sprintf(
+			"Pruned %d containers, reclaimed %s",
+			msg.report.ItemsDeleted,
+			helper.FormatSize(int64(msg.report.SpaceReclaimed)),
+		)
+		return tea.Batch(s.updateContainersCmd(), func() tea.Msg {
+			return message.ShowBannerMsg{Message: summary, IsError: false}
+		})
 	case containerActionMsg:
 		if msg.Error != nil {
 			return func() tea.Msg {
@@ -315,6 +338,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			}
 			s.activePanel = s.execPanel
 			return s.execPanel.Init(cItem.container.ID)
+		case key.Matches(msg, keys.Keys.Prune):
+			return s.confirmContainerPrune()
 		case key.Matches(msg, keys.Keys.ContainerDelete):
 			return s.confirmContainerDelete()
 		case key.Matches(msg, keys.Keys.ContainerStartStop):
@@ -489,6 +514,25 @@ func (s *Section) extendFilterHelpCommand() tea.Cmd {
 				key.WithHelp("esc", "exit"),
 			),
 		}}
+	}
+}
+
+func (s *Section) pruneContainersCmd() tea.Cmd {
+	ctx, svc := s.ctx, s.service
+	return func() tea.Msg {
+		report, err := svc.Prune(ctx, client.PruneOptions{})
+		return containersPrunedMsg{report: report, err: err}
+	}
+}
+
+func (s *Section) confirmContainerPrune() tea.Cmd {
+	pruneCmd := s.pruneContainersCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Prune Containers",
+			Body:      "Remove all stopped containers?",
+			OnConfirm: pruneCmd,
+		}
 	}
 }
 
