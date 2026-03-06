@@ -207,7 +207,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateVolumesCmd())
 		case key.Matches(msg, keys.Keys.Delete):
-			return s.deleteVolumeCmd()
+			return s.confirmVolumeDelete()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
@@ -327,5 +327,25 @@ func (s *Section) extendFilterHelpCommand() tea.Cmd {
 				key.WithHelp("esc", "exit"),
 			),
 		}}
+	}
+}
+
+func (s *Section) confirmVolumeDelete() tea.Cmd {
+	items := s.list.Items()
+	idx := s.list.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	vi, ok := items[idx].(volumeItem)
+	if !ok {
+		return nil
+	}
+	deleteCmd := s.deleteVolumeCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Delete Volume",
+			Body:      fmt.Sprintf("Delete volume %s?", vi.volume.Name),
+			OnConfirm: deleteCmd,
+		}
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
 type imageSectionModel struct {
@@ -29,6 +30,9 @@ func (m imageSectionModel) Init() tea.Cmd { return nil }
 func (m imageSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
+	}
+	if confirmMsg, ok := msg.(message.ShowConfirmationMsg); ok {
+		return m, confirmMsg.OnConfirm
 	}
 	cmd := m.section.Update(msg)
 	return m, cmd

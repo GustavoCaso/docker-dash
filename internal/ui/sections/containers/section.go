@@ -316,11 +316,11 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			s.activePanel = s.execPanel
 			return s.execPanel.Init(cItem.container.ID)
 		case key.Matches(msg, keys.Keys.ContainerDelete):
-			return s.deleteContainerCmd()
+			return s.confirmContainerDelete()
 		case key.Matches(msg, keys.Keys.ContainerStartStop):
-			return s.toggleContainerCmd()
+			return s.confirmContainerToggle()
 		case key.Matches(msg, keys.Keys.ContainerRestart):
-			return s.restartContainerCmd()
+			return s.confirmContainerRestart()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
@@ -489,5 +489,69 @@ func (s *Section) extendFilterHelpCommand() tea.Cmd {
 				key.WithHelp("esc", "exit"),
 			),
 		}}
+	}
+}
+
+func (s *Section) confirmContainerDelete() tea.Cmd {
+	items := s.list.Items()
+	idx := s.list.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	ci, ok := items[idx].(containerItem)
+	if !ok {
+		return nil
+	}
+	deleteCmd := s.deleteContainerCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Delete Container",
+			Body:      fmt.Sprintf("Delete container %s?", helper.ShortID(ci.ID())),
+			OnConfirm: deleteCmd,
+		}
+	}
+}
+
+func (s *Section) confirmContainerToggle() tea.Cmd {
+	items := s.list.Items()
+	idx := s.list.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	ci, ok := items[idx].(containerItem)
+	if !ok {
+		return nil
+	}
+	action := "Stop"
+	if ci.container.State != client.StateRunning {
+		action = "Start"
+	}
+	toggleCmd := s.toggleContainerCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     fmt.Sprintf("%s Container", action),
+			Body:      fmt.Sprintf("%s container %s?", action, helper.ShortID(ci.ID())),
+			OnConfirm: toggleCmd,
+		}
+	}
+}
+
+func (s *Section) confirmContainerRestart() tea.Cmd {
+	items := s.list.Items()
+	idx := s.list.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	ci, ok := items[idx].(containerItem)
+	if !ok {
+		return nil
+	}
+	restartCmd := s.restartContainerCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Restart Container",
+			Body:      fmt.Sprintf("Restart container %s?", helper.ShortID(ci.ID())),
+			OnConfirm: restartCmd,
+		}
 	}
 }

@@ -28,3 +28,14 @@ type AddContextualKeyBindingsMsg struct {
 // ClearContextualKeyBindingsMsg is sent by components to extra help info.
 type ClearContextualKeyBindingsMsg struct {
 }
+
+// ShowConfirmationMsg triggers the confirmation modal overlay.
+// OnConfirm is the tea.Cmd to run when the user presses y.
+type ShowConfirmationMsg struct {
+	Title     string
+	Body      string
+	OnConfirm tea.Cmd
+}
+
+// HideConfirmationMsg dismisses the confirmation modal.
+type HideConfirmationMsg struct{}
