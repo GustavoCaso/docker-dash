@@ -3,9 +3,7 @@ package networks
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -15,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -64,8 +63,9 @@ type Section struct {
 	isFilter       bool
 	viewport       viewport.Model
 	networkService client.NetworkService
+	detailsPanel   panel.Panel
+	activePanel    panel.Panel
 	width, height  int
-	showDetails    bool
 	loading        bool
 	spinner        spinner.Model
 }
@@ -82,21 +82,18 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(true)
 
-	vp := viewport.New(0, 0)
-
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	s := &Section{
+	return &Section{
 		ctx:            ctx,
 		list:           l,
-		viewport:       vp,
+		viewport:       viewport.New(0, 0),
 		networkService: svc,
+		detailsPanel:   newDetailsPanel(),
 		spinner:        sp,
 	}
-	s.updateDetails()
-	return s
 }
 
 // SetSize sets dimensions.
@@ -106,13 +103,14 @@ func (s *Section) SetSize(width, height int) {
 
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if s.showDetails {
+	if s.activePanel != nil {
 		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
 
 		s.list.SetSize(listWidth-listX, height-listY)
 		s.viewport.Width = detailWidth - listX
 		s.viewport.Height = height - listY
+		s.activePanel.SetSize(s.viewport.Width, s.viewport.Height)
 	} else {
 		s.list.SetSize(width-listX, height-listY)
 	}
@@ -174,9 +172,21 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 		switch {
 		case key.Matches(msg, keys.Keys.NetworkInfo):
-			s.showDetails = !s.showDetails
-			s.SetSize(s.width, s.height)
-			return nil
+			if s.activePanel == s.detailsPanel {
+				cmd := s.activePanel.Close()
+				s.activePanel = nil
+				return cmd
+			}
+			selected := s.list.SelectedItem()
+			if selected == nil {
+				return nil
+			}
+			item, ok := selected.(networkItem)
+			if !ok {
+				return nil
+			}
+			s.activePanel = s.detailsPanel
+			return s.detailsPanel.Init(formatNetworkDetails(item.network))
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateNetworksCmd())
@@ -185,11 +195,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			return listCmd
-		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
-			var vpCmd tea.Cmd
-			s.viewport, vpCmd = s.viewport.Update(msg)
-			return vpCmd
+			return tea.Batch(listCmd, s.clearDetails())
 		case key.Matches(msg, keys.Keys.Filter):
 			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
@@ -198,19 +204,16 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
-	var listCmd tea.Cmd
-	s.list, listCmd = s.list.Update(msg)
-	cmds = append(cmds, listCmd)
-
-	var vpCmd tea.Cmd
-	s.viewport, vpCmd = s.viewport.Update(msg)
-	cmds = append(cmds, vpCmd)
+	if s.activePanel != nil {
+		cmds = append(cmds, s.activePanel.Update(msg))
+	}
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the section.
 func (s *Section) View() string {
+	s.SetSize(s.width, s.height)
 	listContent := s.list.View()
 
 	if s.loading {
@@ -222,94 +225,40 @@ func (s *Section) View() string {
 		Width(s.list.Width()).
 		Render(listContent)
 
-	if !s.showDetails {
+	if s.activePanel == nil {
 		return listView
 	}
 
-	s.updateDetails()
-
+	detailContent := s.activePanel.View()
 	detailView := theme.ListStyle.
 		Width(s.viewport.Width).
-		Render(s.viewport.View())
+		Height(s.viewport.Height).
+		Render(detailContent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
-// Reset reset internal state to when a component isfirst initialized.
+// Reset reset internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
 	s.isFilter = false
-	s.showDetails = false
 	s.viewport.SetContent("")
+	var cmd tea.Cmd
+	if s.activePanel != nil {
+		cmd = s.activePanel.Close()
+		s.activePanel = nil
+	}
 	s.SetSize(s.width, s.height)
-	return nil
+	return cmd
 }
 
-func (s *Section) updateDetails() {
-	selected := s.list.SelectedItem()
-	if selected == nil {
-		s.viewport.SetContent("No network selected")
-		return
+func (s *Section) clearDetails() tea.Cmd {
+	var cmd tea.Cmd
+	if s.activePanel != nil {
+		cmd = s.activePanel.Close()
+		s.activePanel = nil
 	}
-
-	item, ok := selected.(networkItem)
-	if !ok {
-		return
-	}
-	n := item.network
-
-	const shortIDLen = 12
-	id := n.ID
-	if len(id) > shortIDLen {
-		id = id[:shortIDLen]
-	}
-
-	var content strings.Builder
-
-	fmt.Fprintf(&content, "Network: %s\n", n.Name)
-	content.WriteString("═══════════════════════\n\n")
-
-	label := theme.DetailLabelStyle
-	value := theme.DetailValueStyle
-
-	fmt.Fprintf(&content, "%s%s\n", label.Render("ID"), value.Render(id))
-	fmt.Fprintf(&content, "%s%s\n", label.Render("Driver"), value.Render(n.Driver))
-	fmt.Fprintf(&content, "%s%s\n", label.Render("Scope"), value.Render(n.Scope))
-
-	internalStr := "false"
-	if n.Internal {
-		internalStr = "true"
-	}
-	fmt.Fprintf(&content, "%s%s\n", label.Render("Internal"), value.Render(internalStr))
-
-	if n.IPAM.Subnet != "" {
-		fmt.Fprintf(&content, "%s%s\n", label.Render("Subnet"), value.Render(n.IPAM.Subnet))
-	}
-	if n.IPAM.Gateway != "" {
-		fmt.Fprintf(&content, "%s%s\n", label.Render("Gateway"), value.Render(n.IPAM.Gateway))
-	}
-
-	fmt.Fprintf(&content, "%s%s\n", label.Render("Containers"), value.Render(strconv.Itoa(len(n.ConnectedContainers))))
-
-	if len(n.ConnectedContainers) > 0 {
-		content.WriteString("\n")
-		content.WriteString(label.Render("Connected Containers"))
-		content.WriteString("\n")
-		for _, c := range n.ConnectedContainers {
-			ip := c.IPv4Address
-			if ip == "" {
-				ip = c.IPv6Address
-			}
-			if ip == "" {
-				fmt.Fprintf(&content, "  %s\n", value.Render(c.Name))
-			} else {
-				fmt.Fprintf(&content, "  %s  %s\n", value.Render(c.Name), label.Render(ip))
-			}
-		}
-	}
-
-	fmt.Fprintf(&content, "\n%s%s\n", label.Render("Created"), value.Render(n.Created.Format(time.RFC3339)))
-
-	s.viewport.SetContent(content.String())
+	s.viewport.SetContent("")
+	return cmd
 }
 
 func (s *Section) updateNetworksCmd() tea.Cmd {
