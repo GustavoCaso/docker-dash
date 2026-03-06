@@ -145,6 +145,19 @@ type Network struct {
 	IPAM                NetworkIPAM
 }
 
+// PruneReport summarises the result of a prune operation.
+type PruneReport struct {
+	ItemsDeleted   int
+	SpaceReclaimed uint64 // bytes; 0 for networks
+}
+
+// PruneOptions controls what gets removed during a prune operation.
+// All=true for images includes non-dangling unused images (dangling=false filter).
+// All=true for volumes includes named unused volumes in addition to anonymous ones.
+type PruneOptions struct {
+	All bool
+}
+
 // LogOptions configures log streaming.
 type LogOptions struct {
 	Follow     bool

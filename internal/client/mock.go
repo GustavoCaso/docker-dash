@@ -323,6 +323,20 @@ func (s *mockContainerService) FileTree(ctx context.Context, id string) (Contain
 	return ContainerFileTree{Files: []string{}, Tree: tree.New()}, nil
 }
 
+func (s *mockContainerService) Prune(_ context.Context, _ PruneOptions) (PruneReport, error) {
+	var count int
+	var remaining []Container
+	for _, c := range s.containers {
+		if c.State == StateStopped {
+			count++
+		} else {
+			remaining = append(remaining, c)
+		}
+	}
+	s.containers = remaining
+	return PruneReport{ItemsDeleted: count, SpaceReclaimed: 0}, nil
+}
+
 // mockImageService provides mock image data.
 type mockImageService struct {
 	images []Image
@@ -398,6 +412,23 @@ func (s *mockImageService) Remove(ctx context.Context, id string, force bool) er
 	return fmt.Errorf("image not found: %s", id)
 }
 
+func (s *mockImageService) Prune(_ context.Context, opts PruneOptions) (PruneReport, error) {
+	var count int
+	var spaceReclaimed uint64
+	var remaining []Image
+	for _, img := range s.images {
+		unused := img.Dangling || (opts.All && len(img.UsedBy) == 0)
+		if unused {
+			count++
+			spaceReclaimed += uint64(img.Size)
+		} else {
+			remaining = append(remaining, img)
+		}
+	}
+	s.images = remaining
+	return PruneReport{ItemsDeleted: count, SpaceReclaimed: spaceReclaimed}, nil
+}
+
 // mockVolumeService provides mock volume data.
 type mockVolumeService struct {
 	volumes []Volume
@@ -450,6 +481,25 @@ func (s *mockVolumeService) Remove(ctx context.Context, name string, force bool)
 		}
 	}
 	return fmt.Errorf("volume not found: %s", name)
+}
+
+func (s *mockVolumeService) Prune(_ context.Context, opts PruneOptions) (PruneReport, error) {
+	var count int
+	var spaceReclaimed uint64
+	var remaining []Volume
+	for _, v := range s.volumes {
+		// Without All, only prune anonymous volumes (UsedCount==0 and no name).
+		// In the mock all volumes are named, so without All nothing is pruned.
+		// With All, prune all unused (UsedCount==0) volumes.
+		if opts.All && v.UsedCount == 0 {
+			count++
+			spaceReclaimed += uint64(v.Size)
+		} else {
+			remaining = append(remaining, v)
+		}
+	}
+	s.volumes = remaining
+	return PruneReport{ItemsDeleted: count, SpaceReclaimed: spaceReclaimed}, nil
 }
 
 func (s *mockVolumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
@@ -567,4 +617,18 @@ func (s *mockNetworkService) Remove(ctx context.Context, id string) error {
 		}
 	}
 	return fmt.Errorf("network not found: %s", id)
+}
+
+func (s *mockNetworkService) Prune(_ context.Context, _ PruneOptions) (PruneReport, error) {
+	var count int
+	var remaining []Network
+	for _, n := range s.networks {
+		if len(n.ConnectedContainers) == 0 {
+			count++
+		} else {
+			remaining = append(remaining, n)
+		}
+	}
+	s.networks = remaining
+	return PruneReport{ItemsDeleted: count, SpaceReclaimed: 0}, nil
 }

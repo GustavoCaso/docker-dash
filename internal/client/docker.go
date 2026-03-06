@@ -391,6 +391,14 @@ func (s *containerService) Stats(ctx context.Context, id string) (*StatsSession,
 	), nil
 }
 
+func (s *containerService) Prune(ctx context.Context, _ PruneOptions) (PruneReport, error) {
+	r, err := s.cli.ContainersPrune(ctx, filters.Args{})
+	if err != nil {
+		return PruneReport{}, err
+	}
+	return PruneReport{ItemsDeleted: len(r.ContainersDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
+}
+
 func (s *containerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
 	reader, err := s.cli.ContainerExport(ctx, id)
 	if err != nil {
@@ -556,6 +564,18 @@ func (s *imageService) Remove(ctx context.Context, id string, force bool) error 
 	return err
 }
 
+func (s *imageService) Prune(ctx context.Context, opts PruneOptions) (PruneReport, error) {
+	f := filters.Args{}
+	if opts.All {
+		f = filters.NewArgs(filters.Arg("dangling", "false"))
+	}
+	r, err := s.cli.ImagesPrune(ctx, f)
+	if err != nil {
+		return PruneReport{}, err
+	}
+	return PruneReport{ItemsDeleted: len(r.ImagesDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
+}
+
 // Local Volume Service.
 type volumeService struct {
 	cli *client.Client
@@ -593,6 +613,18 @@ func (s *volumeService) List(ctx context.Context) ([]Volume, error) {
 
 func (s *volumeService) Remove(ctx context.Context, name string, force bool) error {
 	return s.cli.VolumeRemove(ctx, name, force)
+}
+
+func (s *volumeService) Prune(ctx context.Context, opts PruneOptions) (PruneReport, error) {
+	f := filters.Args{}
+	if opts.All {
+		f = filters.NewArgs(filters.Arg("all", "true"))
+	}
+	r, err := s.cli.VolumesPrune(ctx, f)
+	if err != nil {
+		return PruneReport{}, err
+	}
+	return PruneReport{ItemsDeleted: len(r.VolumesDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
 func (s *volumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
@@ -764,6 +796,14 @@ func (s *networkService) List(ctx context.Context) ([]Network, error) {
 
 func (s *networkService) Remove(ctx context.Context, id string) error {
 	return s.cli.NetworkRemove(ctx, id)
+}
+
+func (s *networkService) Prune(ctx context.Context, _ PruneOptions) (PruneReport, error) {
+	r, err := s.cli.NetworksPrune(ctx, filters.Args{})
+	if err != nil {
+		return PruneReport{}, err
+	}
+	return PruneReport{ItemsDeleted: len(r.NetworksDeleted), SpaceReclaimed: 0}, nil
 }
 
 // timeFromUnix converts Unix timestamp to time.Time.
