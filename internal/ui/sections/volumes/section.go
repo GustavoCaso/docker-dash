@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -25,12 +26,6 @@ const listSplitRatio = 0.4
 type volumesLoadedMsg struct {
 	error error
 	items []list.Item
-}
-
-// volumeTreeLoadedMsg is sent when the volume file tree is loaded.
-type volumeTreeLoadedMsg struct {
-	error    error
-	fileTree client.VolumeFileTree
 }
 
 // volumeRemovedMsg is sent when a volume deletion completes.
@@ -67,8 +62,9 @@ type Section struct {
 	isFilter      bool
 	viewport      viewport.Model
 	volumeService client.VolumeService
+	fileTreePanel panel.Panel
+	activePanel   panel.Panel
 	width, height int
-	showFileTree  bool
 	loading       bool
 	spinner       spinner.Model
 }
@@ -85,8 +81,6 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(true)
 
-	vp := viewport.New(0, 0)
-
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -94,8 +88,9 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 	return &Section{
 		ctx:           ctx,
 		list:          l,
-		viewport:      vp,
+		viewport:      viewport.New(0, 0),
 		volumeService: svc,
+		fileTreePanel: newFileTreePanel(ctx, svc),
 		spinner:       sp,
 	}
 }
@@ -107,13 +102,14 @@ func (s *Section) SetSize(width, height int) {
 
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if s.showFileTree {
+	if s.activePanel != nil {
 		listWidth := int(float64(width) * listSplitRatio)
 		detailWidth := width - listWidth
 
 		s.list.SetSize(listWidth-listX, height-listY)
 		s.viewport.Width = detailWidth - listX
 		s.viewport.Height = height - listY
+		s.activePanel.SetSize(s.viewport.Width, s.viewport.Height)
 	} else {
 		s.list.SetSize(width-listX, height-listY)
 	}
@@ -153,7 +149,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		s.viewport.SetContent(lipgloss.NewStyle().Width(s.viewport.Width).Render(msg.fileTree.Tree.String()))
+		if s.activePanel != nil {
+			return s.activePanel.Update(msg)
+		}
 		return nil
 	case volumeRemovedMsg:
 		if msg.Error != nil {
@@ -187,6 +185,12 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 		switch {
 		case key.Matches(msg, keys.Keys.FileTree):
+			if s.activePanel == s.fileTreePanel {
+				cmd := s.activePanel.Close()
+				s.activePanel = nil
+				return cmd
+			}
+
 			selected := s.list.SelectedItem()
 			if selected == nil {
 				return nil
@@ -195,16 +199,10 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			if !ok {
 				return nil
 			}
-			vol := vItem.volume
-			s.showFileTree = !s.showFileTree
-			if s.showFileTree {
-				s.loading = true
-				s.SetSize(s.width, s.height)
-				s.viewport.SetContent("")
-				return tea.Batch(s.spinner.Tick, s.fetchFileTreeCmd(vol.Name))
-			}
-			s.SetSize(s.width, s.height)
-			return nil
+
+			s.loading = true
+			s.activePanel = s.fileTreePanel
+			return tea.Batch(s.spinner.Tick, s.fileTreePanel.Init(vItem.volume.Name))
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateVolumesCmd())
@@ -213,32 +211,29 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			return listCmd
-		case key.Matches(msg, keys.Keys.ScrollUp, keys.Keys.ScrollDown):
-			var vpCmd tea.Cmd
-			s.viewport, vpCmd = s.viewport.Update(msg)
-			return vpCmd
+			return tea.Batch(listCmd, s.clearDetails())
 		case key.Matches(msg, keys.Keys.Filter):
 			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			return tea.Batch(listCmd, s.extendFilterHelpCommand())
+
+			if s.isFilter {
+				return tea.Batch(listCmd, s.extendFilterHelpCommand())
+			}
+			return listCmd
 		}
 	}
 
-	var listCmd tea.Cmd
-	s.list, listCmd = s.list.Update(msg)
-	cmds = append(cmds, listCmd)
-
-	var vpCmd tea.Cmd
-	s.viewport, vpCmd = s.viewport.Update(msg)
-	cmds = append(cmds, vpCmd)
+	if s.activePanel != nil {
+		cmds = append(cmds, s.activePanel.Update(msg))
+	}
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the list.
 func (s *Section) View() string {
+	s.SetSize(s.width, s.height)
 	listContent := s.list.View()
 
 	if s.loading {
@@ -250,36 +245,41 @@ func (s *Section) View() string {
 		Width(s.list.Width()).
 		Render(listContent)
 
-	if !s.showFileTree {
+	if s.activePanel == nil {
 		return listView
 	}
 
+	detailContent := s.activePanel.View()
 	detailView := theme.ListStyle.
 		Width(s.viewport.Width).
-		Render(s.viewport.View())
+		Height(s.viewport.Height).
+		Render(detailContent)
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
 }
 
-// Reset reset internal state to when a component isfirst initialized.
+// Reset reset internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
 	s.isFilter = false
-	s.showFileTree = false
 	s.viewport.SetContent("")
 	s.SetSize(s.width, s.height)
-	return nil
+	var cmd tea.Cmd
+	if s.activePanel != nil {
+		cmd = s.activePanel.Close()
+		s.activePanel = nil
+	}
+	return cmd
 }
 
-func (s *Section) fetchFileTreeCmd(volumeName string) tea.Cmd {
-	ctx := s.ctx
-	svc := s.volumeService
-	return func() tea.Msg {
-		fileTree, err := svc.FileTree(ctx, volumeName)
-		if err != nil {
-			return volumeTreeLoadedMsg{error: fmt.Errorf("error getting volume file tree: %s", err.Error())}
-		}
-		return volumeTreeLoadedMsg{fileTree: fileTree}
+func (s *Section) clearDetails() tea.Cmd {
+	var cmd tea.Cmd
+	if s.activePanel != nil {
+		cmd = s.activePanel.Close()
+		s.activePanel = nil
 	}
+	s.SetSize(s.width, s.height)
+	s.viewport.SetContent("")
+	return cmd
 }
 
 func (s *Section) updateVolumesCmd() tea.Cmd {
