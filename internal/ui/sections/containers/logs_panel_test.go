@@ -92,6 +92,7 @@ func TestLogsPanelUpdateOnSessionStartedReadsOutput(t *testing.T) {
 
 func TestLogsPanelAccumulatesOutput(t *testing.T) {
 	p := newTestLogsPanel()
+	p.SetSize(100, 100)
 
 	p.Update(logsOutputMsg{output: "first line\n"})
 	p.Update(logsOutputMsg{output: "second line\n"})
@@ -118,6 +119,9 @@ func TestLogsPanelClose(t *testing.T) {
 	}
 	if p.logsOutput != "" {
 		t.Errorf("Close() should clear logsOutput, got %q", p.logsOutput)
+	}
+	if p.viewport.View() != "" {
+		t.Errorf("Close() should clear viewport, got %q", p.viewport.View())
 	}
 }
 

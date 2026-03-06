@@ -333,15 +333,6 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
-	// Send the remaining of msg to models and active panel
-	var listCmd tea.Cmd
-	s.list, listCmd = s.list.Update(msg)
-	cmds = append(cmds, listCmd)
-
-	var vpCmd tea.Cmd
-	s.viewport, vpCmd = s.viewport.Update(msg)
-	cmds = append(cmds, vpCmd)
-
 	if s.activePanel != nil {
 		cmds = append(cmds, s.activePanel.Update(msg))
 	}
