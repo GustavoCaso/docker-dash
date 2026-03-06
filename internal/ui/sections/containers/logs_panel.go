@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -18,6 +19,7 @@ import (
 type logsPanel struct {
 	ctx         context.Context
 	logsSession *client.LogsSession
+	viewport    viewport.Model
 	logsOutput  string
 	client      client.ContainerService
 }
@@ -34,8 +36,9 @@ type logsSessionStartedMsg struct {
 
 func NewLogsPanel(ctx context.Context, client client.ContainerService) panel.Panel {
 	return &logsPanel{
-		ctx:    ctx,
-		client: client,
+		ctx:      ctx,
+		client:   client,
+		viewport: viewport.New(0, 0),
 	}
 }
 
@@ -68,14 +71,19 @@ func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
 			}
 		}
 		l.logsOutput += msg.output
+		l.viewport.SetContent(l.logsOutput)
+		l.viewport.GotoBottom()
 		return l.readLogsOutput()
 	}
 
-	return nil
+	var cmd tea.Cmd
+	l.viewport, cmd = l.viewport.Update(msg)
+
+	return cmd
 }
 
 func (l *logsPanel) View() string {
-	return l.logsOutput
+	return l.viewport.View()
 }
 func (l *logsPanel) Close() tea.Cmd {
 	if l.logsSession != nil {
@@ -83,10 +91,14 @@ func (l *logsPanel) Close() tea.Cmd {
 		l.logsSession = nil
 	}
 	l.logsOutput = ""
+	l.viewport.SetContent("")
 
 	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
-func (l *logsPanel) SetSize(_, _ int) {}
+func (l *logsPanel) SetSize(width, height int) {
+	l.viewport.Width = width
+	l.viewport.Height = height
+}
 
 func (l *logsPanel) readLogsOutput() tea.Cmd {
 	session := l.logsSession
