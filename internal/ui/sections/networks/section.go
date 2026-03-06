@@ -191,7 +191,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateNetworksCmd())
 		case key.Matches(msg, keys.Keys.NetworkDelete):
-			return s.deleteNetworkCmd()
+			return s.confirmNetworkDelete()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
@@ -294,6 +294,26 @@ func (s *Section) deleteNetworkCmd() tea.Cmd {
 	return func() tea.Msg {
 		err := svc.Remove(ctx, item.network.ID)
 		return networkRemovedMsg{ID: item.network.ID, Name: item.network.Name, Idx: idx, Error: err}
+	}
+}
+
+func (s *Section) confirmNetworkDelete() tea.Cmd {
+	items := s.list.Items()
+	idx := s.list.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	item, ok := items[idx].(networkItem)
+	if !ok {
+		return nil
+	}
+	deleteCmd := s.deleteNetworkCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Delete Network",
+			Body:      fmt.Sprintf("Delete network %s?", item.network.Name),
+			OnConfirm: deleteCmd,
+		}
 	}
 }
 

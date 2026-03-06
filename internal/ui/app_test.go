@@ -156,6 +156,83 @@ func TestAutoRefreshValidInterval(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestConfirmationModalAppearsOnDelete(t *testing.T) {
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+
+	// Default view is Images — wait for it
+	waitForString(t, tm, "nginx")
+
+	// Press 'd' to trigger delete — modal should appear
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+
+	// Modal title and hint both appear in the same render; check for both in one pass
+	// to avoid consuming the output reader between two separate waitForString calls.
+	waitFor(t, tm, func(b []byte) bool {
+		s := string(b)
+		return strings.Contains(s, "Delete Image") && strings.Contains(s, "[y] confirm")
+	})
+
+	// Dismiss the modal before quitting — 'q' is swallowed by the modal.
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestConfirmationModalDismissedOnN(t *testing.T) {
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+
+	waitForString(t, tm, "nginx")
+
+	// Trigger delete modal
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	waitForString(t, tm, "Delete Image")
+
+	// Press 'n' to cancel — modal should disappear, images list should be visible again
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	waitForString(t, tm, "nginx")
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestConfirmationModalDismissedOnEsc(t *testing.T) {
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+
+	waitForString(t, tm, "nginx")
+
+	// Trigger delete modal
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	waitForString(t, tm, "Delete Image")
+
+	// Press 'esc' to cancel
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	waitForString(t, tm, "nginx")
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestConfirmationModalConfirmDeletesImage(t *testing.T) {
+	m := InitialModel(context.Background(), &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+
+	waitForString(t, tm, "nginx")
+
+	// Press 'd' to trigger delete on the first image (nginx:latest)
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	waitForString(t, tm, "Delete Image")
+
+	// Confirm with 'y' — banner should show success
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	waitForString(t, tm, "deleted")
+
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
 	teatest.WaitFor(
 		t,

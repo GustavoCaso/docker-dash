@@ -228,7 +228,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
 		case key.Matches(msg, keys.Keys.Delete):
-			return s.deleteImageCmd()
+			return s.confirmImageDelete()
 		case key.Matches(msg, keys.Keys.CreateAndRunContainer):
 			return s.createContainerCmdAndRun()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
@@ -373,4 +373,24 @@ func (s *Section) clearDetails() tea.Cmd {
 	s.viewport.SetContent("")
 
 	return cmd
+}
+
+func (s *Section) confirmImageDelete() tea.Cmd {
+	items := s.list.Items()
+	idx := s.list.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+	dockerImage, ok := items[idx].(imageItem)
+	if !ok {
+		return nil
+	}
+	deleteCmd := s.deleteImageCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Delete Image",
+			Body:      fmt.Sprintf("Delete image %s?", helper.ShortID(dockerImage.ID())),
+			OnConfirm: deleteCmd,
+		}
+	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/confirmation"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/header"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/statusbar"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -72,6 +73,9 @@ type model struct {
 	bannerMsg        string
 	bannerKind       bannerType
 	initErr          string
+	confirmation     confirmation.Model
+	pendingCmd       tea.Cmd
+	showConfirmation bool
 	refreshInterval  time.Duration
 }
 
@@ -114,6 +118,7 @@ func InitialModel(ctx context.Context, cfg *config.Config, client client.Client)
 		networkSection:   networks.New(ctx, networksList, client.Networks()),
 		statusBar:        statusbar.New(),
 		initErr:          initErr,
+		confirmation:     confirmation.New(),
 		refreshInterval:  refreshInterval,
 	}
 }
@@ -134,6 +139,24 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.showConfirmation {
+		if km, ok := msg.(tea.KeyMsg); ok {
+			switch km.String() {
+			case "y":
+				cmd := m.pendingCmd
+				m.showConfirmation = false
+				m.pendingCmd = nil
+				return m, cmd
+			case "n", "esc":
+				m.showConfirmation = false
+				m.pendingCmd = nil
+				return m, nil
+			}
+			// Swallow all other keys while modal is visible
+			return m, nil
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -156,6 +179,17 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.volumeSection.SetSize(msg.Width, contentHeight)
 		m.networkSection.SetSize(msg.Width, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
+
+	case message.ShowConfirmationMsg:
+		m.confirmation.Init(msg.Title, msg.Body)
+		m.pendingCmd = msg.OnConfirm
+		m.showConfirmation = true
+		return m, nil
+
+	case message.HideConfirmationMsg:
+		m.showConfirmation = false
+		m.pendingCmd = nil
+		return m, nil
 
 	case message.ShowBannerMsg:
 		m.bannerMsg = msg.Message
@@ -235,6 +269,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) View() string {
 	if m.width == 0 {
 		return "Loading..."
+	}
+
+	if m.showConfirmation {
+		return lipgloss.Place(
+			m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			m.confirmation.View(),
+		)
 	}
 
 	var listView string
