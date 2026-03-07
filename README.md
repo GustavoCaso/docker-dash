@@ -18,6 +18,13 @@ Switching between the terminal and a Docker GUI breaks flow. `docker-dash` gives
 
 ## Install
 
+Homebrew:
+```bash
+brew tap GustavoCaso/tap
+brew install docker-dash
+```
+
+Go:
 ```bash
 go install github.com/GustavoCaso/docker-dash/cmd/docker-dash@latest
 ```
