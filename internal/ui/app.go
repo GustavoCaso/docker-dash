@@ -198,7 +198,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.bannerKind = bannerSuccess
 		}
-		return m, tea.Tick(bannerTimeoutSecs*time.Second, func(_ time.Time) tea.Msg {
+
+		clearTimeout := msg.ClearTimeout
+		if clearTimeout <= 0 {
+			clearTimeout = bannerTimeoutSecs * time.Second
+		}
+
+		return m, tea.Tick(clearTimeout, func(_ time.Time) tea.Msg {
 			return clearBannerMsg{}
 		})
 

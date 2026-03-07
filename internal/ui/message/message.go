@@ -1,14 +1,25 @@
 package message
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ShowBannerMsg is sent by components to display a banner notification.
 type ShowBannerMsg struct {
-	Message string
-	IsError bool
+	Message      string
+	IsError      bool
+	ClearTimeout time.Duration
+}
+
+func NewShowBannerMsg(message string, isError bool, clearTimeOut time.Duration) ShowBannerMsg {
+	return ShowBannerMsg{
+		Message:      message,
+		IsError:      isError,
+		ClearTimeout: clearTimeOut,
+	}
 }
 
 // BubbleUpMsg is sent by components to communicate to other components
