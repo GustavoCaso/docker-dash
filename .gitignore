@@ -1,3 +1,4 @@
 .worktrees/
 docs/
 ./docker-dash
+dist/

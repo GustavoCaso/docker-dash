@@ -12,7 +12,7 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - "-s -w"
-      - -X main.version={{.Version}}
+      - -X main.Version={{.Version}}
     goos:
       - linux
       - windows
