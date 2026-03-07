@@ -8,14 +8,14 @@ import (
 )
 
 func TestHeaderNewDefaults(t *testing.T) {
-	h := New()
+	h := New("test")
 	if h.ActiveView() != ViewImages {
 		t.Errorf("expected initial ActiveView to be ViewImages, got %v", h.ActiveView())
 	}
 }
 
 func TestHeaderMoveRight(t *testing.T) {
-	h := New()
+	h := New("test")
 
 	if h.ActiveView() != ViewImages {
 		t.Fatalf("expected ViewImages at start, got %v", h.ActiveView())
@@ -43,7 +43,7 @@ func TestHeaderMoveRight(t *testing.T) {
 }
 
 func TestHeaderMoveLeft(t *testing.T) {
-	h := New()
+	h := New("test")
 
 	h.MoveLeft()
 	if h.ActiveView() != ViewNetworks {
@@ -67,7 +67,7 @@ func TestHeaderMoveLeft(t *testing.T) {
 }
 
 func TestHeaderViewContainsSectionNames(t *testing.T) {
-	h := New()
+	h := New("test")
 	h.SetWidth(120)
 
 	output := h.View()
@@ -80,7 +80,7 @@ func TestHeaderViewContainsSectionNames(t *testing.T) {
 }
 
 func TestHeaderViewContainsDockerIcon(t *testing.T) {
-	h := New()
+	h := New("test")
 	h.SetWidth(120)
 
 	output := h.View()

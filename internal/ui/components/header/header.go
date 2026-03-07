@@ -46,9 +46,9 @@ type Header struct {
 }
 
 // New creates a new header with all sections.
-func New() *Header {
+func New(version string) *Header {
 	return &Header{
-		logo: theme.IconDocker + "  Docker Dash",
+		logo: theme.IconDocker + "  Docker Dash " + version,
 		items: []headerItem{
 			{icon: theme.IconImage, label: "Images", view: ViewImages},
 			{icon: theme.IconContainer, label: "Containers", view: ViewContainers},

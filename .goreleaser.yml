@@ -1,0 +1,61 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: docker-dash
+    main: ./cmd/docker-dash
+    binary: docker-dash
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - "-s -w"
+      - -X main.version={{.Version}}
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+
+archives:
+  - formats:
+      - binary
+    name_template: "docker-dash_{{ .Tag }}_{{ .Os }}-{{ .Arch }}{{if .Arm}}_{{.Arm}}{{end}}"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-devel"
+
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^test:"
+      - "^chore"
+      - "merge conflict"
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+      - go mod tidy
+
+homebrew_casks:
+  - name: docker-dash
+    binaries:
+      - docker-dash
+    repository:
+      owner: GustavoCaso
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/GustavoCaso/docker-dash"
+    description: "Terminal UI dashboard for managing Docker containers, images, volumes, and networks"
