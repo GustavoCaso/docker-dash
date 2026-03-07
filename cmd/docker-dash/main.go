@@ -13,6 +13,8 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui"
 )
 
+var Version = "dev"
+
 func main() {
 	configPath := flag.String("config", "", "path to config file (default: $HOME/.config/docker-dash.toml)")
 	refreshConfig := flag.String(
@@ -55,7 +57,7 @@ func main() {
 	}
 
 	p := tea.NewProgram(
-		ui.InitialModel(ctx, cfg, dockerClient),
+		ui.InitialModel(ctx, Version, cfg, dockerClient),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)

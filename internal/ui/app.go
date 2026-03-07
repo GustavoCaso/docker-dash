@@ -79,7 +79,7 @@ type model struct {
 	refreshInterval  time.Duration
 }
 
-func InitialModel(ctx context.Context, cfg *config.Config, client client.Client) tea.Model {
+func InitialModel(ctx context.Context, version string, cfg *config.Config, client client.Client) tea.Model {
 	containersList, containersErr := client.Containers().List(ctx)
 	imagesList, imagesErr := client.Images().List(ctx)
 	volumesList, volumesErr := client.Volumes().List(ctx)
@@ -111,7 +111,7 @@ func InitialModel(ctx context.Context, cfg *config.Config, client client.Client)
 		containerKeys:    keys.Keys.ContainerKeyMap(),
 		volumeKeys:       keys.Keys.VolumeKeyMap(),
 		networkKeys:      keys.Keys.NetworkKeyMap(),
-		header:           header.New(),
+		header:           header.New(version),
 		containerSection: containers.New(ctx, containersList, client.Containers()),
 		imageSection:     images.New(ctx, imagesList, client),
 		volumeSection:    volumes.New(ctx, volumesList, client.Volumes()),
