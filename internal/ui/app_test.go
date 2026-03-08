@@ -108,6 +108,70 @@ func TestSwitchingSectionResetActiveView(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestSwitchingSectionResetContainersActiveView(t *testing.T) {
+	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+	// Switch to Containers view
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	waitForString(t, tm, "nginx-proxy")
+	// Select a container and open logs panel
+	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	waitForString(t, tm, "Starting application")
+	// Switch away and back
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
+	waitFor(t, tm, func(b []byte) bool {
+		return !strings.Contains(string(b), "Starting application")
+	})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestSwitchingSectionResetVolumesActiveView(t *testing.T) {
+	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+	// Navigate to Volumes view (Images -> Containers -> Volumes)
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	waitForString(t, tm, "postgres_data")
+	// Open file tree panel
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	waitForString(t, tm, "pgdata")
+	// Switch away and back
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
+	waitFor(t, tm, func(b []byte) bool {
+		return !strings.Contains(string(b), "pgdata")
+	})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestSwitchingSectionResetNetworksActiveView(t *testing.T) {
+	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+	// Navigate to Networks view (Images -> Containers -> Volumes -> Networks)
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	waitForString(t, tm, "bridge")
+	// Open details panel
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	waitForString(t, tm, "Network:")
+	// Switch away and back
+	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
+	waitFor(t, tm, func(b []byte) bool {
+		return !strings.Contains(string(b), "Network:")
+	})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func TestVolumesView(t *testing.T) {
 	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))

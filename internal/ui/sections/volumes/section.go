@@ -287,12 +287,12 @@ func (s *Section) View() string {
 func (s *Section) Reset() tea.Cmd {
 	s.isFilter = false
 	s.viewport.SetContent("")
-	s.SetSize(s.width, s.height)
 	var cmd tea.Cmd
 	if s.activePanel != nil {
 		cmd = s.activePanel.Close()
 		s.activePanel = nil
 	}
+	s.SetSize(s.width, s.height)
 	return cmd
 }
 

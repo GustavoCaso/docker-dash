@@ -313,10 +313,11 @@ func (s *Section) Reset() tea.Cmd {
 	var cmd tea.Cmd
 	s.isFilter = false
 	s.viewport.SetContent("")
-	s.SetSize(s.width, s.height)
 	if s.activePanel != nil {
 		cmd = s.activePanel.Close()
+		s.activePanel = nil
 	}
+	s.SetSize(s.width, s.height)
 	return cmd
 }
 

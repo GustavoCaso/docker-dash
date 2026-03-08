@@ -105,7 +105,11 @@ func TestContainerReset(t *testing.T) {
 
 	waitFor(t, tm, "Starting application")
 
-	model.Reset()
+	cmd := model.Reset()
+
+	if cmd == nil {
+		t.Error("Reset() should return non-nil cmd when activePanel was set")
+	}
 
 	view := model.View()
 
@@ -227,6 +231,49 @@ func TestContainerListPrune(t *testing.T) {
 	waitFor(t, tm, "nginx-proxy")      // running containers remain
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestResetClearsActivePanelAndFlags(t *testing.T) {
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	cl := New(context.Background(), containers, dockerClient.Containers())
+	cl.SetSize(120, 40)
+
+	cl.activePanel = cl.detailsPanel
+	cl.isFilter = true
+
+	cmd := cl.Reset()
+
+	if cl.activePanel != nil {
+		t.Error("Reset() should set activePanel to nil")
+	}
+	if cl.isFilter {
+		t.Error("Reset() should set isFilter to false")
+	}
+	if cmd == nil {
+		t.Error("Reset() should return non-nil cmd when activePanel was set")
+	}
+}
+
+func TestResetWithNoActivePanelDoesNotPanic(t *testing.T) {
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	cl := New(context.Background(), containers, dockerClient.Containers())
+	cl.SetSize(120, 40)
+
+	cl.isFilter = true
+
+	cmd := cl.Reset()
+
+	if cl.activePanel != nil {
+		t.Error("Reset() should leave activePanel as nil when it was already nil")
+	}
+	if cl.isFilter {
+		t.Error("Reset() should set isFilter to false")
+	}
+	if cmd != nil {
+		t.Error("Reset() should return nil cmd when no activePanel was set")
+	}
 }
 
 func TestFormatBytes(t *testing.T) {
