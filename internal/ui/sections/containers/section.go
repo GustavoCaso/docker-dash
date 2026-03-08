@@ -402,6 +402,7 @@ func (s *Section) Reset() tea.Cmd {
 	s.isFilter = false
 	if s.activePanel != nil {
 		cmd = s.activePanel.Close()
+		s.activePanel = nil
 	}
 	s.viewport.SetContent("")
 	s.SetSize(s.width, s.height)
