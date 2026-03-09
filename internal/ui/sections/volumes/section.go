@@ -8,7 +8,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -19,8 +18,6 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
-
-const listSplitRatio = 0.4
 
 // volumesLoadedMsg is sent when volumes have been loaded asynchronously.
 type volumesLoadedMsg struct {
@@ -63,16 +60,17 @@ func (v volumeItem) FilterValue() string { return v.volume.Name }
 
 // Section wraps bubbles/list for displaying volumes.
 type Section struct {
-	ctx           context.Context
-	list          list.Model
-	isFilter      bool
-	viewport      viewport.Model
-	volumeService client.VolumeService
-	fileTreePanel panel.Panel
-	activePanel   panel.Panel
-	width, height int
-	loading       bool
-	spinner       spinner.Model
+	ctx            context.Context
+	list           list.Model
+	isFilter       bool
+	volumeService  client.VolumeService
+	panels         []panel.Panel
+	activePanelIdx int
+	width, height  int
+	panelWidth     int
+	panelHeight    int
+	loading        bool
+	spinner        spinner.Model
 }
 
 // New creates a new volume list.
@@ -92,13 +90,25 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	return &Section{
-		ctx:           ctx,
-		list:          l,
-		viewport:      viewport.New(0, 0),
-		volumeService: svc,
-		fileTreePanel: newFileTreePanel(ctx, svc),
-		spinner:       sp,
+		ctx:            ctx,
+		list:           l,
+		volumeService:  svc,
+		panels:         []panel.Panel{newFileTreePanel(ctx, svc)},
+		activePanelIdx: 0,
+		spinner:        sp,
 	}
+}
+
+func (s *Section) Init() tea.Cmd {
+	selected := s.list.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	vItem, ok := selected.(volumeItem)
+	if !ok {
+		return nil
+	}
+	return s.activePanel().Init(vItem.volume.Name)
 }
 
 // SetSize sets dimensions.
@@ -106,19 +116,24 @@ func (s *Section) SetSize(width, height int) {
 	s.width = width
 	s.height = height
 
+	// Account for details menu height
+	menuHeight := lipgloss.Height(s.detailsMenu())
+	menuX, menuY := theme.Tab.GetFrameSize()
+
+	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if s.activePanel != nil {
-		listWidth := int(float64(width) * listSplitRatio)
-		detailWidth := width - listWidth
+	// Panel Style
+	panelX, panelY := theme.NoBorders.GetFrameSize()
 
-		s.list.SetSize(listWidth-listX, height-listY)
-		s.viewport.Width = detailWidth - listX
-		s.viewport.Height = height - listY
-		s.activePanel.SetSize(s.viewport.Width, s.viewport.Height)
-	} else {
-		s.list.SetSize(width-listX, height-listY)
-	}
+	listWidth := int(float64(width) * theme.SplitRatio)
+	detailWidth := width - listWidth
+
+	s.list.SetSize(listWidth-listX, height-listY)
+	s.panelWidth = detailWidth - panelX - menuX
+	// TODO: Figure out the + 1
+	s.panelHeight = height - menuHeight - menuY - panelY + 1
+	s.activePanel().SetSize(s.panelWidth, s.panelHeight)
 }
 
 // Update handles messages.
@@ -155,10 +170,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		if s.activePanel != nil {
-			return s.activePanel.Update(msg)
-		}
-		return nil
+		return s.activePanel().Update(msg)
 	case volumesPrunedMsg:
 		if msg.err != nil {
 			return func() tea.Msg {
@@ -207,25 +219,14 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 
 		switch {
-		case key.Matches(msg, keys.Keys.FileTree):
-			if s.activePanel == s.fileTreePanel {
-				cmd := s.activePanel.Close()
-				s.activePanel = nil
-				return cmd
-			}
-
-			selected := s.list.SelectedItem()
-			if selected == nil {
-				return nil
-			}
-			vItem, ok := selected.(volumeItem)
-			if !ok {
-				return nil
-			}
-
-			s.loading = true
-			s.activePanel = s.fileTreePanel
-			return tea.Batch(s.spinner.Tick, s.fileTreePanel.Init(vItem.volume.Name))
+		case key.Matches(msg, keys.Keys.PanelNext):
+			currentPanel := s.activePanel()
+			s.activePanelIdx = (s.activePanelIdx + 1) % len(s.panels)
+			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
+		case key.Matches(msg, keys.Keys.PanelPrev):
+			currentPanel := s.activePanel()
+			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
+			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateVolumesCmd())
@@ -236,7 +237,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			return tea.Batch(listCmd, s.clearDetails())
+			return tea.Batch(listCmd, s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
 			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
@@ -249,9 +250,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
-	if s.activePanel != nil {
-		cmds = append(cmds, s.activePanel.Update(msg))
-	}
+	cmds = append(cmds, s.activePanel().Update(msg))
 
 	return tea.Batch(cmds...)
 }
@@ -270,41 +269,58 @@ func (s *Section) View() string {
 		Width(s.list.Width()).
 		Render(listContent)
 
-	if s.activePanel == nil {
-		return listView
-	}
+	detailContent := s.activePanel().View()
 
-	detailContent := s.activePanel.View()
-	detailView := theme.ListStyle.
-		Width(s.viewport.Width).
-		Height(s.viewport.Height).
+	details := theme.NoBorders.
+		Width(s.panelWidth).
+		Height(s.panelHeight).
 		Render(detailContent)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		listView,
+		lipgloss.JoinVertical(lipgloss.Top, s.detailsMenu(), details),
+	)
 }
 
-// Reset reset internal state to when a component is first initialized.
+func (s *Section) detailsMenu() string {
+	sectionsMenu := make([]string, 0, len(s.panels))
+	for idx, p := range s.panels {
+		if idx == s.activePanelIdx {
+			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
+		} else {
+			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
+		}
+	}
+
+	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
+	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, s.panelWidth-lipgloss.Width(detailsMenu))))
+
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
+}
+
+// Reset resets internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
 	s.isFilter = false
-	s.viewport.SetContent("")
-	var cmd tea.Cmd
-	if s.activePanel != nil {
-		cmd = s.activePanel.Close()
-		s.activePanel = nil
-	}
+	cmd := s.activePanel().Close()
 	s.SetSize(s.width, s.height)
 	return cmd
 }
 
-func (s *Section) clearDetails() tea.Cmd {
-	var cmd tea.Cmd
-	if s.activePanel != nil {
-		cmd = s.activePanel.Close()
-		s.activePanel = nil
+func (s *Section) activePanel() panel.Panel {
+	return s.panels[s.activePanelIdx]
+}
+
+func (s *Section) updateActivePanel() tea.Cmd {
+	selected := s.list.SelectedItem()
+	if selected == nil {
+		return nil
 	}
-	s.SetSize(s.width, s.height)
-	s.viewport.SetContent("")
-	return cmd
+	vItem, ok := selected.(volumeItem)
+	if !ok {
+		return nil
+	}
+	return s.activePanel().Init(vItem.volume.Name)
 }
 
 func (s *Section) updateVolumesCmd() tea.Cmd {

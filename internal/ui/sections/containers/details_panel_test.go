@@ -6,8 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
@@ -25,30 +23,8 @@ func TestDetailsPanelInitReturnsCmd(t *testing.T) {
 
 	msg := cmd()
 
-	batch, ok := msg.(tea.BatchMsg)
-	if !ok {
-		t.Fatal("Init() not returned BatchMsg")
-	}
-
-	details := false
-	extendCmd := false
-
-	for _, cmd := range batch {
-		msg := cmd()
-		switch msg.(type) {
-		case detailsMsg:
-			details = true
-		case message.AddContextualKeyBindingsMsg:
-			extendCmd = true
-		}
-	}
-
-	if !details {
-		t.Fatal("Init() not returned detailsMsg  msg")
-	}
-
-	if !extendCmd {
-		t.Fatal("Init() not returned AddContextualKeyBindingsMsg msg")
+	if _, ok := msg.(detailsMsg); !ok {
+		t.Fatalf("Init() cmd should return detailsMsg, got %T", msg)
 	}
 }
 
@@ -57,31 +33,22 @@ func TestDetailsPanelUpdateSetsContent(t *testing.T) {
 	dp.SetSize(100, 100)
 
 	cmd := dp.Init("abc123def456")
-
 	msg := cmd()
 
-	batch, ok := msg.(tea.BatchMsg)
+	dm, ok := msg.(detailsMsg)
 	if !ok {
-		t.Fatal("Init() not returned BatchMsg")
+		t.Fatalf("Init() cmd should return detailsMsg, got %T", msg)
 	}
 
-	for _, cmd := range batch {
-		msg := cmd()
-		switch msg.(type) {
-		case detailsMsg:
-			cmd := dp.Update(msg)
-
-			if cmd != nil {
-				t.Errorf("Update should return nil on success, got %v", cmd)
-			}
-			if dp.View() == "" {
-				t.Error("Update should set content")
-			}
-			if !strings.Contains(dp.View(), "nginx-proxy") {
-				t.Errorf("content should contain container name, got: %q", dp.View())
-			}
-		case message.AddContextualKeyBindingsMsg:
-		}
+	updateCmd := dp.Update(dm)
+	if updateCmd != nil {
+		t.Errorf("Update should return nil on success, got %v", updateCmd)
+	}
+	if dp.View() == "" {
+		t.Error("Update should set content")
+	}
+	if !strings.Contains(dp.View(), "nginx-proxy") {
+		t.Errorf("content should contain container name, got: %q", dp.View())
 	}
 }
 

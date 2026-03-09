@@ -99,6 +99,10 @@ func NewStatsPanel(ctx context.Context, svc client.ContainerService) panel.Panel
 	}
 }
 
+func (s *statsPanel) Name() string {
+	return "Stats"
+}
+
 func (s *statsPanel) Init(containerID string) tea.Cmd {
 	return s.startSession(containerID)
 }

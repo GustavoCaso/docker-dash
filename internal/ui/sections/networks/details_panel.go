@@ -6,14 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
-	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -29,7 +26,11 @@ func newDetailsPanel() panel.Panel {
 
 func (d *detailsPanel) Init(content string) tea.Cmd {
 	d.viewport.SetContent(content)
-	return d.extendHelpCmd()
+	return nil
+}
+
+func (d *detailsPanel) Name() string {
+	return "Details"
 }
 
 func (d *detailsPanel) Update(msg tea.Msg) tea.Cmd {
@@ -44,21 +45,12 @@ func (d *detailsPanel) View() string {
 
 func (d *detailsPanel) Close() tea.Cmd {
 	d.viewport.SetContent("")
-	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
+	return nil
 }
 
 func (d *detailsPanel) SetSize(width, height int) {
 	d.viewport.Width = width
 	d.viewport.Height = height
-}
-
-func (d *detailsPanel) extendHelpCmd() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			keys.Keys.ScrollUp,
-			keys.Keys.ScrollDown,
-		}}
-	}
 }
 
 const shortIDLen = 12
@@ -70,9 +62,6 @@ func formatNetworkDetails(n client.Network) string {
 	}
 
 	var content strings.Builder
-
-	fmt.Fprintf(&content, "Network: %s\n", n.Name)
-	content.WriteString("═══════════════════════\n\n")
 
 	label := theme.DetailLabelStyle
 	value := theme.DetailValueStyle

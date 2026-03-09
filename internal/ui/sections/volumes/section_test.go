@@ -25,7 +25,7 @@ func newModel() volumeSectionModel {
 	return volumeSectionModel{section: section}
 }
 
-func (m volumeSectionModel) Init() tea.Cmd { return nil }
+func (m volumeSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m volumeSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
@@ -50,49 +50,18 @@ func TestVolumeReset(t *testing.T) {
 	model := newModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "postgres_data")
-	// Open file tree on the selected volume (postgres_data)
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
-	waitFor(t, tm, "pgdata")
 
 	cmd := model.Reset()
 
-	if cmd == nil {
-		t.Error("Reset() should return non-nil cmd when activePanel was set")
-	}
-
-	view := model.View()
-
-	if strings.Contains(view, "pgdata") {
-		t.Errorf("Reset should close the file tree panel. Found: %s", view)
+	if cmd != nil {
+		t.Error("Reset() should return nil cmd")
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestResetClearsActivePanelAndFlags(t *testing.T) {
-	c := client.NewMockClient()
-	volumes, _ := c.Volumes().List(context.Background())
-	s := New(context.Background(), volumes, c.Volumes())
-	s.SetSize(120, 40)
-
-	s.activePanel = s.fileTreePanel
-	s.isFilter = true
-
-	cmd := s.Reset()
-
-	if s.activePanel != nil {
-		t.Error("Reset() should set activePanel to nil")
-	}
-	if s.isFilter {
-		t.Error("Reset() should set isFilter to false")
-	}
-	if cmd == nil {
-		t.Error("Reset() should return non-nil cmd when activePanel was set")
-	}
-}
-
-func TestResetWithNoActivePanelReturnsNilCmd(t *testing.T) {
+func TestResetClearsFlags(t *testing.T) {
 	c := client.NewMockClient()
 	volumes, _ := c.Volumes().List(context.Background())
 	s := New(context.Background(), volumes, c.Volumes())
@@ -102,14 +71,11 @@ func TestResetWithNoActivePanelReturnsNilCmd(t *testing.T) {
 
 	cmd := s.Reset()
 
-	if s.activePanel != nil {
-		t.Error("Reset() should leave activePanel as nil when it was already nil")
-	}
 	if s.isFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
 	if cmd != nil {
-		t.Error("Reset() should return nil cmd when no activePanel was set")
+		t.Error("Reset() should return nil cmd from activePanel.Close()")
 	}
 }
 

@@ -75,6 +75,7 @@ CLI flags take precedence over values in the config file.
 |------------|--------------------|
 | `← / →`    | Switch section     |
 | `↑ / ↓`    | Move up/down       |
+|`shift+← / shift+→`    | Switch panels     |
 | `j / k`    | Scroll down/up     |
 | `/`        | Filter             |
 | `?`        | Toggle help        |
@@ -84,22 +85,16 @@ CLI flags take precedence over values in the config file.
 
 | Key        | Action                         |
 |------------|--------------------------------|
-| `d`        | Container info                 |
 | `D`        | Delete container               |
 | `P`        | Prune unused container         |
-| `l`        | View logs                      |
 | `s`        | Start/stop                     |
-| `S`        | Stats                          |
 | `ctrl+R`   | Restart                        |
-| `e`        | Exec into container            |
-| `t`        | Show files                     |
 
 **Images**
 
 | Key        | Action                  |
 |------------|-------------------------|
 | `d`        | Delete image            |
-| `l`        | Show layers             |
 | `P`        | Prune all unused images          |
 | `c`        | Create and run container|
 
@@ -109,13 +104,11 @@ CLI flags take precedence over values in the config file.
 |------------|--------------|
 | `d`        | Delete volume|
 | `P`        | Prune all unused volumes          |
-| `t`        | Show files   |
 
 **Networks**
 
 | Key        | Action         |
 |------------|----------------|
-| `d`        | Network details|
 | `P`        | Prune unused networks          |
 | `D`        | Delete network |
 

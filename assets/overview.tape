@@ -17,30 +17,19 @@ Type "?"
 Sleep 3
 Type "?"
 
-Down@500ms 2
-Sleep 1
-Type "l"
-Sleep 5
+Type "d"
+Sleep 3
+Type "n"
 
 Right@500ms 1
 Sleep 3
-Type "?"
+Type "j"
+Type "j"
+Type "j"
 Sleep 2
-Down 1
-Type "l"
-Sleep 4
-Type "t"
-Sleep 10
-Type@500ms "j"
-Type@500ms "j"
-Type@500ms "j"
 Sleep 5
-Type "?"
+Right@500ms 2
 Sleep 5
-Type "?"
-Sleep 5
-Type "S"
-Sleep 10
 
 Hide
 Ctrl+C

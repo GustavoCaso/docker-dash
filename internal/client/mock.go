@@ -354,6 +354,10 @@ func newMockImageService() *mockImageService {
 				Created:  now.Add(-24 * time.Hour),
 				Dangling: false,
 				UsedBy:   []string{"abc123def456"},
+				Layers: []Layer{{
+					Command: "ngnix run",
+				},
+				},
 			},
 			{
 				ID:       "sha256:node456",

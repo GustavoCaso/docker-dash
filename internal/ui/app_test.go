@@ -40,52 +40,36 @@ func TestExecPanel(t *testing.T) {
 	// Navigate to first container (should be running)
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 
-	// Press 'e' to open exec panel
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	// Navigate to exec panel using shift+right (panels: details=0, logs=1, stats=2, filetree=3, exec=4)
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 
 	// Wait for the exec input prompt to appear
 	waitForString(t, tm, "$")
 
-	// Close exec panel and quit
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestContainerStatsOnStoppedContainer(t *testing.T) {
+func TestContainerSwitchSectionResetsPanel(t *testing.T) {
 	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch to Containers view
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	waitForString(t, tm, "nginx-proxy")
-	// Navigate to old-container (stopped, last in list)
+	// Select a container and navigate to logs panel
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Try to open stats on stopped container
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
-	waitForString(t, tm, "Container is not running")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestContainerLogsOnStoppedContainer(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
-	waitForString(t, tm, "Images")
-	// Switch to Containers view
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
+	waitForString(t, tm, "Starting application")
+	// Switch away and back - "Starting application" should disappear as panel is closed
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
-	waitForString(t, tm, "nginx-proxy")
-	// Navigate to old-container (stopped, last in list)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Try to open stats on stopped container
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-	waitForString(t, tm, "Container is not running")
+	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
+	waitFor(t, tm, func(b []byte) bool {
+		return !strings.Contains(string(b), "Starting application")
+	})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -94,36 +78,11 @@ func TestSwitchingSectionResetActiveView(t *testing.T) {
 	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
-	// Switch to Containers view
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-	waitForString(t, tm, "Layers")
-	// Swicth section
-	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
-	// Swicth back
-	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
-	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "Layers")
-	})
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestSwitchingSectionResetContainersActiveView(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
-	waitForString(t, tm, "Images")
-	// Switch to Containers view
-	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
-	waitForString(t, tm, "nginx-proxy")
-	// Select a container and open logs panel
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-	waitForString(t, tm, "Starting application")
-	// Switch away and back
+	// Switch section and back
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
 	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "Starting application")
+		return !strings.Contains(string(b), "Containers")
 	})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
@@ -137,14 +96,11 @@ func TestSwitchingSectionResetVolumesActiveView(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	waitForString(t, tm, "postgres_data")
-	// Open file tree panel
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
-	waitForString(t, tm, "pgdata")
 	// Switch away and back
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
 	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "pgdata")
+		return !strings.Contains(string(b), "Networks")
 	})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
@@ -159,14 +115,11 @@ func TestSwitchingSectionResetNetworksActiveView(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	waitForString(t, tm, "bridge")
-	// Open details panel
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	waitForString(t, tm, "Network:")
 	// Switch away and back
 	tm.Send(tea.KeyMsg{Type: tea.KeyLeft})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRight})
 	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "Network:")
+		return !strings.Contains(string(b), "Volumes")
 	})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))

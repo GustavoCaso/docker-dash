@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
@@ -35,8 +33,12 @@ func NewLayersPanel(ctx context.Context, client client.ImageService) panel.Panel
 	}
 }
 
+func (l *layersPanel) Name() string {
+	return "Layers"
+}
+
 func (l *layersPanel) Init(imageID string) tea.Cmd {
-	return tea.Batch(l.fetchCmd(imageID), l.extendHelpCmd())
+	return l.fetchCmd(imageID)
 }
 
 func (l *layersPanel) Update(msg tea.Msg) tea.Cmd {
@@ -63,7 +65,7 @@ func (l *layersPanel) View() string {
 
 func (l *layersPanel) Close() tea.Cmd {
 	l.viewport.SetContent("")
-	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
+	return nil
 }
 
 func (l *layersPanel) SetSize(width, height int) {
@@ -86,10 +88,6 @@ func (l *layersPanel) fetchCmd(imageID string) tea.Cmd {
 func formatDetails(img client.Image) string {
 	var content strings.Builder
 
-	// Header
-	fmt.Fprintf(&content, "Layers for %s:%s\n", img.Repo, img.Tag)
-	content.WriteString("═══════════════════════\n\n")
-
 	const maxLayerCmdLen = 50 // max chars to show for a layer command
 	if len(img.Layers) == 0 {
 		content.WriteString("No layer information available\n")
@@ -104,13 +102,4 @@ func formatDetails(img client.Image) string {
 	}
 
 	return content.String()
-}
-
-func (l *layersPanel) extendHelpCmd() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			keys.Keys.ScrollUp,
-			keys.Keys.ScrollDown,
-		}}
-	}
 }

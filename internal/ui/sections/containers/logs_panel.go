@@ -46,6 +46,10 @@ func (l *logsPanel) Init(containerID string) tea.Cmd {
 	return tea.Batch(l.init(containerID), l.extendHelpCmd())
 }
 
+func (l *logsPanel) Name() string {
+	return "Logs"
+}
+
 func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case logsSessionStartedMsg:
@@ -85,6 +89,7 @@ func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
 func (l *logsPanel) View() string {
 	return l.viewport.View()
 }
+
 func (l *logsPanel) Close() tea.Cmd {
 	if l.logsSession != nil {
 		l.logsSession.Close()
@@ -95,6 +100,7 @@ func (l *logsPanel) Close() tea.Cmd {
 
 	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
+
 func (l *logsPanel) SetSize(width, height int) {
 	l.viewport.Width = width
 	l.viewport.Height = height

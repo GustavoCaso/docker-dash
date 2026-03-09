@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -33,8 +31,12 @@ func NewDetailsPanel(ctx context.Context, svc client.ContainerService) panel.Pan
 	return &detailsPanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0)}
 }
 
+func (d *detailsPanel) Name() string {
+	return "Details"
+}
+
 func (d *detailsPanel) Init(containerID string) tea.Cmd {
-	return tea.Batch(d.fetchCmd(containerID), d.extendHelpCmd())
+	return d.fetchCmd(containerID)
 }
 
 func (d *detailsPanel) Update(msg tea.Msg) tea.Cmd {
@@ -61,7 +63,7 @@ func (d *detailsPanel) View() string {
 
 func (d *detailsPanel) Close() tea.Cmd {
 	d.viewport.SetContent("")
-	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
+	return nil
 }
 
 func (d *detailsPanel) SetSize(width, height int) {
@@ -174,13 +176,4 @@ func formatDetails(c *client.Container) string {
 	}
 
 	return b.String()
-}
-
-func (d *detailsPanel) extendHelpCmd() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			keys.Keys.ScrollUp,
-			keys.Keys.ScrollDown,
-		}}
-	}
 }

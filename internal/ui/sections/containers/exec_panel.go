@@ -68,6 +68,10 @@ func (e *execPanel) Init(containerID string) tea.Cmd {
 	)
 }
 
+func (e *execPanel) Name() string {
+	return "Exec"
+}
+
 func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case execSessionStartedMsg:
@@ -126,11 +130,6 @@ func (e *execPanel) SetSize(width, height int) {
 
 func (e *execPanel) handleKeyInput(msg tea.KeyMsg) tea.Cmd {
 	switch {
-	case key.Matches(msg, keys.Keys.Esc):
-		return tea.Batch(
-			e.closeSessionCmd(),
-			func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} },
-		)
 	case key.Matches(msg, keys.Keys.Enter):
 		if e.session == nil {
 			return nil
@@ -200,12 +199,6 @@ func (e *execPanel) startSession(containerID string) tea.Cmd {
 	}
 }
 
-func (e *execPanel) closeSessionCmd() tea.Cmd {
-	return func() tea.Msg {
-		return execCloseMsg{}
-	}
-}
-
 func (e *execPanel) readOutput() tea.Cmd {
 	session := e.session
 	if session == nil {
@@ -224,7 +217,6 @@ func (e *execPanel) readOutput() tea.Cmd {
 func (e *execPanel) extendHelpCmd() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "exit")),
 			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send command")),
 			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "history up")),
 			key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "history down")),

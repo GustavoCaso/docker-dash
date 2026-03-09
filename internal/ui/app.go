@@ -130,12 +130,20 @@ func (m *model) Init() tea.Cmd {
 		}
 	}
 
-	if m.refreshInterval > 0 {
-		return tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
-			return autoRefreshMsg{}
-		})
+	cmds := []tea.Cmd{
+		m.imageSection.Init(),
+		m.containerSection.Init(),
+		m.volumeSection.Init(),
+		m.networkSection.Init(),
 	}
-	return nil
+
+	if m.refreshInterval > 0 {
+		cmds = append(cmds, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
+			return autoRefreshMsg{}
+		}))
+	}
+
+	return tea.Batch(cmds...)
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -238,13 +246,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Left):
-			section := m.activeSection()
+			// section := m.activeSection()
 			m.header.MoveLeft()
-			return m, section.Reset()
+			return m, nil
 		case key.Matches(msg, m.keys.Right):
-			section := m.activeSection()
+			// section := m.activeSection()
 			m.header.MoveRight()
-			return m, section.Reset()
+			return m, nil
 		case key.Matches(msg, m.keys.Refresh):
 			return m.forwardMessageToActive(msg)
 		case key.Matches(msg, m.keys.RefreshAll):

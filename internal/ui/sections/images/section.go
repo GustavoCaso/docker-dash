@@ -3,11 +3,11 @@ package images
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -18,8 +18,6 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
-
-const listSplitRatio = 0.4
 
 // imagesLoadedMsg is sent when images have been loaded asynchronously.
 type imagesLoadedMsg struct {
@@ -63,17 +61,17 @@ func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 
 // Section wraps bubbles/list.
 type Section struct {
-	ctx              context.Context
-	list             list.Model
-	viewport         viewport.Model
-	imageService     client.ImageService
-	containerService client.ContainerService
-	layersPanel      panel.Panel
-	activePanel      panel.Panel
-	width, height    int
-	loading          bool
-	isFilter         bool
-	spinner          spinner.Model
+	ctx                          context.Context
+	list                         list.Model
+	imageService                 client.ImageService
+	containerService             client.ContainerService
+	panels                       []panel.Panel
+	activePanelIdx               int
+	originalWidth, orginalHeight int
+	panelWidth, panelHeight      int
+	loading                      bool
+	isFilter                     bool
+	spinner                      spinner.Model
 }
 
 // New creates a new image section.
@@ -95,37 +93,51 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 	il := &Section{
 		ctx:              ctx,
 		list:             l,
-		viewport:         viewport.New(0, 0),
 		imageService:     client.Images(),
 		containerService: client.Containers(),
-		layersPanel:      NewLayersPanel(ctx, client.Images()),
+		panels:           []panel.Panel{NewLayersPanel(ctx, client.Images())},
+		activePanelIdx:   0,
 		spinner:          sp,
 	}
 
 	return il
 }
 
+func (s *Section) Init() tea.Cmd {
+	selected := s.list.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	item, ok := selected.(imageItem)
+	if !ok {
+		return nil
+	}
+	return s.panels[s.activePanelIdx].Init(item.ID())
+}
+
 // SetSize sets dimensions.
 func (s *Section) SetSize(width, height int) {
-	s.width = width
-	s.height = height
+	s.originalWidth = width
+	s.orginalHeight = height
+
+	// Account for details menu height
+	menuHeight := lipgloss.Height(s.detailsMenu())
+	menuX, menuY := theme.Tab.GetFrameSize()
 
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
-	if s.activePanel != nil {
-		// Split view: 40% list, 60% details
-		listWidth := int(float64(width) * listSplitRatio)
-		detailWidth := width - listWidth
+	// Panel Style
+	panelX, panelY := theme.NoBorders.GetFrameSize()
 
-		s.list.SetSize(listWidth-listX, height-listY)
-		s.viewport.Width = detailWidth - listX
-		s.viewport.Height = height - listY
-		s.activePanel.SetSize(s.viewport.Width, s.viewport.Height)
-	} else {
-		// Full width list when viewport is hidden
-		s.list.SetSize(width-listX, height-listY)
-	}
+	listWidth := int(float64(width) * theme.SplitRatio)
+	detailWidth := width - listWidth
+
+	s.list.SetSize(listWidth-listX, height-listY)
+	s.panelWidth = detailWidth - panelX - menuX
+	// TODO: Figure out the + 1
+	s.panelHeight = height - menuHeight - menuY - panelY + 1
+	s.activePanel().SetSize(s.panelWidth, s.panelHeight)
 }
 
 // Update handles messages.
@@ -231,22 +243,14 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 
 		switch {
-		case key.Matches(msg, keys.Keys.ImageLayers):
-			if s.activePanel == s.layersPanel {
-				cmd := s.layersPanel.Close()
-				s.activePanel = nil
-				return cmd
-			}
-			selected := s.list.SelectedItem()
-			if selected == nil {
-				return nil
-			}
-			item, ok := selected.(imageItem)
-			if !ok {
-				return nil
-			}
-			s.activePanel = s.layersPanel
-			return s.layersPanel.Init(item.ID())
+		case key.Matches(msg, keys.Keys.PanelNext):
+			currentPanel := s.activePanel()
+			s.activePanelIdx = (s.activePanelIdx + 1) % len(s.panels)
+			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
+		case key.Matches(msg, keys.Keys.PanelPrev):
+			currentPanel := s.activePanel()
+			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
+			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
@@ -259,7 +263,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			return tea.Batch(listCmd, s.clearDetails())
+			return tea.Batch(listCmd, s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
 			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd
@@ -268,17 +272,15 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
-	// Send the remaining of msg to both panels
-	if s.activePanel != nil {
-		cmds = append(cmds, s.activePanel.Update(msg))
-	}
+	// Send the remaining of msg to active panel
+	cmds = append(cmds, s.activePanel().Update(msg))
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the list.
 func (s *Section) View() string {
-	s.SetSize(s.width, s.height)
+	s.SetSize(s.originalWidth, s.orginalHeight)
 
 	listContent := s.list.View()
 
@@ -292,32 +294,41 @@ func (s *Section) View() string {
 		Width(s.list.Width()).
 		Render(listContent)
 
-	// Only show list when layers is not enabled
-	if s.activePanel == nil {
-		return listView
-	}
+	detailContent := s.activePanel().View()
 
-	detailContent := s.activePanel.View()
-	s.viewport.SetContent(detailContent)
-
-	detailView := theme.ListStyle.
-		Width(s.viewport.Width).
-		Height(s.viewport.Height).
+	details := theme.NoBorders.
+		Width(s.panelWidth).
+		Height(s.panelHeight).
 		Render(detailContent)
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, detailView)
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		listView,
+		lipgloss.JoinVertical(lipgloss.Top, s.detailsMenu(), details),
+	)
+}
+
+func (s *Section) detailsMenu() string {
+	sectionsMenu := make([]string, 0, len(s.panels))
+	for idx, p := range s.panels {
+		if idx == s.activePanelIdx {
+			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
+		} else {
+			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
+		}
+	}
+
+	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
+	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, s.panelWidth-lipgloss.Width(detailsMenu))))
+
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
 }
 
 // Reset reset internal state to when a component isfirst initialized.
 func (s *Section) Reset() tea.Cmd {
-	var cmd tea.Cmd
 	s.isFilter = false
-	s.viewport.SetContent("")
-	if s.activePanel != nil {
-		cmd = s.activePanel.Close()
-		s.activePanel = nil
-	}
-	s.SetSize(s.width, s.height)
+	cmd := s.activePanel().Close()
+	s.SetSize(s.originalWidth, s.orginalHeight)
 	return cmd
 }
 
@@ -390,17 +401,6 @@ func (s *Section) createContainerCmdAndRun() tea.Cmd {
 	}
 }
 
-func (s *Section) clearDetails() tea.Cmd {
-	var cmd tea.Cmd
-	if s.activePanel != nil {
-		cmd = s.activePanel.Close()
-		s.activePanel = nil
-	}
-	s.viewport.SetContent("")
-
-	return cmd
-}
-
 func (s *Section) pruneImagesCmd() tea.Cmd {
 	ctx, svc := s.ctx, s.imageService
 	return func() tea.Msg {
@@ -438,4 +438,20 @@ func (s *Section) confirmImageDelete() tea.Cmd {
 			OnConfirm: deleteCmd,
 		}
 	}
+}
+
+func (s *Section) activePanel() panel.Panel {
+	return s.panels[s.activePanelIdx]
+}
+
+func (s *Section) updateActivePanel() tea.Cmd {
+	selected := s.list.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	item, ok := selected.(imageItem)
+	if !ok {
+		return nil
+	}
+	return s.activePanel().Init(item.ID())
 }
