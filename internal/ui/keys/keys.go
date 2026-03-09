@@ -16,22 +16,18 @@ type KeyMap struct {
 	Refresh    key.Binding
 	RefreshAll key.Binding
 	Delete     key.Binding
-	FileTree   key.Binding
 	Filter     key.Binding
 
-	ImageLayers           key.Binding
 	CreateAndRunContainer key.Binding
 
-	ContainerInfo      key.Binding
 	ContainerDelete    key.Binding
-	ContainerLogs      key.Binding
 	ContainerStartStop key.Binding
 	ContainerRestart   key.Binding
-	ContainerExec      key.Binding
-	ContainerStats     key.Binding
 
-	NetworkInfo   key.Binding
 	NetworkDelete key.Binding
+
+	PanelNext key.Binding
+	PanelPrev key.Binding
 
 	Prune key.Binding
 
@@ -39,8 +35,23 @@ type KeyMap struct {
 	Quit key.Binding
 }
 
+var navigation = key.NewBinding(
+	key.WithKeys("↑↓←→"),
+	key.WithHelp("↑↓←→", "navigation"),
+)
+
+var scroll = key.NewBinding(
+	key.WithKeys("j/k"),
+	key.WithHelp("j/k", "scroll"),
+)
+
+var panelNavigation = key.NewBinding(
+	key.WithKeys("shift+→/shift+←"),
+	key.WithHelp("shift+→/shift+←", "panels"),
+)
+
 func (k *KeyMap) navigationKeys() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Up, k.Down, k.Filter}
+	return []key.Binding{navigation, scroll, panelNavigation, k.Filter}
 }
 
 var Keys = &KeyMap{
@@ -88,33 +99,17 @@ var Keys = &KeyMap{
 		key.WithKeys("d"),
 		key.WithHelp("d", "delete"),
 	),
-	FileTree: key.NewBinding(
-		key.WithKeys("t"),
-		key.WithHelp("t", "show files"),
-	),
 	Filter: key.NewBinding(
 		key.WithKeys("/"),
 		key.WithHelp("/", "filter"),
-	),
-	ImageLayers: key.NewBinding(
-		key.WithKeys("l"),
-		key.WithHelp("l", "show layer"),
 	),
 	CreateAndRunContainer: key.NewBinding(
 		key.WithKeys("c"),
 		key.WithHelp("c", "create and run container"),
 	),
-	ContainerInfo: key.NewBinding(
-		key.WithKeys("d"),
-		key.WithHelp("d", "info"),
-	),
 	ContainerDelete: key.NewBinding(
 		key.WithKeys("D"),
 		key.WithHelp("D", "delete container"),
-	),
-	ContainerLogs: key.NewBinding(
-		key.WithKeys("l"),
-		key.WithHelp("l", "logs"),
 	),
 	ContainerStartStop: key.NewBinding(
 		key.WithKeys("s"),
@@ -124,21 +119,17 @@ var Keys = &KeyMap{
 		key.WithKeys("ctrl+R"),
 		key.WithHelp("ctrl+R", "restart container"),
 	),
-	ContainerExec: key.NewBinding(
-		key.WithKeys("e"),
-		key.WithHelp("e", "exec into container"),
-	),
-	ContainerStats: key.NewBinding(
-		key.WithKeys("S"),
-		key.WithHelp("S", "container stats"),
-	),
-	NetworkInfo: key.NewBinding(
-		key.WithKeys("d"),
-		key.WithHelp("d", "info"),
-	),
 	NetworkDelete: key.NewBinding(
 		key.WithKeys("D"),
 		key.WithHelp("D", "delete network"),
+	),
+	PanelNext: key.NewBinding(
+		key.WithKeys("shift+right"),
+		key.WithHelp("shift+→", "next panel"),
+	),
+	PanelPrev: key.NewBinding(
+		key.WithKeys("shift+left"),
+		key.WithHelp("shift+←", "prev panel"),
 	),
 	Prune: key.NewBinding(
 		key.WithKeys("P"),
@@ -177,24 +168,14 @@ func (v *ViewKeyMap) DisableContextual() {
 	v.contextualEnabled = false
 }
 
-func (k KeyMap) HeaderKeyMap() *ViewKeyMap {
-	return &ViewKeyMap{
-		short: []key.Binding{k.Left, k.Right, k.Help, k.Quit},
-		full: [][]key.Binding{
-			{k.Left, k.Right},
-			{k.Refresh, k.RefreshAll, k.Help, k.Quit},
-		},
-	}
-}
-
 func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
-			{k.Left, k.Right},
+			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
-			{k.Delete, k.ImageLayers, k.CreateAndRunContainer},
-			{k.Prune, k.Filter, k.Help, k.Quit},
+			{k.Delete, k.CreateAndRunContainer, k.Prune, k.Filter},
+			{k.Help, k.Quit},
 		},
 	}
 }
@@ -203,11 +184,10 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
-			{k.Left, k.Right},
+			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
-			{k.ContainerDelete, k.ContainerInfo, k.ContainerLogs, k.ContainerStartStop},
-			{k.ContainerStats, k.ContainerRestart, k.ContainerExec, k.FileTree},
-			{k.Prune, k.Filter, k.Help, k.Quit},
+			{k.ContainerDelete, k.ContainerStartStop, k.ContainerRestart, k.Prune},
+			{k.Filter, k.Help, k.Quit},
 		},
 	}
 }
@@ -216,10 +196,10 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
-			{k.Left, k.Right},
+			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
-			{k.Delete, k.FileTree},
-			{k.Prune, k.Filter, k.Help, k.Quit},
+			{k.Delete, k.Prune, k.Filter},
+			{k.Help, k.Quit},
 		},
 	}
 }
@@ -228,10 +208,10 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 	return &ViewKeyMap{
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
-			{k.Left, k.Right},
+			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
-			{k.NetworkInfo, k.NetworkDelete},
-			{k.Prune, k.Filter, k.Help, k.Quit},
+			{k.NetworkDelete, k.Prune, k.Filter},
+			{k.Help, k.Quit},
 		},
 	}
 }

@@ -25,7 +25,7 @@ func newModel() networkSectionModel {
 	return networkSectionModel{section: section}
 }
 
-func (m networkSectionModel) Init() tea.Cmd { return nil }
+func (m networkSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m networkSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
@@ -53,14 +53,14 @@ func TestNetworkListRendersItems(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestNetworkListDetailsToggle(t *testing.T) {
+func TestNetworkListDetailsVisible(t *testing.T) {
+	t.Helper()
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "bridge")
-	// Show details panel
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	waitFor(t, tm, "Network:")
-	// Hide details panel
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+	// Both list and details panel are always visible simultaneously
+	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
+		s := string(b)
+		return strings.Contains(s, "bridge") && strings.Contains(s, "abc123def456")
+	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -92,49 +92,18 @@ func TestNetworkReset(t *testing.T) {
 	model := newModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "bridge")
-	// Details
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	waitFor(t, tm, "Network:")
 
 	cmd := model.Reset()
 
-	if cmd == nil {
-		t.Error("Reset() should return non-nil cmd when activePanel was set")
-	}
-
-	view := model.View()
-
-	if strings.Contains(view, "bridge:") {
-		t.Errorf("Reset should reset viewport. Found: %s", view)
+	if cmd != nil {
+		t.Error("Reset() should return nil cmd")
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestResetClearsActivePanelAndFlags(t *testing.T) {
-	c := client.NewMockClient()
-	networks, _ := c.Networks().List(context.Background())
-	s := New(context.Background(), networks, c.Networks())
-	s.SetSize(120, 40)
-
-	s.activePanel = s.detailsPanel
-	s.isFilter = true
-
-	cmd := s.Reset()
-
-	if s.activePanel != nil {
-		t.Error("Reset() should set activePanel to nil")
-	}
-	if s.isFilter {
-		t.Error("Reset() should set isFilter to false")
-	}
-	if cmd == nil {
-		t.Error("Reset() should return non-nil cmd when activePanel was set")
-	}
-}
-
-func TestResetWithNoActivePanelReturnsNilCmd(t *testing.T) {
+func TestResetClearsFlags(t *testing.T) {
 	c := client.NewMockClient()
 	networks, _ := c.Networks().List(context.Background())
 	s := New(context.Background(), networks, c.Networks())
@@ -144,14 +113,11 @@ func TestResetWithNoActivePanelReturnsNilCmd(t *testing.T) {
 
 	cmd := s.Reset()
 
-	if s.activePanel != nil {
-		t.Error("Reset() should leave activePanel as nil when it was already nil")
-	}
 	if s.isFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
 	if cmd != nil {
-		t.Error("Reset() should return nil cmd when no activePanel was set")
+		t.Error("Reset() should return nil cmd from activePanel.Close()")
 	}
 }
 

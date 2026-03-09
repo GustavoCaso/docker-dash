@@ -25,7 +25,7 @@ func newModel() imageSectionModel {
 	return imageSectionModel{section: section}
 }
 
-func (m imageSectionModel) Init() tea.Cmd { return nil }
+func (m imageSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m imageSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
@@ -53,16 +53,9 @@ func TestImageListRendersItems(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestImageListLayersToggle(t *testing.T) {
+func TestImageListLayersVisible(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx")
-	// Select an image
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Show layers
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-	waitFor(t, tm, "Layers for")
-	// Hide layers
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	waitFor(t, tm, "ngnix run")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -70,23 +63,13 @@ func TestImageListLayersToggle(t *testing.T) {
 func TestImageReset(t *testing.T) {
 	model := newModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx")
-	// Select an image
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Show layers
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-	waitFor(t, tm, "Layers for")
+	// We wait for the image. and layer information
+	waitFor(t, tm, "ngnix run")
 
 	cmd := model.Reset()
 
-	if cmd == nil {
-		t.Error("Reset() should return non-nil cmd when activePanel was set")
-	}
-
-	view := model.View()
-
-	if strings.Contains(view, "Layers for") {
-		t.Errorf("Reset should reset viewport. Found: %s", view)
+	if cmd != nil {
+		t.Error("Reset() should return nil cmd")
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
@@ -134,29 +117,7 @@ func TestImageListRunContainer(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestResetClearsActivePanelAndFlags(t *testing.T) {
-	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	s := New(context.Background(), images, c)
-	s.SetSize(120, 40)
-
-	s.activePanel = s.layersPanel
-	s.isFilter = true
-
-	cmd := s.Reset()
-
-	if s.activePanel != nil {
-		t.Error("Reset() should set activePanel to nil")
-	}
-	if s.isFilter {
-		t.Error("Reset() should set isFilter to false")
-	}
-	if cmd == nil {
-		t.Error("Reset() should return non-nil cmd when activePanel was set")
-	}
-}
-
-func TestResetWithNoActivePanelReturnsNilCmd(t *testing.T) {
+func TestResetClearsFlags(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
 	s := New(context.Background(), images, c)
@@ -166,14 +127,11 @@ func TestResetWithNoActivePanelReturnsNilCmd(t *testing.T) {
 
 	cmd := s.Reset()
 
-	if s.activePanel != nil {
-		t.Error("Reset() should leave activePanel as nil when it was already nil")
-	}
 	if s.isFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
 	if cmd != nil {
-		t.Error("Reset() should return nil cmd when no activePanel was set")
+		t.Error("Reset() should return nil cmd from activePanel.Close()")
 	}
 }
 

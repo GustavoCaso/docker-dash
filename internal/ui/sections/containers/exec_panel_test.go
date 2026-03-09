@@ -110,46 +110,6 @@ func TestExecPanelErrorEmitsBanner(t *testing.T) {
 	}
 }
 
-func TestExecPanelHandleEscEmitsCloseMsg(t *testing.T) {
-	p := newTestExecPanel()
-	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
-	p.input.Focus()
-
-	cmd := p.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	if cmd == nil {
-		t.Fatal("Esc should return a cmd")
-	}
-
-	msg := cmd()
-
-	batch, ok := msg.(tea.BatchMsg)
-	if !ok {
-		t.Fatal("Init() not returned BatchMsg")
-	}
-
-	closeSessionCmd := false
-	clearBindings := false
-
-	for _, cmd := range batch {
-		msg := cmd()
-		switch msg.(type) {
-		case execCloseMsg:
-			closeSessionCmd = true
-		case message.ClearContextualKeyBindingsMsg:
-			clearBindings = true
-		}
-	}
-
-	if !closeSessionCmd {
-		t.Fatal("Update() not returned execCloseMsg msg")
-	}
-
-	if !clearBindings {
-		t.Fatal("Update() not returned ClearContextualKeyBindingsMsg msg")
-	}
-}
-
 func TestExecPanelClearClearsOutput(t *testing.T) {
 	p := newTestExecPanel()
 	pr, pw := io.Pipe()

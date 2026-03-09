@@ -28,6 +28,8 @@ var (
 	Highlight     = lipgloss.Color("#1A365D")
 )
 
+var SplitRatio = 0.3 // fraction of width used by list in split view
+
 // Nerd Font icon constants
 // These require a Nerd Font patched terminal font to display correctly.
 const (
@@ -64,24 +66,10 @@ const (
 
 // Layout constants.
 const (
-	horizontalPadding = 2  // standard horizontal padding for tabs and buttons
-	dockerPadding     = 3  // right padding for Docker icon in header
-	labelColumnWidth  = 16 // fixed width of the detail label column
-)
-
-// Main panel styles.
-var (
-	MainPanelStyle = lipgloss.NewStyle().
-			Background(Background)
-
-	HeaderStyle = lipgloss.NewStyle().
-			Foreground(TextPrimary).
-			Bold(true).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderBottom(true).
-			BorderForeground(Border).
-			MarginBottom(1).
-			PaddingBottom(1)
+	horizontalPadding    = 2  // standard horizontal padding for tabs and buttons
+	dockerPadding        = 3  // right padding for Docker icon in header
+	labelColumnWidth     = 16 // fixed width of the detail label column
+	panelMenuMarginRight = 2  // right margin for panel name menu items
 )
 
 // Header tab bar styles (top navigation).
@@ -114,24 +102,12 @@ var (
 // List item styles.
 var (
 	ListStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder())
-	ListItemStyle = lipgloss.NewStyle().
-			Foreground(TextSecondary).
-			Padding(0, 1)
-
-	ListItemSelectedStyle = lipgloss.NewStyle().
-				Foreground(TextPrimary).
-				Background(Highlight).
-				Bold(true).
-				Padding(0, 1)
+		Border(lipgloss.RoundedBorder())
 )
 
 // Detail panel styles.
 var (
-	DetailStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(Border).
-			Padding(1, horizontalPadding)
+	NoBorders = lipgloss.NewStyle()
 
 	DetailLabelStyle = lipgloss.NewStyle().
 				Foreground(TextMuted).
@@ -139,7 +115,46 @@ var (
 
 	DetailValueStyle = lipgloss.NewStyle().
 				Foreground(TextPrimary)
+
+	PanelMenu = lipgloss.NewStyle().
+			MarginRight(panelMenuMarginRight)
+
+	activeTabBorder = lipgloss.Border{
+		Top:         "─",
+		Bottom:      " ",
+		Left:        "│",
+		Right:       "│",
+		TopLeft:     "╭",
+		TopRight:    "╮",
+		BottomLeft:  "┘",
+		BottomRight: "└",
+	}
+
+	tabBorder = lipgloss.Border{
+		Top:         "─",
+		Bottom:      "─",
+		Left:        "│",
+		Right:       "│",
+		TopLeft:     "╭",
+		TopRight:    "╮",
+		BottomLeft:  "┴",
+		BottomRight: "┴",
+	}
+
+	Tab = lipgloss.NewStyle().
+		Border(tabBorder, true).
+		BorderForeground(lipgloss.Color("white")).
+		Padding(0, 0)
+
+	ActiveTab = Tab.Border(activeTabBorder, true)
+
+	TabGap = Tab.
+		BorderTop(false).
+		BorderLeft(false).
+		BorderRight(false)
 )
+
+//
 
 // Status indicator styles.
 var (
@@ -156,25 +171,6 @@ var (
 
 	StatusPausedStyle = lipgloss.NewStyle().
 				Foreground(StatusPaused)
-)
-
-// Action button styles.
-var (
-	ActionButtonStyle = lipgloss.NewStyle().
-				Foreground(TextSecondary).
-				Background(DockerDark).
-				Padding(0, horizontalPadding).
-				MarginRight(1).
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(Border)
-
-	ActionButtonActiveStyle = lipgloss.NewStyle().
-				Foreground(TextPrimary).
-				Background(DockerBlue).
-				Padding(0, horizontalPadding).
-				MarginRight(1).
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(DockerBlue)
 )
 
 // Status bar styles.

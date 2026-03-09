@@ -30,6 +30,10 @@ func NewFileTreePanel(ctx context.Context, svc client.ContainerService) panel.Pa
 	return &filetreePanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0)}
 }
 
+func (f *filetreePanel) Name() string {
+	return "Files"
+}
+
 func (f *filetreePanel) Init(containerID string) tea.Cmd {
 	return tea.Batch(f.fetchCmd(containerID), f.extendHelpCmd())
 }

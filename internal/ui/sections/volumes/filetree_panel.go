@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
@@ -35,8 +33,12 @@ func newFileTreePanel(ctx context.Context, svc client.VolumeService) panel.Panel
 	}
 }
 
+func (f *fileTreePanel) Name() string {
+	return "Files"
+}
+
 func (f *fileTreePanel) Init(volumeName string) tea.Cmd {
-	return tea.Batch(f.fetchCmd(volumeName), f.extendHelpCmd())
+	return f.fetchCmd(volumeName)
 }
 
 func (f *fileTreePanel) Update(msg tea.Msg) tea.Cmd {
@@ -62,7 +64,7 @@ func (f *fileTreePanel) View() string {
 
 func (f *fileTreePanel) Close() tea.Cmd {
 	f.viewport.SetContent("")
-	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
+	return nil
 }
 
 func (f *fileTreePanel) SetSize(width, height int) {
@@ -79,14 +81,5 @@ func (f *fileTreePanel) fetchCmd(volumeName string) tea.Cmd {
 			return volumeTreeLoadedMsg{error: fmt.Errorf("error getting volume file tree: %s", err.Error())}
 		}
 		return volumeTreeLoadedMsg{fileTree: fileTree}
-	}
-}
-
-func (f *fileTreePanel) extendHelpCmd() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			keys.Keys.ScrollUp,
-			keys.Keys.ScrollDown,
-		}}
 	}
 }

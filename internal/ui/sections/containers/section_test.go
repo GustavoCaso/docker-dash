@@ -26,7 +26,7 @@ func newContainerSectionModel() containerSectionModel {
 	return containerSectionModel{section: section}
 }
 
-func (m containerSectionModel) Init() tea.Cmd { return nil }
+func (m containerSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m containerSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
@@ -68,26 +68,22 @@ func TestContainerListRendersItems(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestContainerListDetailsToggle(t *testing.T) {
+func TestContainerListDetailsVisible(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
-	// Select a container
+	// Select a container - details panel is always shown (it's the default panel)
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Show details
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 	waitFor(t, tm, "Container:")
-	// Hide details
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestContainerListLogsToggle(t *testing.T) {
+func TestContainerListLogsPanel(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Show logs
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	// Navigate to logs panel using shift+right
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 
 	waitFor(t, tm, "Starting application")
 
@@ -100,8 +96,8 @@ func TestContainerReset(t *testing.T) {
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Show logs
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	// Navigate to logs panel
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 
 	waitFor(t, tm, "Starting application")
 
@@ -111,31 +107,22 @@ func TestContainerReset(t *testing.T) {
 		t.Error("Reset() should return non-nil cmd when activePanel was set")
 	}
 
-	view := model.View()
-
-	if strings.Contains(view, "Starting application") {
-		t.Errorf("Reset should reset viewport. Found: %s", view)
-	}
-
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestContainerListLogsClosedOnNavigation(t *testing.T) {
+func TestContainerListPanelNavigation(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-
-	// Open logs on the selected container.
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
-
+	// Default is details panel
+	waitFor(t, tm, "Container:")
+	// Navigate to logs panel using shift+right
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 	waitFor(t, tm, "Starting application")
-
-	// Navigate to a different container must close the panel.
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-
-	waitForNot(t, tm, "Starting application")
-	waitFor(t, tm, "nginx-proxy")
+	// Navigate back to details panel using shift+left
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftLeft})
+	waitFor(t, tm, "Container:")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -170,8 +157,9 @@ func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Open stats on running container
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("S")})
+	// Navigate to stats panel (index 2: details=0, logs=1, stats=2)
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
+	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 	// Both labels appear in the same rendered frame; check them together so the
 	// ANSI compressor (which only diffs changed lines) doesn't swallow one of them.
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
@@ -196,28 +184,25 @@ func TestContainerListRefresh(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestClearDetailsClosesActivePanel(t *testing.T) {
+func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	dockerClient := client.NewMockClient()
 	containers, _ := dockerClient.Containers().List(context.Background())
 	cl := New(context.Background(), containers, dockerClient.Containers())
 	cl.SetSize(120, 40)
 
+	// Navigate to logs panel (index 1)
+	cl.activePanelIdx = 1
+	lp := cl.panels[1].(*logsPanel)
+
 	pr, pw := io.Pipe()
-	lp := cl.logsPanel.(*logsPanel)
 	lp.logsSession = client.NewLogsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
 	lp.logsOutput = "some logs"
-	cl.activePanel = cl.logsPanel
 
-	cl.clearDetails()
+	// Simulate exec close which calls activePanel().Close()
+	cl.activePanel().Close()
 
-	if cl.activePanel != nil {
-		t.Error("clearDetails() should nil out activePanel")
-	}
-	if lp.logsSession != nil {
-		t.Error("clearDetails() should close the logsPanel session")
-	}
 	if lp.logsOutput != "" {
-		t.Errorf("clearDetails() should clear logsOutput, got %q", lp.logsOutput)
+		t.Errorf("Close() should clear logsOutput, got %q", lp.logsOutput)
 	}
 }
 
@@ -233,29 +218,7 @@ func TestContainerListPrune(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestResetClearsActivePanelAndFlags(t *testing.T) {
-	dockerClient := client.NewMockClient()
-	containers, _ := dockerClient.Containers().List(context.Background())
-	cl := New(context.Background(), containers, dockerClient.Containers())
-	cl.SetSize(120, 40)
-
-	cl.activePanel = cl.detailsPanel
-	cl.isFilter = true
-
-	cmd := cl.Reset()
-
-	if cl.activePanel != nil {
-		t.Error("Reset() should set activePanel to nil")
-	}
-	if cl.isFilter {
-		t.Error("Reset() should set isFilter to false")
-	}
-	if cmd == nil {
-		t.Error("Reset() should return non-nil cmd when activePanel was set")
-	}
-}
-
-func TestResetWithNoActivePanelDoesNotPanic(t *testing.T) {
+func TestResetClearsFilterFlag(t *testing.T) {
 	dockerClient := client.NewMockClient()
 	containers, _ := dockerClient.Containers().List(context.Background())
 	cl := New(context.Background(), containers, dockerClient.Containers())
@@ -263,16 +226,10 @@ func TestResetWithNoActivePanelDoesNotPanic(t *testing.T) {
 
 	cl.isFilter = true
 
-	cmd := cl.Reset()
+	cl.Reset()
 
-	if cl.activePanel != nil {
-		t.Error("Reset() should leave activePanel as nil when it was already nil")
-	}
 	if cl.isFilter {
 		t.Error("Reset() should set isFilter to false")
-	}
-	if cmd != nil {
-		t.Error("Reset() should return nil cmd when no activePanel was set")
 	}
 }
 

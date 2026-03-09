@@ -3,6 +3,8 @@ package sections
 import tea "github.com/charmbracelet/bubbletea"
 
 type Section interface {
+	// Initialize Section
+	Init() tea.Cmd
 	// SetSize sets dimensions.
 	SetSize(width, height int)
 	// Update handles messages.
