@@ -26,7 +26,10 @@ Sleep 3
 Type "j"
 Type "j"
 Type "j"
+Type "j"
 Sleep 2
+Type "]"
+Type "]"
 Sleep 5
 Right@500ms 2
 Sleep 5
