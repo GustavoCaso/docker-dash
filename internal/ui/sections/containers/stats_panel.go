@@ -183,6 +183,10 @@ func (s *statsPanel) Close() tea.Cmd {
 		s.session.Close()
 		s.session = nil
 	}
+	s.cpuChart.ClearAllData()
+	s.memChart.ClearAllData()
+	s.ioChart.ClearAllData()
+	s.networkChart.ClearAllData()
 	s.lastView = ""
 
 	return nil

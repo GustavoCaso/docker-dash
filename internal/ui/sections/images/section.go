@@ -261,9 +261,10 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.CreateAndRunContainer):
 			return s.createContainerCmdAndRun()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
+			currentPanel := s.activePanel()
 			var listCmd tea.Cmd
 			s.list, listCmd = s.list.Update(msg)
-			return tea.Batch(listCmd, s.updateActivePanel())
+			return tea.Batch(listCmd, currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
 			s.isFilter = !s.isFilter
 			var listCmd tea.Cmd

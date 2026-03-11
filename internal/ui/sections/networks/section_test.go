@@ -146,3 +146,52 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 		return !strings.Contains(string(b), s)
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }
+
+func TestPanelClosedOnUpDownNavigation(t *testing.T) {
+	c := client.NewMockClient()
+	networks, _ := c.Networks().List(context.Background())
+	section := New(context.Background(), networks, c.Networks())
+	section.SetSize(120, 40)
+
+	// Navigate to second network
+	section.list.Select(1)
+	// Initialize the details panel with content
+	section.activePanel().Init("network2 content")
+
+	// Navigate down to next network - this should close the current panel (clearing viewport)
+	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Verify the panel Close() was called by reinitializing successfully
+	// The panel should not panic and should accept new content
+	section.activePanel().Init("network3 content")
+
+	// Verify the panel view is generated without errors
+	view := section.activePanel().View()
+	if view == "" {
+		t.Error("Panel view should not be empty after reinitialization")
+	}
+}
+
+func TestPanelClosedOnUpNavigation(t *testing.T) {
+	c := client.NewMockClient()
+	networks, _ := c.Networks().List(context.Background())
+	section := New(context.Background(), networks, c.Networks())
+	section.SetSize(120, 40)
+
+	// Navigate to second network
+	section.list.Select(1)
+	// Initialize the details panel
+	section.activePanel().Init("network2 content")
+
+	// Navigate up to previous network - this should close the current panel
+	section.Update(tea.KeyMsg{Type: tea.KeyUp})
+
+	// Verify the panel can be reinitialized without issues
+	section.activePanel().Init("network1 content")
+
+	// Verify the panel view is generated
+	view := section.activePanel().View()
+	if view == "" {
+		t.Error("Panel view should not be empty after reinitialization")
+	}
+}

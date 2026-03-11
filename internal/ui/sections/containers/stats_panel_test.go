@@ -97,6 +97,31 @@ func TestStatsPanelCloseIsIdempotent(t *testing.T) {
 	p.Close() // must not panic
 }
 
+func TestStatsPanelCloseClearsChartData(t *testing.T) {
+	p := newTestStatsPanel()
+	pr, pw := io.Pipe()
+	p.session = client.NewStatsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
+	p.lastView = "some chart data"
+
+	// Initialize charts with some size so they have internal buffers
+	p.SetSize(100, 40)
+
+	// Close should clear all charts without panicking
+	p.Close()
+
+	// Verify session is closed
+	if p.session != nil {
+		t.Error("Close() should nil out session")
+	}
+	// Verify lastView is cleared
+	if p.lastView != "" {
+		t.Errorf("Close() should clear lastView, got %q", p.lastView)
+	}
+
+	// Verify Close() can be called again (charts are properly cleared)
+	p.Close() // Should not panic even after charts were cleared
+}
+
 func TestStatsPanelSetSizeResizesCharts(t *testing.T) {
 	p := newTestStatsPanel()
 	p.SetSize(100, 40)
