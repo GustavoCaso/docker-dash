@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -95,6 +96,44 @@ func TestStatsPanelCloseIsIdempotent(t *testing.T) {
 	p := newTestStatsPanel()
 	p.Close()
 	p.Close() // must not panic
+}
+
+func TestStatsPanelCloseClearsChartData(t *testing.T) {
+	p := newTestStatsPanel()
+	pr, pw := io.Pipe()
+	p.session = client.NewStatsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
+	p.lastView = "some chart data"
+
+	// Initialize charts with some size so they have internal buffers
+	p.SetSize(100, 40)
+
+	// Close should clear all charts without panicking
+	p.Close()
+
+	// Verify session is closed
+	if p.session != nil {
+		t.Error("Close() should nil out session")
+	}
+	// Verify lastView is cleared
+	if p.lastView != "" {
+		t.Errorf("Close() should clear lastView, got %q", p.lastView)
+	}
+
+	if strings.TrimSpace(p.cpuChart.View()) != "" {
+		t.Errorf("Close() should clear cpuChart view, got %q", strings.TrimSpace(p.cpuChart.View()))
+	}
+	if strings.TrimSpace(p.networkChart.View()) != "" {
+		t.Errorf("Close() should clear networkChart view, got %q", strings.TrimSpace(p.networkChart.View()))
+	}
+	if strings.TrimSpace(p.ioChart.View()) != "" {
+		t.Errorf("Close() should clear ioChart view, got %q", strings.TrimSpace(p.ioChart.View()))
+	}
+	if strings.TrimSpace(p.memChart.View()) != "" {
+		t.Errorf("Close() should clear memChart view, got %q", strings.TrimSpace(p.memChart.View()))
+	}
+
+	// Verify Close() can be called again (charts are properly cleared)
+	p.Close() // Should not panic even after charts were cleared
 }
 
 func TestStatsPanelSetSizeResizesCharts(t *testing.T) {

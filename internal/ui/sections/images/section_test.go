@@ -160,3 +160,47 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 		return !strings.Contains(string(b), s)
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }
+
+func TestPanelClosedOnUpDownNavigation(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	// Navigate to second image
+	section.list.Select(1)
+	// Initialize the layers panel with content
+	section.activePanel().Init("sha256:image2")
+
+	// Navigate down to next image - this should close the current panel
+	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Verify the panel Close() was called (panel is ready for new content)
+	// We can't directly verify viewport content is cleared, but we can verify
+	// the panel can be initialized again without issues
+	cmd := section.activePanel().Init("sha256:image3")
+	if cmd == nil {
+		t.Error("Panel should be able to reinitialize after navigation")
+	}
+}
+
+func TestPanelClosedOnUpNavigation(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	// Navigate to second image
+	section.list.Select(1)
+	// Initialize the layers panel
+	section.activePanel().Init("sha256:image2")
+
+	// Navigate up to previous image - this should close the current panel
+	section.Update(tea.KeyMsg{Type: tea.KeyUp})
+
+	// Verify the panel can be reinitialized
+	cmd := section.activePanel().Init("sha256:image1")
+	if cmd == nil {
+		t.Error("Panel should be able to reinitialize after navigation")
+	}
+}

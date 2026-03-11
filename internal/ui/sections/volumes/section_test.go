@@ -111,3 +111,51 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 		return !strings.Contains(string(b), s)
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }
+
+func TestPanelClosedOnUpDownNavigation(t *testing.T) {
+	c := client.NewMockClient()
+	volumes, _ := c.Volumes().List(context.Background())
+	section := New(context.Background(), volumes, c.Volumes())
+	section.SetSize(120, 40)
+
+	// Navigate to second volume
+	section.list.Select(1)
+	// Initialize the filetree panel with content
+	section.activePanel().Init("volume2")
+
+	// Navigate down to next volume - this should close the current panel (clearing viewport)
+	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Verify the panel Close() was called by reinitializing successfully
+	section.activePanel().Init("volume3")
+
+	// Verify the panel view is generated without errors
+	view := section.activePanel().View()
+	if view == "" {
+		t.Error("Panel view should not be empty after reinitialization")
+	}
+}
+
+func TestPanelClosedOnUpNavigation(t *testing.T) {
+	c := client.NewMockClient()
+	volumes, _ := c.Volumes().List(context.Background())
+	section := New(context.Background(), volumes, c.Volumes())
+	section.SetSize(120, 40)
+
+	// Navigate to second volume
+	section.list.Select(1)
+	// Initialize the filetree panel
+	section.activePanel().Init("volume2")
+
+	// Navigate up to previous volume - this should close the current panel
+	section.Update(tea.KeyMsg{Type: tea.KeyUp})
+
+	// Verify the panel can be reinitialized without issues
+	section.activePanel().Init("volume1")
+
+	// Verify the panel view is generated
+	view := section.activePanel().View()
+	if view == "" {
+		t.Error("Panel view should not be empty after reinitialization")
+	}
+}

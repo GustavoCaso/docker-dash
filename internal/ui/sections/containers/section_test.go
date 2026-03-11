@@ -256,3 +256,55 @@ func TestFormatBytes(t *testing.T) {
 		})
 	}
 }
+
+func TestPanelClosedOnUpDownNavigation(t *testing.T) {
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	section := New(context.Background(), containers, dockerClient.Containers())
+	section.SetSize(120, 40)
+
+	// Navigate to stats panel (index 2)
+	section.activePanelIdx = 2
+	statsPanel := section.panels[2].(*statsPanel)
+
+	// Set some state on the stats panel to verify it gets cleared
+	pr, pw := io.Pipe()
+	statsPanel.session = client.NewStatsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
+	statsPanel.lastView = "previous container stats"
+
+	// Navigate down to next container - this should close the current panel
+	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	// Verify the stats panel was closed (session nil'd, lastView cleared)
+	if statsPanel.session != nil {
+		t.Error("Navigation should close stats panel, session should be nil")
+	}
+	if statsPanel.lastView != "" {
+		t.Errorf("Navigation should clear stats panel lastView, got %q", statsPanel.lastView)
+	}
+}
+
+func TestPanelClosedOnUpNavigation(t *testing.T) {
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	section := New(context.Background(), containers, dockerClient.Containers())
+	section.SetSize(120, 40)
+
+	// Navigate to logs panel (index 1) on second container
+	section.list.Select(1) // Select second container
+	section.activePanelIdx = 1
+	logsPanel := section.panels[1].(*logsPanel)
+
+	// Set some state on the logs panel
+	pr, pw := io.Pipe()
+	logsPanel.logsSession = client.NewLogsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
+	logsPanel.logsOutput = "previous container logs"
+
+	// Navigate up to previous container - this should close the current panel
+	section.Update(tea.KeyMsg{Type: tea.KeyUp})
+
+	// Verify the logs panel was closed
+	if logsPanel.logsOutput != "" {
+		t.Errorf("Navigation should clear logs panel output, got %q", logsPanel.logsOutput)
+	}
+}
