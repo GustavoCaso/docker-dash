@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -116,6 +117,19 @@ func TestStatsPanelCloseClearsChartData(t *testing.T) {
 	// Verify lastView is cleared
 	if p.lastView != "" {
 		t.Errorf("Close() should clear lastView, got %q", p.lastView)
+	}
+
+	if strings.TrimSpace(p.cpuChart.View()) != "" {
+		t.Errorf("Close() should clear cpuChart view, got %q", strings.TrimSpace(p.cpuChart.View()))
+	}
+	if strings.TrimSpace(p.networkChart.View()) != "" {
+		t.Errorf("Close() should clear networkChart view, got %q", strings.TrimSpace(p.networkChart.View()))
+	}
+	if strings.TrimSpace(p.ioChart.View()) != "" {
+		t.Errorf("Close() should clear ioChart view, got %q", strings.TrimSpace(p.ioChart.View()))
+	}
+	if strings.TrimSpace(p.memChart.View()) != "" {
+		t.Errorf("Close() should clear memChart view, got %q", strings.TrimSpace(p.memChart.View()))
 	}
 
 	// Verify Close() can be called again (charts are properly cleared)
