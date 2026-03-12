@@ -43,7 +43,7 @@ type statsOutputMsg struct {
 	memoryUsage      float64
 	memoryLimit      float64
 	networkRead      float64
-	netwrokWrite     float64
+	networkWrite     float64
 	ioRead           float64
 	ioWrite          float64
 	err              error
@@ -131,7 +131,7 @@ func (s *statsPanel) Update(msg tea.Msg) tea.Cmd {
 		s.memChart.Push(msg.memoryPercentage)
 		s.memChart.Draw()
 		s.networkChart.Push(msg.networkRead)
-		s.networkChart.PushDataSet("write", msg.netwrokWrite)
+		s.networkChart.PushDataSet("write", msg.networkWrite)
 		s.networkChart.DrawAll()
 		s.ioChart.Push(msg.ioRead)
 		s.ioChart.PushDataSet("write", msg.ioWrite)
@@ -145,7 +145,7 @@ func (s *statsPanel) Update(msg tea.Msg) tea.Cmd {
 		)
 		netLabel := fmt.Sprintf("NET  rx:%s tx:%s",
 			formatBytes(uint64(msg.networkRead)),
-			formatBytes(uint64(msg.netwrokWrite)),
+			formatBytes(uint64(msg.networkWrite)),
 		)
 		ioLabel := fmt.Sprintf("I/O  r:%s w:%s",
 			formatBytes(uint64(msg.ioRead)),
@@ -270,7 +270,7 @@ func (s *statsPanel) readOutput() tea.Cmd {
 			memoryUsage:      memUsage,
 			memoryLimit:      memLimit,
 			networkRead:      networkRead,
-			netwrokWrite:     networkWrite,
+			networkWrite:     networkWrite,
 			ioRead:           ioRead,
 			ioWrite:          ioWrite,
 		}
