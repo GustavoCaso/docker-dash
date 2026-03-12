@@ -161,9 +161,6 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		cmd := s.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
-	case containersTreeLoadedMsg:
-		s.loading = false
-		return s.activePanel().Update(msg)
 	case containersPrunedMsg:
 		if msg.err != nil {
 			return func() tea.Msg {
@@ -207,9 +204,6 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				IsError: false,
 			}
 		})...)
-	case statsSessionStartedMsg:
-		s.loading = false
-		return s.activePanel().Update(msg)
 	case execCloseMsg:
 		s.activePanel().Close()
 		return func() tea.Msg {
