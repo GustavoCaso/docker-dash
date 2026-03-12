@@ -5,11 +5,14 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
+	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
@@ -23,11 +26,17 @@ type containersTreeLoadedMsg struct {
 type filetreePanel struct {
 	ctx      context.Context
 	service  client.ContainerService
+	loading  bool
+	spinner  spinner.Model
 	viewport viewport.Model
 }
 
 func NewFileTreePanel(ctx context.Context, svc client.ContainerService) panel.Panel {
-	return &filetreePanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0)}
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
+	return &filetreePanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0), spinner: sp}
 }
 
 func (f *filetreePanel) Name() string {
@@ -35,12 +44,22 @@ func (f *filetreePanel) Name() string {
 }
 
 func (f *filetreePanel) Init(containerID string) tea.Cmd {
-	return tea.Batch(f.fetchCmd(containerID), f.extendHelpCmd())
+	f.loading = true
+	return tea.Batch(f.spinner.Tick, f.fetchCmd(containerID), f.extendHelpCmd())
 }
 
 func (f *filetreePanel) Update(msg tea.Msg) tea.Cmd {
+	var cmds []tea.Cmd
+
+	if f.loading {
+		var spinnerCmd tea.Cmd
+		f.spinner, spinnerCmd = f.spinner.Update(msg)
+		cmds = append(cmds, spinnerCmd)
+	}
+
 	treeMsg, ok := msg.(containersTreeLoadedMsg)
 	if ok {
+		f.loading = false
 		if treeMsg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -56,14 +75,23 @@ func (f *filetreePanel) Update(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	f.viewport, cmd = f.viewport.Update(msg)
 
-	return cmd
+	return tea.Batch(append(cmds, cmd)...)
 }
 
 func (f *filetreePanel) View() string {
-	return f.viewport.View()
+	content := f.viewport.View()
+
+	// Overlay spinner in bottom right corner when loading
+	if f.loading {
+		spinnerText := f.spinner.View() + " Loading..."
+		content = helper.OverlayBottomRight(1, content, spinnerText, f.viewport.Width)
+	}
+
+	return content
 }
 
 func (f *filetreePanel) Close() tea.Cmd {
+	f.loading = false
 	f.viewport.SetContent("")
 	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
