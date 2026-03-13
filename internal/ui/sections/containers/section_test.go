@@ -184,6 +184,34 @@ func TestContainerListRefresh(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestContainerListExecMouseScroll(t *testing.T) {
+	dockerClient := client.NewMockClient()
+	containers, _ := dockerClient.Containers().List(context.Background())
+	section := New(context.Background(), containers, dockerClient.Containers())
+	section.SetSize(120, 40)
+
+	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
+	// Instead if moving four time to the right, we move one to the left
+	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
+	ep := section.panels[section.activePanelIdx].(*execPanel)
+
+	// Give the viewport content tall enough to scroll
+	lines := strings.Repeat("output line\n", 50)
+	ep.viewport.SetContent(lines)
+	ep.viewport.GotoBottom()
+	beforeOffset := ep.viewport.YOffset
+
+	// Send a scroll-up mouse event directly to the section
+	section.Update(tea.MouseMsg{
+		Button: tea.MouseButtonWheelUp,
+		Action: tea.MouseActionPress,
+	})
+
+	if ep.viewport.YOffset >= beforeOffset {
+		t.Errorf("scroll up should decrease YOffset: before=%d after=%d", beforeOffset, ep.viewport.YOffset)
+	}
+}
+
 func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	dockerClient := client.NewMockClient()
 	containers, _ := dockerClient.Containers().List(context.Background())
