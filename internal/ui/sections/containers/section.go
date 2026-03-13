@@ -209,6 +209,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
 		}
+	case tea.MouseEvent:
+		cmds = append(cmds, s.activePanel().Update(msg))
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, keys.Keys.PanelNext):
@@ -223,7 +225,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 		// When exec is active, route ALL keys directly to it.
 		if ep, ok := s.activePanel().(*execPanel); ok {
-			return ep.Update(msg)
+			cmds = append(cmds, ep.Update(msg))
+			return tea.Batch(cmds...)
 		}
 
 		if s.isFilter {

@@ -73,6 +73,8 @@ func (e *execPanel) Name() string {
 }
 
 func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
+	var viewportCmd tea.Cmd
+
 	switch msg := msg.(type) {
 	case execSessionStartedMsg:
 		e.session = msg.session
@@ -96,12 +98,15 @@ func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 		return e.readOutput()
 	case tea.KeyMsg:
 		return e.handleKeyInput(msg)
+	default:
+		// Mouse Scroll messages
+		e.viewport, viewportCmd = e.viewport.Update(msg)
 	}
 
 	// Forward blinking cursor ticks to the text input.
 	var inputCmd tea.Cmd
 	e.input, inputCmd = e.input.Update(msg)
-	return inputCmd
+	return tea.Batch([]tea.Cmd{inputCmd, viewportCmd}...)
 }
 
 func (e *execPanel) View() string {
