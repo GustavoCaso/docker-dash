@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
 func TestFullOutput(t *testing.T) {
@@ -248,6 +250,18 @@ func TestConfirmationModalConfirmDeletesImage(t *testing.T) {
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContextualKeyBindingsBeforeViewRender(t *testing.T) {
+	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+
+	// Send AddContextualKeyBindingsMsg before activeKeys is set — must not panic.
+	m.Update(message.AddContextualKeyBindingsMsg{
+		Bindings: []key.Binding{key.NewBinding(key.WithKeys("x"))},
+	})
+
+	// Send ClearContextualKeyBindingsMsg before activeKeys is set — must not panic.
+	m.Update(message.ClearContextualKeyBindingsMsg{})
 }
 
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
