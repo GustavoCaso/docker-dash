@@ -28,7 +28,7 @@ type fileNodeLoadedMsg struct {
 
 type filesPanel struct {
 	ctx           context.Context
-	service       FileService
+	service       fileService
 	loading       bool
 	spinner       spinner.Model
 	width, height int
@@ -37,11 +37,11 @@ type filesPanel struct {
 	cursor        int
 }
 
-type FileService interface {
+type fileService interface {
 	FileTree(ctx context.Context, ID string) (*client.FileNode, error)
 }
 
-func NewFilesPanel(ctx context.Context, svc FileService) Panel {
+func NewFilesPanel(ctx context.Context, svc fileService) Panel {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -127,7 +127,6 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 }
 
 func (f *filesPanel) View() string {
-	// Overlay spinner in bottom right corner when loading
 	if f.loading {
 		spinnerText := f.spinner.View() + " Loading..."
 		content := helper.OverlayBottomRight(1, "", spinnerText, f.width)
