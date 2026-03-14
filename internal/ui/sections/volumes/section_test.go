@@ -53,8 +53,8 @@ func TestVolumeReset(t *testing.T) {
 
 	cmd := model.Reset()
 
-	if cmd != nil {
-		t.Error("Reset() should return nil cmd")
+	if cmd == nil {
+		t.Error("Reset() should return cmd")
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
@@ -74,8 +74,8 @@ func TestResetClearsFlags(t *testing.T) {
 	if s.isFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
-	if cmd != nil {
-		t.Error("Reset() should return nil cmd from activePanel.Close()")
+	if cmd == nil {
+		t.Error("Reset() should return cmd from activePanel.Close()")
 	}
 }
 

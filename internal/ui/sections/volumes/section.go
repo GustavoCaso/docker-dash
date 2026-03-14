@@ -93,7 +93,7 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 		ctx:            ctx,
 		list:           l,
 		volumeService:  svc,
-		panels:         []panel.Panel{newFileTreePanel(ctx, svc)},
+		panels:         []panel.Panel{panel.NewFilesPanel(ctx, svc)},
 		activePanelIdx: 0,
 		spinner:        sp,
 	}
@@ -160,17 +160,6 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		cmd := s.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
-	case volumeTreeLoadedMsg:
-		s.loading = false
-		if msg.error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: msg.error.Error(),
-					IsError: true,
-				}
-			}
-		}
-		return s.activePanel().Update(msg)
 	case volumesPrunedMsg:
 		if msg.err != nil {
 			return func() tea.Msg {

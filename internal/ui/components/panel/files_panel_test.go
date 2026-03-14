@@ -1,4 +1,4 @@
-package containers
+package panel
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
-func newTestFileTreePanel() *filetreePanel {
-	return NewFileTreePanel(context.Background(), client.NewMockClient().Containers()).(*filetreePanel)
+func newTestFileTreePanel() *filesPanel {
+	return NewFilesPanel(context.Background(), client.NewMockClient().Containers()).(*filesPanel)
 }
 
 func TestFileTreePanelInitFetchesTree(t *testing.T) {
@@ -38,7 +38,7 @@ func TestFileTreePanelInitFetchesTree(t *testing.T) {
 	for _, cmd := range batch {
 		msg := cmd()
 		switch msg.(type) {
-		case containersTreeLoadedMsg:
+		case fileNodeLoadedMsg:
 			containersTreeLoaded = true
 		case message.AddContextualKeyBindingsMsg:
 			extendCmd = true
@@ -48,7 +48,7 @@ func TestFileTreePanelInitFetchesTree(t *testing.T) {
 	}
 
 	if !containersTreeLoaded {
-		t.Fatal("Init() not returned containersTreeLoadedMsg msg")
+		t.Fatal("Init() not returned fileNodeLoadedMsg msg")
 	}
 
 	if !extendCmd {
@@ -90,7 +90,7 @@ func TestFileTreePanelUpdateWithError(t *testing.T) {
 	p := newTestFileTreePanel()
 	p.SetSize(80, 40)
 
-	errMsg := containersTreeLoadedMsg{error: errors.New("fetch failed")}
+	errMsg := fileNodeLoadedMsg{err: errors.New("fetch failed")}
 	cmd := p.Update(errMsg)
 
 	if cmd == nil {
@@ -106,9 +106,8 @@ func TestFileTreePanelUpdateWithError(t *testing.T) {
 	}
 }
 
-func TestFileTreePanelCloseResetsViewPort(t *testing.T) {
+func TestFileTreePanelCloseResets(t *testing.T) {
 	p := newTestFileTreePanel()
-	p.viewport.SetContent("some file tree content")
 
 	p.Close()
 
@@ -116,8 +115,8 @@ func TestFileTreePanelCloseResetsViewPort(t *testing.T) {
 		t.Error("Close() Must set loading state to false. Got true")
 	}
 
-	if p.viewport.View() != "" {
-		t.Errorf("Close() should clear viewport, got %q", p.viewport.View())
+	if p.View() != "" {
+		t.Errorf("Close() should clear View, got %q", p.View())
 	}
 }
 
@@ -130,10 +129,16 @@ func TestFileTreePanelCloseIsIdempotent(t *testing.T) {
 func TestFileTreePanelViewReturnsViewPort(t *testing.T) {
 	p := newTestFileTreePanel()
 	p.SetSize(80, 40)
-	p.viewport.SetContent("hello tree")
+	p.visible = []*client.FileNode{
+		{
+			Name:  "test",
+			IsDir: true,
+			Depth: 2,
+		},
+	}
 
-	if !strings.Contains(p.View(), "hello tree") {
-		t.Errorf("View() = %q, want to contain 'hello tree'", p.View())
+	if !strings.Contains(p.View(), "▼ test/") {
+		t.Errorf("View() = %q, want to contain '▼ test/'", p.View())
 	}
 }
 
@@ -151,11 +156,11 @@ func TestFileTreePanelSetSizeStoresWidth(t *testing.T) {
 	p := newTestFileTreePanel()
 	p.SetSize(100, 50)
 
-	if p.viewport.Width != 100 {
-		t.Errorf("SetSize should store width=100, got %d", p.viewport.Width)
+	if p.width != 100 {
+		t.Errorf("SetSize should store width=100, got %d", p.width)
 	}
 
-	if p.viewport.Height != 50 {
-		t.Errorf("SetSize should store height=50, got %d", p.viewport.Height)
+	if p.height != 50 {
+		t.Errorf("SetSize should store height=50, got %d", p.height)
 	}
 }

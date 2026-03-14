@@ -98,7 +98,7 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 			NewDetailsPanel(ctx, svc),
 			NewLogsPanel(ctx, svc),
 			NewStatsPanel(ctx, svc),
-			NewFileTreePanel(ctx, svc),
+			panel.NewFilesPanel(ctx, svc),
 			NewExecPanel(ctx, svc),
 		},
 		activePanelIdx: 0,
