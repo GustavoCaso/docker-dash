@@ -7,8 +7,6 @@ import (
 	"io"
 	"strings"
 	"time"
-
-	"github.com/charmbracelet/lipgloss/tree"
 )
 
 // MockClient provides a mock implementation of DockerClient for development.
@@ -319,8 +317,8 @@ func (w *mockExecWriter) Close() error {
 	return w.pw.Close()
 }
 
-func (s *mockContainerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
-	return ContainerFileTree{Files: []string{}, Tree: tree.New()}, nil
+func (s *mockContainerService) FileTree(ctx context.Context, id string) (*FileNode, error) {
+	return &FileNode{}, nil
 }
 
 func (s *mockContainerService) Prune(_ context.Context, _ PruneOptions) (PruneReport, error) {
@@ -506,47 +504,8 @@ func (s *mockVolumeService) Prune(_ context.Context, opts PruneOptions) (PruneRe
 	return PruneReport{ItemsDeleted: count, SpaceReclaimed: spaceReclaimed}, nil
 }
 
-func (s *mockVolumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
-	for _, v := range s.volumes {
-		if v.Name == name {
-			t := tree.Root(name)
-			files := []string{}
-
-			switch name {
-			case "postgres_data":
-				pgdata := tree.Root("pgdata")
-				pgdata.Child("PG_VERSION")
-				pgdata.Child("postgresql.conf")
-				pgdata.Child("pg_hba.conf")
-				baseDir := tree.Root("base")
-				baseDir.Child("1")
-				baseDir.Child("13067")
-				pgdata.Child(baseDir)
-				t.Child(pgdata)
-				files = []string{
-					"pgdata/",
-					"pgdata/PG_VERSION",
-					"pgdata/postgresql.conf",
-					"pgdata/pg_hba.conf",
-					"pgdata/base/",
-					"pgdata/base/1",
-					"pgdata/base/13067",
-				}
-			case "nginx_config":
-				t.Child("nginx.conf")
-				confD := tree.Root("conf.d")
-				confD.Child("default.conf")
-				t.Child(confD)
-				files = []string{"nginx.conf", "conf.d/", "conf.d/default.conf"}
-			default:
-				t.Child("data.bin")
-				files = []string{"data.bin"}
-			}
-
-			return VolumeFileTree{Files: files, Tree: t}, nil
-		}
-	}
-	return VolumeFileTree{}, fmt.Errorf("volume not found: %s", name)
+func (s *mockVolumeService) FileTree(ctx context.Context, name string) (*FileNode, error) {
+	return &FileNode{}, nil
 }
 
 // mockNetworkService provides mock network data.

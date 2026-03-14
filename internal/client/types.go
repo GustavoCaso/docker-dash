@@ -2,9 +2,9 @@ package client
 
 import (
 	"io"
+	"io/fs"
 	"time"
 
-	"github.com/charmbracelet/lipgloss/tree"
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 )
 
@@ -38,14 +38,17 @@ type Container struct {
 	Privileged    bool
 }
 
-type ContainerFileTree struct {
-	Files []string
-	Tree  *tree.Tree
-}
-
-type VolumeFileTree struct {
-	Files []string
-	Tree  *tree.Tree
+type FileNode struct {
+	Name      string
+	Path      string
+	IsDir     bool
+	Collapsed bool
+	Linkname  string
+	Size      int64
+	Mode      fs.FileMode
+	Children  []*FileNode
+	Parent    *FileNode
+	Depth     int
 }
 
 type ContainerState string

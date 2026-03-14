@@ -31,6 +31,8 @@ Sleep 2
 Type "]"
 Type "]"
 Sleep 5
+Type "]"
+Sleep 10
 Right@500ms 2
 Sleep 5
 

@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/docker/cli/cli/connhelper"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -399,10 +398,10 @@ func (s *containerService) Prune(ctx context.Context, _ PruneOptions) (PruneRepo
 	return PruneReport{ItemsDeleted: len(r.ContainersDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
-func (s *containerService) FileTree(ctx context.Context, id string) (ContainerFileTree, error) {
+func (s *containerService) FileTree(ctx context.Context, id string) (*FileNode, error) {
 	reader, err := s.cli.ContainerExport(ctx, id)
 	if err != nil {
-		return ContainerFileTree{}, err
+		return &FileNode{}, err
 	}
 
 	defer reader.Close()
@@ -410,59 +409,69 @@ func (s *containerService) FileTree(ctx context.Context, id string) (ContainerFi
 	return buildContainerFileTree(reader), nil
 }
 
-func buildContainerFileTree(reader io.ReadCloser) ContainerFileTree {
+func buildContainerFileTree(reader io.ReadCloser) *FileNode {
 	tr := tar.NewReader(reader)
-	files := []string{}
-	t := tree.Root(".")
+	t := &FileNode{Name: ".", Path: ".", IsDir: true}
 	for {
 		hdr, err := tr.Next()
-		if err == io.EOF {
+		if err != nil {
 			break
 		}
 		file := hdr.Name
-		files = append(files, file)
 		subTree := t
 		isDir := hdr.Typeflag == tar.TypeDir
 		clean := strings.TrimSuffix(file, "/")
 		parts := strings.Split(clean, "/")
+
+		length := len(parts)
 
 		for i, part := range parts {
 			if part == "." || part == "" {
 				continue
 			}
 
-			isLast := i == len(parts)-1
+			isLast := i == length-1
 
 			if isLast && !isDir {
 				// file entry — add as leaf and move to next part
-				if hdr.Linkname != "" {
-					subTree.Child(part + " -> " + hdr.Linkname)
-				} else {
-					subTree.Child(part)
+				child := &FileNode{
+					Name:     part,
+					Path:     file,
+					IsDir:    false,
+					Linkname: hdr.Linkname,
+					Size:     hdr.Size,
+					Mode:     hdr.FileInfo().Mode(),
+					Parent:   subTree,
+					Depth:    i + 1,
 				}
+				subTree.Children = append(subTree.Children, child)
 				continue
 			}
 
 			// directory entry — find existing subtree or create one
 			found := false
-			children := subTree.Children()
-			for j := range children.Length() {
-				child := children.At(j)
-				if sub, ok := child.(*tree.Tree); ok && child.Value() == part {
-					subTree = sub
+			for _, j := range subTree.Children {
+				if j.Name == part {
+					subTree = j
 					found = true
 					break
 				}
 			}
 			if !found {
-				c := tree.Root(part)
-				subTree.Child(c)
+				c := &FileNode{
+					Name:   part,
+					Path:   strings.Join(parts[:i+1], "/"),
+					IsDir:  true,
+					Parent: subTree,
+					Depth:  i + 1,
+				}
+				subTree.Children = append(subTree.Children, c)
 				subTree = c
 			}
 		}
 	}
 
-	return ContainerFileTree{Files: files, Tree: t}
+	return t
 }
 
 // Local Image Service.
@@ -627,11 +636,11 @@ func (s *volumeService) Prune(ctx context.Context, opts PruneOptions) (PruneRepo
 	return PruneReport{ItemsDeleted: len(r.VolumesDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
-func (s *volumeService) FileTree(ctx context.Context, name string) (VolumeFileTree, error) {
+func (s *volumeService) FileTree(ctx context.Context, name string) (*FileNode, error) {
 	// Try to find a running container that mounts this volume
 	containerID, mountPoint, err := s.findRunningContainerForVolume(ctx, name)
 	if err != nil {
-		return VolumeFileTree{}, err
+		return &FileNode{}, err
 	}
 
 	if containerID != "" {
@@ -666,15 +675,14 @@ func (s *volumeService) findRunningContainerForVolume(ctx context.Context, name 
 }
 
 // copyFileTree reads a tar archive from a container path and builds a file tree.
-func (s *volumeService) copyFileTree(ctx context.Context, containerID, path string) (VolumeFileTree, error) {
+func (s *volumeService) copyFileTree(ctx context.Context, containerID, path string) (*FileNode, error) {
 	reader, _, err := s.cli.CopyFromContainer(ctx, containerID, path)
 	if err != nil {
-		return VolumeFileTree{}, fmt.Errorf("copy from container failed: %w", err)
+		return &FileNode{}, fmt.Errorf("copy from container failed: %w", err)
 	}
 	defer reader.Close()
 
-	cft := buildContainerFileTree(reader)
-	return VolumeFileTree(cft), nil
+	return buildContainerFileTree(reader), nil
 }
 
 const (
@@ -703,9 +711,9 @@ func (s *volumeService) ensureImage(ctx context.Context, ref string) error {
 
 // fileTreeViaTempContainer creates a temporary alpine container to browse
 // a volume that is not in use by any running container.
-func (s *volumeService) fileTreeViaTempContainer(ctx context.Context, volumeName string) (VolumeFileTree, error) {
+func (s *volumeService) fileTreeViaTempContainer(ctx context.Context, volumeName string) (*FileNode, error) {
 	if err := s.ensureImage(ctx, alpineImage); err != nil {
-		return VolumeFileTree{}, err
+		return &FileNode{}, err
 	}
 
 	resp, err := s.cli.ContainerCreate(ctx, &container.Config{
@@ -715,7 +723,7 @@ func (s *volumeService) fileTreeViaTempContainer(ctx context.Context, volumeName
 		Binds: []string{volumeName + ":" + volumeMountPath},
 	}, nil, nil, "")
 	if err != nil {
-		return VolumeFileTree{}, fmt.Errorf("failed to create temp container: %w", err)
+		return &FileNode{}, fmt.Errorf("failed to create temp container: %w", err)
 	}
 
 	// Always clean up the temporary container
@@ -723,7 +731,7 @@ func (s *volumeService) fileTreeViaTempContainer(ctx context.Context, volumeName
 
 	ft, err := s.copyFileTree(ctx, resp.ID, volumeMountPath)
 	if err != nil {
-		return VolumeFileTree{}, fmt.Errorf("failed to read volume files: %w", err)
+		return &FileNode{}, fmt.Errorf("failed to read volume files: %w", err)
 	}
 
 	return ft, nil

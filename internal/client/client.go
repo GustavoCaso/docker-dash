@@ -23,7 +23,7 @@ type ContainerService interface {
 	Stop(ctx context.Context, id string) error
 	Restart(ctx context.Context, id string) error
 	Remove(ctx context.Context, id string, force bool) error
-	FileTree(ctx context.Context, id string) (ContainerFileTree, error)
+	FileTree(ctx context.Context, id string) (*FileNode, error)
 	Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error)
 	Exec(ctx context.Context, id string) (*ExecSession, error)
 	Stats(ctx context.Context, is string) (*StatsSession, error)
@@ -42,7 +42,7 @@ type ImageService interface {
 type VolumeService interface {
 	List(ctx context.Context) ([]Volume, error)
 	Remove(ctx context.Context, name string, force bool) error
-	FileTree(ctx context.Context, name string) (VolumeFileTree, error)
+	FileTree(ctx context.Context, name string) (*FileNode, error)
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)
 }
 

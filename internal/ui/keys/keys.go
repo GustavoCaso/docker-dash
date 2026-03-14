@@ -13,6 +13,7 @@ type KeyMap struct {
 	Enter      key.Binding
 	ScrollDown key.Binding
 	ScrollUp   key.Binding
+	Space      key.Binding
 	Refresh    key.Binding
 	RefreshAll key.Binding
 	Delete     key.Binding
@@ -86,6 +87,10 @@ var Keys = &KeyMap{
 	ScrollDown: key.NewBinding(
 		key.WithKeys("j"),
 		key.WithHelp("j", "scroll down"),
+	),
+	Space: key.NewBinding(
+		key.WithKeys(" "),
+		key.WithHelp("space", "toggle"),
 	),
 	Refresh: key.NewBinding(
 		key.WithKeys("r"),
@@ -177,6 +182,7 @@ func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 			{k.Delete, k.CreateAndRunContainer, k.Prune, k.Filter},
 			{k.Help, k.Quit},
 		},
+		contextualKeys: []key.Binding{},
 	}
 }
 
@@ -189,6 +195,7 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 			{k.ContainerDelete, k.ContainerStartStop, k.ContainerRestart, k.Prune},
 			{k.Filter, k.Help, k.Quit},
 		},
+		contextualKeys: []key.Binding{},
 	}
 }
 
@@ -201,6 +208,7 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 			{k.Delete, k.Prune, k.Filter},
 			{k.Help, k.Quit},
 		},
+		contextualKeys: []key.Binding{},
 	}
 }
 
@@ -213,5 +221,6 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 			{k.NetworkDelete, k.Prune, k.Filter},
 			{k.Help, k.Quit},
 		},
+		contextualKeys: []key.Binding{},
 	}
 }
