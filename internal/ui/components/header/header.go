@@ -112,10 +112,7 @@ func (h *Header) View() string {
 
 	tabBarWidth := lipgloss.Width(tabBar)
 	iconWidth := lipgloss.Width(logo)
-	spacerWidth := h.width - tabBarWidth - iconWidth
-	if spacerWidth < 0 {
-		spacerWidth = 0
-	}
+	spacerWidth := max(h.width-tabBarWidth-iconWidth, 0)
 	spacer := lipgloss.NewStyle().Width(spacerWidth).Render("")
 
 	row := lipgloss.JoinHorizontal(lipgloss.Center, tabBar, spacer, logo)
