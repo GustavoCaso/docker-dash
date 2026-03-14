@@ -234,11 +234,16 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}))
 
 	case message.AddContextualKeyBindingsMsg:
-		m.activeKeys.ToggleContextual(msg.Bindings)
+		if m.activeKeys != nil {
+			m.activeKeys.ToggleContextual(msg.Bindings)
+		}
+
 		return m, nil
 
 	case message.ClearContextualKeyBindingsMsg:
-		m.activeKeys.DisableContextual()
+		if m.activeKeys != nil {
+			m.activeKeys.DisableContextual()
+		}
 		return m, nil
 
 	case tea.KeyMsg:
