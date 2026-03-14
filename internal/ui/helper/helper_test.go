@@ -213,6 +213,29 @@ func TestFormatSize(t *testing.T) {
 	}
 }
 
+func TestFormatSizeUint64(t *testing.T) {
+	tests := []struct {
+		name  string
+		bytes uint64
+		want  string
+	}{
+		{"bytes", 500, "500 B"},
+		{"kilobytes", 2048, "2.0 KB"},
+		{"megabytes", 142 * 1024 * 1024, "142.0 MB"},
+		{"gigabytes", 2 * 1024 * 1024 * 1024, "2.0 GB"},
+		{"zero", 0, "0 B"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatSize(tt.bytes)
+			if got != tt.want {
+				t.Errorf("FormatSize(%d) = %q, want %q", tt.bytes, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTruncateCommand(t *testing.T) {
 	tests := []struct {
 		name   string

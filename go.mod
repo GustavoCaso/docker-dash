@@ -1,6 +1,6 @@
 module github.com/GustavoCaso/docker-dash
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/BurntSushi/toml v1.6.0
@@ -14,6 +14,7 @@ require (
 	github.com/docker/docker v28.5.0+incompatible
 	github.com/docker/go-connections v0.6.0
 	github.com/moby/docker-image-spec v1.3.1
+	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90
 )
 
 require (

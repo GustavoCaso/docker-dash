@@ -138,10 +138,7 @@ func (f *filesPanel) View() string {
 	}
 
 	// reserve 1 for status bar + 1 for padding.
-	treeLines := f.height - statusBarSpace
-	if treeLines < 1 {
-		treeLines = 1
-	}
+	treeLines := max(f.height-statusBarSpace, 1)
 
 	var fileTree strings.Builder
 
@@ -150,10 +147,7 @@ func (f *filesPanel) View() string {
 	if f.cursor >= treeLines {
 		start = f.cursor - treeLines + 1
 	}
-	end := start + treeLines
-	if end > len(f.visible) {
-		end = len(f.visible)
-	}
+	end := min(start+treeLines, len(f.visible))
 	height := 0
 	for i := start; i < end; i++ {
 		height++
@@ -203,7 +197,10 @@ func (f *filesPanel) View() string {
 				normalStyle.Width(f.width).Render(fmt.Sprintf("items: %d path: %s/", len(node.Children), node.Path)),
 			)
 		} else {
-			statusBar.WriteString(normalStyle.Width(f.width).Render(fmt.Sprintf("size: %s mode: %s path: %s", helper.FormatSize(node.Size), node.Mode.String(), node.Path)))
+			statusBar.WriteString(
+				normalStyle.Width(f.width).
+					Render(fmt.Sprintf("size: %s mode: %s path: %s", helper.FormatSize(node.Size), node.Mode.String(), node.Path)),
+			)
 		}
 	}
 

@@ -173,7 +173,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		summary := fmt.Sprintf(
 			"Pruned %d containers, reclaimed %s",
 			msg.report.ItemsDeleted,
-			helper.FormatSize(int64(msg.report.SpaceReclaimed)),
+			helper.FormatSize(msg.report.SpaceReclaimed),
 		)
 		return tea.Batch(s.updateContainersCmd(), func() tea.Msg {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
