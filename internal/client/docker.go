@@ -487,9 +487,9 @@ func (s *imageService) List(ctx context.Context) ([]Image, error) {
 
 	result := make([]Image, len(images))
 	for i, img := range images {
-		imageData, err := s.get(ctx, img.ID)
-		if err != nil {
-			return []Image{}, err
+		imageData, imageErr := s.get(ctx, img.ID)
+		if imageErr != nil {
+			return []Image{}, imageErr
 		}
 
 		imageData.Containers = img.Containers
@@ -623,40 +623,6 @@ const (
 	logsSinceHours = 2 // hours of log history to fetch
 	repoTagParts   = 2 // parts when splitting repo:tag on ":"
 )
-
-// ensureImage pulls the image if it doesn't exist locally.
-func (s *volumeService) ensureImage(ctx context.Context, ref string) error {
-	_, err := s.cli.ImageInspect(ctx, ref)
-	if err == nil {
-		return nil // already exists
-	}
-
-	reader, err := s.cli.ImagePull(ctx, ref, image.PullOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to pull %s: %w", ref, err)
-	}
-	defer reader.Close()
-	// Drain the reader to complete the pull
-	_, err = io.Copy(io.Discard, reader)
-	return err
-}
-
-// Helper to get containers using a volume.
-func (s *volumeService) getVolumeUsage(ctx context.Context, volumeName string) ([]string, error) {
-	containers, err := s.cli.ContainerList(ctx, container.ListOptions{
-		All:     true,
-		Filters: filters.NewArgs(filters.Arg("volume", volumeName)),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	ids := make([]string, len(containers))
-	for i, c := range containers {
-		ids[i] = c.ID
-	}
-	return ids, nil
-}
 
 // Local Network Service.
 type networkService struct {

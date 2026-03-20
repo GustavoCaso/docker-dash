@@ -199,7 +199,7 @@ func (e *execPanel) startSession(containerID string) tea.Cmd {
 		}
 
 		if container.State != client.StateRunning {
-			return execOutputMsg{err: errors.New("container is not running.")}
+			return execOutputMsg{err: errors.New("container is not running")}
 		}
 
 		session, err := svc.Exec(ctx, containerID)
