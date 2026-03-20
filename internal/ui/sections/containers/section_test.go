@@ -285,6 +285,83 @@ func TestFormatBytes(t *testing.T) {
 	}
 }
 
+func TestContainerDeleteUpdatesSelection(t *testing.T) {
+	c := client.NewMockClient()
+	containers, _ := c.Containers().List(context.Background())
+	section := New(context.Background(), containers, c.Containers())
+	section.SetSize(120, 40)
+
+	initialCount := len(section.list.Items())
+	if initialCount == 0 {
+		t.Fatal("expected at least one container in mock data")
+	}
+
+	section.list.Select(0)
+	cmd := section.removeItem(0)
+
+	if len(section.list.Items()) != initialCount-1 {
+		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.list.Items()))
+	}
+	if section.list.Index() != 0 {
+		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.list.Index())
+	}
+	if cmd == nil {
+		t.Fatal("removeItem() should return non-nil cmd when items remain")
+	}
+	if _, ok := cmd().(detailsMsg); !ok {
+		t.Errorf("removeItem() cmd should produce detailsMsg, got %T", cmd())
+	}
+}
+
+func TestContainerDeleteLastItemClampsSelection(t *testing.T) {
+	c := client.NewMockClient()
+	containers, _ := c.Containers().List(context.Background())
+	section := New(context.Background(), containers, c.Containers())
+	section.SetSize(120, 40)
+
+	if len(section.list.Items()) == 0 {
+		t.Fatal("expected at least one container in mock data")
+	}
+
+	// Delete all but the last item without checking cmd type (items still remain)
+	for len(section.list.Items()) > 1 {
+		section.removeItem(0)
+	}
+
+	// Delete the final item — no selected item remains, so cmd must be nil
+	cmd := section.removeItem(0)
+	if cmd != nil {
+		t.Error("removeItem() should return nil cmd when list is empty")
+	}
+}
+
+func TestContainerDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
+	c := client.NewMockClient()
+	containers, _ := c.Containers().List(context.Background())
+	section := New(context.Background(), containers, c.Containers())
+	section.SetSize(120, 40)
+
+	count := len(section.list.Items())
+	if count < 2 {
+		t.Fatal("expected at least two containers in mock data")
+	}
+
+	// Select and delete the last item — selection should clamp to new last
+	last := count - 1
+	section.list.Select(last)
+	cmd := section.removeItem(last)
+
+	if section.list.Index() != last-1 {
+		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.list.Index())
+	}
+	if cmd == nil {
+		t.Fatal("removeItem() should return non-nil cmd when items remain")
+	}
+	if _, ok := cmd().(detailsMsg); !ok {
+		t.Errorf("removeItem() cmd should produce detailsMsg, got %T", cmd())
+	}
+}
+
 func TestPanelClosedOnUpDownNavigation(t *testing.T) {
 	dockerClient := client.NewMockClient()
 	containers, _ := dockerClient.Containers().List(context.Background())

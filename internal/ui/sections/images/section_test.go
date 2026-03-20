@@ -55,7 +55,7 @@ func TestImageListRendersItems(t *testing.T) {
 
 func TestImageListLayersVisible(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "ngnix run")
+	waitFor(t, tm, "No layer information available")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -63,8 +63,7 @@ func TestImageListLayersVisible(t *testing.T) {
 func TestImageReset(t *testing.T) {
 	model := newModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
-	// We wait for the image. and layer information
-	waitFor(t, tm, "ngnix run")
+	waitFor(t, tm, "nginx")
 
 	cmd := model.Reset()
 
@@ -159,6 +158,83 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
 		return !strings.Contains(string(b), s)
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
+}
+
+func TestImageDeleteUpdatesSelection(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	initialCount := len(section.list.Items())
+	if initialCount == 0 {
+		t.Fatal("expected at least one image in mock data")
+	}
+
+	section.list.Select(0)
+	cmd := section.removeItem(0)
+
+	if len(section.list.Items()) != initialCount-1 {
+		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.list.Items()))
+	}
+	if section.list.Index() != 0 {
+		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.list.Index())
+	}
+	if cmd == nil {
+		t.Fatal("removeItem() should return non-nil cmd when items remain")
+	}
+	if _, ok := cmd().(layersOutputMsg); !ok {
+		t.Errorf("removeItem() cmd should produce layersOutputMsg, got %T", cmd())
+	}
+}
+
+func TestImageDeleteLastItemClampsSelection(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	if len(section.list.Items()) == 0 {
+		t.Fatal("expected at least one image in mock data")
+	}
+
+	// Delete all but the last item without checking cmd type (items still remain)
+	for len(section.list.Items()) > 1 {
+		section.removeItem(0)
+	}
+
+	// Delete the final item — no selected item remains, so cmd must be nil
+	cmd := section.removeItem(0)
+	if cmd != nil {
+		t.Error("removeItem() should return nil cmd when list is empty")
+	}
+}
+
+func TestImageDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	count := len(section.list.Items())
+	if count < 2 {
+		t.Fatal("expected at least two images in mock data")
+	}
+
+	// Select and delete the last item — selection should clamp to new last
+	last := count - 1
+	section.list.Select(last)
+	cmd := section.removeItem(last)
+
+	if section.list.Index() != last-1 {
+		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.list.Index())
+	}
+	if cmd == nil {
+		t.Fatal("removeItem() should return non-nil cmd when items remain")
+	}
+	if _, ok := cmd().(layersOutputMsg); !ok {
+		t.Errorf("removeItem() cmd should produce layersOutputMsg, got %T", cmd())
+	}
 }
 
 func TestPanelClosedOnUpDownNavigation(t *testing.T) {

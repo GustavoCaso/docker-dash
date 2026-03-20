@@ -77,22 +77,19 @@ func (l *layersPanel) fetchCmd(imageID string) tea.Cmd {
 	ctx := l.ctx
 	svc := l.client
 	return func() tea.Msg {
-		image, err := svc.Get(ctx, imageID)
-		if err != nil {
-			return layersOutputMsg{err: fmt.Errorf("error getting image details: %w", err)}
-		}
-		return layersOutputMsg{output: formatDetails(image)}
+		layers := svc.FetchLayers(ctx, imageID)
+		return layersOutputMsg{output: formatDetails(layers)}
 	}
 }
 
-func formatDetails(img client.Image) string {
+func formatDetails(layers []client.Layer) string {
 	var content strings.Builder
 
 	const maxLayerCmdLen = 50 // max chars to show for a layer command
-	if len(img.Layers) == 0 {
+	if len(layers) == 0 {
 		content.WriteString("No layer information available\n")
 	} else {
-		for idx, layer := range img.Layers {
+		for idx, layer := range layers {
 			cmd := helper.TruncateCommand(layer.Command, maxLayerCmdLen)
 			fmt.Fprintf(&content, "%2d. %s\n", idx+1, cmd)
 			fmt.Fprintf(&content, "    Size: %-10s  ID: %s\n\n",

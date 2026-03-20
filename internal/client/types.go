@@ -100,7 +100,6 @@ type Image struct {
 	Dangling   bool
 	Containers int64
 	UsedBy     []string // Container IDs using this image
-	Layers     []Layer  // Image layers from history
 	Config     *dockerspec.DockerOCIImageConfig
 }
 

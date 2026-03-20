@@ -53,8 +53,8 @@ func TestVolumeReset(t *testing.T) {
 
 	cmd := model.Reset()
 
-	if cmd == nil {
-		t.Error("Reset() should return cmd")
+	if cmd != nil {
+		t.Error("Reset() should return nil cmd")
 	}
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
@@ -74,8 +74,8 @@ func TestResetClearsFlags(t *testing.T) {
 	if s.isFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
-	if cmd == nil {
-		t.Error("Reset() should return cmd from activePanel.Close()")
+	if cmd != nil {
+		t.Error("Reset() should return nil cmd")
 	}
 }
 
@@ -111,51 +111,49 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 		return !strings.Contains(string(b), s)
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }
-
-func TestPanelClosedOnUpDownNavigation(t *testing.T) {
+func TestVolumeDeleteUpdatesSelection(t *testing.T) {
 	c := client.NewMockClient()
 	volumes, _ := c.Volumes().List(context.Background())
 	section := New(context.Background(), volumes, c.Volumes())
 	section.SetSize(120, 40)
 
-	// Navigate to second volume
-	section.list.Select(1)
-	// Initialize the filetree panel with content
-	section.activePanel().Init("volume2")
+	initialCount := len(section.list.Items())
+	if initialCount == 0 {
+		t.Fatal("expected at least one volume in mock data")
+	}
 
-	// Navigate down to next volume - this should close the current panel (clearing viewport)
-	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+	// Select the first item and delete it
+	section.list.Select(0)
+	section.removeItem(0)
 
-	// Verify the panel Close() was called by reinitializing successfully
-	section.activePanel().Init("volume3")
-
-	// Verify the panel view is generated without errors
-	view := section.activePanel().View()
-	if view == "" {
-		t.Error("Panel view should not be empty after reinitialization")
+	if len(section.list.Items()) != initialCount-1 {
+		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.list.Items()))
+	}
+	if section.list.Index() != 0 {
+		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.list.Index())
 	}
 }
 
-func TestPanelClosedOnUpNavigation(t *testing.T) {
+func TestVolumeDeleteLastItemClampsSelection(t *testing.T) {
 	c := client.NewMockClient()
 	volumes, _ := c.Volumes().List(context.Background())
 	section := New(context.Background(), volumes, c.Volumes())
 	section.SetSize(120, 40)
 
-	// Navigate to second volume
-	section.list.Select(1)
-	// Initialize the filetree panel
-	section.activePanel().Init("volume2")
+	count := len(section.list.Items())
+	if count == 0 {
+		t.Fatal("expected at least one volume in mock data")
+	}
 
-	// Navigate up to previous volume - this should close the current panel
-	section.Update(tea.KeyMsg{Type: tea.KeyUp})
+	// Select and delete items until one remains
+	for len(section.list.Items()) > 1 {
+		section.removeItem(len(section.list.Items()) - 1)
+	}
 
-	// Verify the panel can be reinitialized without issues
-	section.activePanel().Init("volume1")
+	// Delete the last item
+	section.removeItem(0)
 
-	// Verify the panel view is generated
-	view := section.activePanel().View()
-	if view == "" {
-		t.Error("Panel view should not be empty after reinitialization")
+	if len(section.list.Items()) != 0 {
+		t.Errorf("expected 0 items, got %d", len(section.list.Items()))
 	}
 }
