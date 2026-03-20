@@ -154,6 +154,56 @@ func newMockContainerService() *mockContainerService {
 				RestartPolicy: "no",
 				Privileged:    false,
 			},
+			{
+				ID:      "mno345pqr678",
+				Name:    "redis-cache",
+				Image:   "redis:7-alpine",
+				Status:  "Up 3 hours",
+				State:   StateRunning,
+				Created: now.Add(-3 * time.Hour),
+				Ports: []PortMapping{
+					{HostPort: 6379, ContainerPort: 6379, Protocol: "tcp"},
+				},
+				Mounts: []Mount{
+					{Type: "volume", Source: "redis_data", Destination: "/data"},
+				},
+				Hostname:    "redis-cache",
+				NetworkMode: "bridge",
+				Networks: []NetworkInfo{
+					{Name: "app-network", IPAddress: "172.20.0.4", Gateway: "172.20.0.1"},
+				},
+				Cmd:           []string{"redis-server", "--appendonly", "yes"},
+				Entrypoint:    []string{"docker-entrypoint.sh"},
+				WorkingDir:    "/data",
+				Env:           []string{},
+				Labels:        map[string]string{"com.docker.compose.service": "cache"},
+				MemoryLimit:   256 * 1024 * 1024, // 256 MB
+				CPUShares:     256,
+				RestartPolicy: "unless-stopped",
+				Privileged:    false,
+			},
+			{
+				ID:            "pqr678stu901",
+				Name:          "worker-crashed",
+				Image:         "python:3.11-slim",
+				Status:        "Exited (1) 1 hour ago",
+				State:         StateStopped,
+				Created:       now.Add(-6 * time.Hour),
+				Ports:         []PortMapping{},
+				Mounts:        []Mount{},
+				Hostname:      "worker-crashed",
+				NetworkMode:   "bridge",
+				Networks:      []NetworkInfo{},
+				Cmd:           []string{"python", "worker.py"},
+				Entrypoint:    []string{},
+				WorkingDir:    "/app",
+				Env:           []string{"PYTHONUNBUFFERED=1", "WORKER_CONCURRENCY=4"},
+				Labels:        map[string]string{"com.docker.compose.service": "worker"},
+				MemoryLimit:   512 * 1024 * 1024, // 512 MB
+				CPUShares:     512,
+				RestartPolicy: "on-failure:5",
+				Privileged:    false,
+			},
 		},
 	}
 }
@@ -352,10 +402,6 @@ func newMockImageService() *mockImageService {
 				Created:  now.Add(-24 * time.Hour),
 				Dangling: false,
 				UsedBy:   []string{"abc123def456"},
-				Layers: []Layer{{
-					Command: "ngnix run",
-				},
-				},
 			},
 			{
 				ID:       "sha256:node456",
@@ -376,11 +422,38 @@ func newMockImageService() *mockImageService {
 				UsedBy:   []string{"ghi789jkl012"},
 			},
 			{
+				ID:       "sha256:redis012",
+				Repo:     "redis",
+				Tag:      "7-alpine",
+				Size:     40 * 1024 * 1024, // 40 MB
+				Created:  now.Add(-48 * time.Hour),
+				Dangling: false,
+				UsedBy:   []string{"mno345pqr678"},
+			},
+			{
+				ID:       "sha256:python345",
+				Repo:     "python",
+				Tag:      "3.11-slim",
+				Size:     130 * 1024 * 1024, // 130 MB
+				Created:  now.Add(-96 * time.Hour),
+				Dangling: false,
+				UsedBy:   []string{"pqr678stu901"},
+			},
+			{
 				ID:       "sha256:dangling001",
 				Repo:     "<none>",
 				Tag:      "<none>",
 				Size:     85 * 1024 * 1024, // 85 MB
 				Created:  now.Add(-168 * time.Hour),
+				Dangling: true,
+				UsedBy:   []string{},
+			},
+			{
+				ID:       "sha256:dangling002",
+				Repo:     "<none>",
+				Tag:      "<none>",
+				Size:     52 * 1024 * 1024, // 52 MB
+				Created:  now.Add(-240 * time.Hour),
 				Dangling: true,
 				UsedBy:   []string{},
 			},
@@ -392,13 +465,8 @@ func (s *mockImageService) List(ctx context.Context) ([]Image, error) {
 	return s.images, nil
 }
 
-func (s *mockImageService) Get(ctx context.Context, id string) (Image, error) {
-	for _, img := range s.images {
-		if img.ID == id {
-			return img, nil
-		}
-	}
-	return Image{}, fmt.Errorf("image not found: %s", id)
+func (s *mockImageService) FetchLayers(ctx context.Context, id string) []Layer {
+	return []Layer{}
 }
 
 func (s *mockImageService) Remove(ctx context.Context, id string, force bool) error {
@@ -449,12 +517,12 @@ func newMockVolumeService() *mockVolumeService {
 				UsedCount: 1,
 			},
 			{
-				Name:      "app_data",
+				Name:      "redis_data",
 				Driver:    "local",
-				MountPath: "/var/lib/docker/volumes/app_data/_data",
-				Size:      64 * 1024 * 1024, // 64 MB
-				Created:   now.Add(-48 * time.Hour),
-				UsedCount: 0,
+				MountPath: "/var/lib/docker/volumes/redis_data/_data",
+				Size:      8 * 1024 * 1024, // 8 MB
+				Created:   now.Add(-3 * time.Hour),
+				UsedCount: 1,
 			},
 			{
 				Name:      "nginx_config",
@@ -463,6 +531,22 @@ func newMockVolumeService() *mockVolumeService {
 				Size:      1024 * 1024, // 1 MB
 				Created:   now.Add(-72 * time.Hour),
 				UsedCount: 1,
+			},
+			{
+				Name:      "app_data",
+				Driver:    "local",
+				MountPath: "/var/lib/docker/volumes/app_data/_data",
+				Size:      64 * 1024 * 1024, // 64 MB
+				Created:   now.Add(-48 * time.Hour),
+				UsedCount: 0,
+			},
+			{
+				Name:      "build_cache",
+				Driver:    "local",
+				MountPath: "/var/lib/docker/volumes/build_cache/_data",
+				Size:      512 * 1024 * 1024, // 512 MB
+				Created:   now.Add(-120 * time.Hour),
+				UsedCount: 0,
 			},
 		},
 	}
@@ -502,10 +586,6 @@ func (s *mockVolumeService) Prune(_ context.Context, opts PruneOptions) (PruneRe
 	}
 	s.volumes = remaining
 	return PruneReport{ItemsDeleted: count, SpaceReclaimed: spaceReclaimed}, nil
-}
-
-func (s *mockVolumeService) FileTree(ctx context.Context, name string) (*FileNode, error) {
-	return &FileNode{}, nil
 }
 
 // mockNetworkService provides mock network data.
@@ -561,8 +641,19 @@ func newMockNetworkService() *mockNetworkService {
 				ConnectedContainers: []NetworkContainer{
 					{Name: "api-server", IPv4Address: "172.20.0.2/16", MacAddress: "02:42:ac:14:00:02"},
 					{Name: "postgres-db", IPv4Address: "172.20.0.3/16", MacAddress: "02:42:ac:14:00:03"},
+					{Name: "redis-cache", IPv4Address: "172.20.0.4/16", MacAddress: "02:42:ac:14:00:04"},
 				},
 				IPAM: NetworkIPAM{Subnet: "172.20.0.0/16", Gateway: "172.20.0.1"},
+			},
+			{
+				ID:                  "mno345pqr678mno3",
+				Name:                "monitoring",
+				Driver:              "bridge",
+				Scope:               "local",
+				Internal:            true,
+				Created:             now.Add(-48 * time.Hour),
+				ConnectedContainers: []NetworkContainer{},
+				IPAM:                NetworkIPAM{Subnet: "172.25.0.0/16", Gateway: "172.25.0.1"},
 			},
 		},
 	}

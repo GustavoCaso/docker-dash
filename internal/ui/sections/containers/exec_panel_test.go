@@ -100,13 +100,21 @@ func TestExecPanelErrorEmitsBanner(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Update with error should return banner cmd")
 	}
-	result := cmd()
-	bannerMsg, ok := result.(message.ShowBannerMsg)
+	batch, ok := cmd().(tea.BatchMsg)
 	if !ok {
-		t.Fatalf("expected ShowBannerMsg, got %T", result)
+		t.Fatalf("expected BatchMsg, got %T", cmd())
 	}
-	if !bannerMsg.IsError {
-		t.Error("ShowBannerMsg.IsError should be true")
+	var found bool
+	for _, c := range batch {
+		if msg, isBanner := c().(message.ShowBannerMsg); isBanner {
+			if !msg.IsError {
+				t.Error("ShowBannerMsg.IsError should be true")
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected ShowBannerMsg in batch")
 	}
 }
 

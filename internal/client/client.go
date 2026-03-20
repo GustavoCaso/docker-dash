@@ -33,7 +33,7 @@ type ContainerService interface {
 // ImageService manages Docker images.
 type ImageService interface {
 	List(ctx context.Context) ([]Image, error)
-	Get(ctx context.Context, id string) (Image, error)
+	FetchLayers(ctx context.Context, id string) []Layer
 	Remove(ctx context.Context, id string, force bool) error
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)
 }
@@ -42,7 +42,6 @@ type ImageService interface {
 type VolumeService interface {
 	List(ctx context.Context) ([]Volume, error)
 	Remove(ctx context.Context, name string, force bool) error
-	FileTree(ctx context.Context, name string) (*FileNode, error)
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)
 }
 

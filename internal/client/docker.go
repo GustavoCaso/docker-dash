@@ -487,24 +487,11 @@ func (s *imageService) List(ctx context.Context) ([]Image, error) {
 
 	result := make([]Image, len(images))
 	for i, img := range images {
-		repo := none
-		tag := none
-		if len(img.RepoTags) > 0 {
-			parts := strings.SplitN(img.RepoTags[0], ":", repoTagParts)
-			repo = parts[0]
-			if len(parts) > 1 {
-				tag = parts[1]
-			}
+		imageData, imageErr := s.get(ctx, img.ID)
+		if imageErr != nil {
+			return []Image{}, imageErr
 		}
 
-		imageData := Image{
-			ID:       img.ID,
-			Repo:     repo,
-			Tag:      tag,
-			Size:     img.Size,
-			Created:  time.Unix(img.Created, 0),
-			Dangling: len(img.RepoTags) == 0 || repo == none && tag == none,
-		}
 		imageData.Containers = img.Containers
 		result[i] = imageData
 	}
@@ -512,11 +499,11 @@ func (s *imageService) List(ctx context.Context) ([]Image, error) {
 	return result, nil
 }
 
-// fetchLayers retrieves the layer history for an image.
-func (s *imageService) fetchLayers(ctx context.Context, imageID string) []Layer {
+// FetchLayers retrieves the layer history for an image.
+func (s *imageService) FetchLayers(ctx context.Context, imageID string) []Layer {
 	history, err := s.cli.ImageHistory(ctx, imageID)
 	if err != nil {
-		return nil
+		return []Layer{}
 	}
 
 	layers := make([]Layer, 0, len(history))
@@ -532,7 +519,7 @@ func (s *imageService) fetchLayers(ctx context.Context, imageID string) []Layer 
 	return layers
 }
 
-func (s *imageService) Get(ctx context.Context, id string) (Image, error) {
+func (s *imageService) get(ctx context.Context, id string) (Image, error) {
 	img, err := s.cli.ImageInspect(ctx, id, client.ImageInspectWithManifests(true))
 	if err != nil {
 		return Image{}, err
@@ -553,9 +540,6 @@ func (s *imageService) Get(ctx context.Context, id string) (Image, error) {
 		return Image{}, err
 	}
 
-	// Fetch layer history for this image
-	layers := s.fetchLayers(ctx, img.ID)
-
 	return Image{
 		ID:       img.ID,
 		Repo:     repo,
@@ -563,7 +547,6 @@ func (s *imageService) Get(ctx context.Context, id string) (Image, error) {
 		Size:     img.Size,
 		Created:  created,
 		Dangling: len(img.RepoTags) == 0 || repo == none && tag == none,
-		Layers:   layers,
 		Config:   img.Config,
 	}, nil
 }
@@ -636,123 +619,10 @@ func (s *volumeService) Prune(ctx context.Context, opts PruneOptions) (PruneRepo
 	return PruneReport{ItemsDeleted: len(r.VolumesDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
-func (s *volumeService) FileTree(ctx context.Context, name string) (*FileNode, error) {
-	// Try to find a running container that mounts this volume
-	containerID, mountPoint, err := s.findRunningContainerForVolume(ctx, name)
-	if err != nil {
-		return &FileNode{}, err
-	}
-
-	if containerID != "" {
-		return s.copyFileTree(ctx, containerID, mountPoint)
-	}
-
-	// No running container — spin up a temporary one to browse the volume
-	return s.fileTreeViaTempContainer(ctx, name)
-}
-
-// findRunningContainerForVolume returns the ID and mount point of a running
-// container that uses the given volume, or empty strings if none found.
-func (s *volumeService) findRunningContainerForVolume(ctx context.Context, name string) (string, string, error) {
-	usedBy, err := s.getVolumeUsage(ctx, name)
-	if err != nil {
-		return "", "", err
-	}
-
-	for _, cID := range usedBy {
-		inspect, inspectErr := s.cli.ContainerInspect(ctx, cID)
-		if inspectErr != nil || !inspect.State.Running {
-			continue
-		}
-		for _, m := range inspect.Mounts {
-			if m.Name == name {
-				return cID, m.Destination, nil
-			}
-		}
-	}
-
-	return "", "", nil
-}
-
-// copyFileTree reads a tar archive from a container path and builds a file tree.
-func (s *volumeService) copyFileTree(ctx context.Context, containerID, path string) (*FileNode, error) {
-	reader, _, err := s.cli.CopyFromContainer(ctx, containerID, path)
-	if err != nil {
-		return &FileNode{}, fmt.Errorf("copy from container failed: %w", err)
-	}
-	defer reader.Close()
-
-	return buildContainerFileTree(reader), nil
-}
-
 const (
-	volumeMountPath = "/mnt/volume"
-	alpineImage     = "alpine:latest"
-	logsSinceHours  = 2 // hours of log history to fetch
-	repoTagParts    = 2 // parts when splitting repo:tag on ":"
+	logsSinceHours = 2 // hours of log history to fetch
+	repoTagParts   = 2 // parts when splitting repo:tag on ":"
 )
-
-// ensureImage pulls the image if it doesn't exist locally.
-func (s *volumeService) ensureImage(ctx context.Context, ref string) error {
-	_, err := s.cli.ImageInspect(ctx, ref)
-	if err == nil {
-		return nil // already exists
-	}
-
-	reader, err := s.cli.ImagePull(ctx, ref, image.PullOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to pull %s: %w", ref, err)
-	}
-	defer reader.Close()
-	// Drain the reader to complete the pull
-	_, err = io.Copy(io.Discard, reader)
-	return err
-}
-
-// fileTreeViaTempContainer creates a temporary alpine container to browse
-// a volume that is not in use by any running container.
-func (s *volumeService) fileTreeViaTempContainer(ctx context.Context, volumeName string) (*FileNode, error) {
-	if err := s.ensureImage(ctx, alpineImage); err != nil {
-		return &FileNode{}, err
-	}
-
-	resp, err := s.cli.ContainerCreate(ctx, &container.Config{
-		Image: alpineImage,
-		Cmd:   []string{"true"},
-	}, &container.HostConfig{
-		Binds: []string{volumeName + ":" + volumeMountPath},
-	}, nil, nil, "")
-	if err != nil {
-		return &FileNode{}, fmt.Errorf("failed to create temp container: %w", err)
-	}
-
-	// Always clean up the temporary container
-	defer func() { _ = s.cli.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true}) }()
-
-	ft, err := s.copyFileTree(ctx, resp.ID, volumeMountPath)
-	if err != nil {
-		return &FileNode{}, fmt.Errorf("failed to read volume files: %w", err)
-	}
-
-	return ft, nil
-}
-
-// Helper to get containers using a volume.
-func (s *volumeService) getVolumeUsage(ctx context.Context, volumeName string) ([]string, error) {
-	containers, err := s.cli.ContainerList(ctx, container.ListOptions{
-		All:     true,
-		Filters: filters.NewArgs(filters.Arg("volume", volumeName)),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	ids := make([]string, len(containers))
-	for i, c := range containers {
-		ids[i] = c.ID
-	}
-	return ids, nil
-}
 
 // Local Network Service.
 type networkService struct {

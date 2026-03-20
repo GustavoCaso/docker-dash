@@ -2,6 +2,7 @@ package containers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -81,16 +82,12 @@ func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 		return e.readOutput()
 	case execOutputMsg:
 		if msg.err != nil {
-			if e.session == nil {
-				return nil
-			}
-			e.Close()
-			return func() tea.Msg {
+			return tea.Batch(e.Close(), func() tea.Msg {
 				return message.ShowBannerMsg{
 					Message: fmt.Sprintf("Exec session error. Err: %s", msg.err),
 					IsError: true,
 				}
-			}
+			})
 		}
 		e.output += msg.output
 		e.viewport.SetContent(noStyle.Width(e.width).Render(e.output))
@@ -154,7 +151,6 @@ func (e *execPanel) handleKeyInput(msg tea.KeyMsg) tea.Cmd {
 		e.input.Reset()
 		_, err := e.session.Writer.Write([]byte(cmd + "\n"))
 		if err != nil {
-			e.Close()
 			return func() tea.Msg {
 				return message.ShowBannerMsg{Message: "Exec write failed", IsError: true}
 			}
@@ -196,6 +192,16 @@ func (e *execPanel) startSession(containerID string) tea.Cmd {
 	ctx := e.ctx
 	svc := e.service
 	return func() tea.Msg {
+		container, err := svc.Get(ctx, containerID)
+
+		if err != nil {
+			return execOutputMsg{err: err}
+		}
+
+		if container.State != client.StateRunning {
+			return execOutputMsg{err: errors.New("container is not running")}
+		}
+
 		session, err := svc.Exec(ctx, containerID)
 		if err != nil {
 			return execOutputMsg{err: err}

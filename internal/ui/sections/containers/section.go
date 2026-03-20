@@ -190,7 +190,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 		// For delete, remove from list
 		if msg.Action == "deleting" {
-			s.list.RemoveItem(msg.Idx)
+			cmds = append(cmds, s.removeItem(msg.Idx))
 		}
 
 		// Refresh list after start/stop/restart
@@ -311,6 +311,14 @@ func (s *Section) Reset() tea.Cmd {
 
 func (s *Section) activePanel() panel.Panel {
 	return s.panels[s.activePanelIdx]
+}
+
+func (s *Section) removeItem(idx int) tea.Cmd {
+	s.list.RemoveItem(idx)
+	if len(s.list.Items()) > 0 {
+		s.list.Select(min(idx, len(s.list.Items())-1))
+	}
+	return s.updateActivePanel()
 }
 
 func (s *Section) updateActivePanel() tea.Cmd {

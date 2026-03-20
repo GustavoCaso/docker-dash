@@ -183,13 +183,12 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		s.list.RemoveItem(msg.Idx)
-		return func() tea.Msg {
+		return tea.Batch(s.removeItem(msg.Idx), func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Network %s deleted", msg.Name),
 				IsError: false,
 			}
-		}
+		})
 	case tea.KeyMsg:
 		if s.isFilter {
 			var filterCmds []tea.Cmd
@@ -292,6 +291,14 @@ func (s *Section) Reset() tea.Cmd {
 
 func (s *Section) activePanel() panel.Panel {
 	return s.panels[s.activePanelIdx]
+}
+
+func (s *Section) removeItem(idx int) tea.Cmd {
+	s.list.RemoveItem(idx)
+	if len(s.list.Items()) > 0 {
+		s.list.Select(min(idx, len(s.list.Items())-1))
+	}
+	return s.updateActivePanel()
 }
 
 func (s *Section) updateActivePanel() tea.Cmd {
