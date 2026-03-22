@@ -3,6 +3,7 @@ package images
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -153,6 +154,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case imagesLoadedMsg:
+		log.Printf("[images] imagesLoadedMsg: count=%d", len(msg.items))
 		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
@@ -166,6 +168,11 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case imagesPrunedMsg:
+		log.Printf(
+			"[images] imagesPrunedMsg: deleted=%d spaceReclaimed=%d",
+			msg.report.ItemsDeleted,
+			msg.report.SpaceReclaimed,
+		)
 		if msg.err != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -183,6 +190,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
 		})
 	case imageRemovedMsg:
+		log.Printf("[images] imageRemovedMsg: imageID=%q err=%v", msg.ID, msg.Error)
 		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -198,6 +206,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			}
 		})
 	case containerRunMsg:
+		log.Printf("[images] containerRunMsg: containerID=%q err=%v", msg.containerID, msg.error)
 		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
@@ -228,6 +237,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(banner, refreshComponents)
 
 	case tea.KeyMsg:
+		log.Printf("[images] KeyMsg: key=%q", msg.String())
 		if s.isFilter {
 			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd

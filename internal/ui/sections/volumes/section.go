@@ -3,6 +3,7 @@ package volumes
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -119,6 +120,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case volumesLoadedMsg:
+		log.Printf("[volumes] volumesLoadedMsg: count=%d", len(msg.items))
 		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
@@ -132,6 +134,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case volumesPrunedMsg:
+		log.Printf("[volumes] volumesPrunedMsg: deleted=%d spaceReclaimed=%d",
+			msg.report.ItemsDeleted, msg.report.SpaceReclaimed)
 		if msg.err != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -149,6 +153,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
 		})
 	case volumeRemovedMsg:
+		log.Printf("[volumes] volumeRemovedMsg: name=%q err=%v", msg.Name, msg.Error)
 		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -165,6 +170,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			}
 		}
 	case tea.KeyMsg:
+		log.Printf("[volumes] KeyMsg: key=%q", msg.String())
 		if s.isFilter {
 			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd

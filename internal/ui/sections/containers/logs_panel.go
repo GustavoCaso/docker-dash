@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -43,6 +44,7 @@ func NewLogsPanel(ctx context.Context, client client.ContainerService) panel.Pan
 }
 
 func (l *logsPanel) Init(containerID string) tea.Cmd {
+	log.Printf("[containers][logs-panel] Init: containerID=%q", containerID)
 	return tea.Batch(l.init(containerID), l.extendHelpCmd())
 }
 
@@ -53,6 +55,7 @@ func (l *logsPanel) Name() string {
 func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case logsSessionStartedMsg:
+		log.Printf("[containers][logs-panel] session started")
 		l.logsSession = msg.session
 		return l.readLogsOutput()
 	case logsOutputMsg:
@@ -74,6 +77,7 @@ func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
+		log.Printf("[containers][logs-panel] output chunk: bytes=%d", len(msg.output))
 		l.logsOutput += msg.output
 		l.viewport.SetContent(l.logsOutput)
 		l.viewport.GotoBottom()
@@ -91,6 +95,7 @@ func (l *logsPanel) View() string {
 }
 
 func (l *logsPanel) Close() tea.Cmd {
+	log.Printf("[containers][logs-panel] Close")
 	if l.logsSession != nil {
 		l.logsSession.Close()
 		l.logsSession = nil

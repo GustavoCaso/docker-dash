@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/NimbleMarkets/ntcharts/canvas/runes"
 	"github.com/NimbleMarkets/ntcharts/linechart/streamlinechart"
@@ -104,12 +105,14 @@ func (s *statsPanel) Name() string {
 }
 
 func (s *statsPanel) Init(containerID string) tea.Cmd {
+	log.Printf("[containers][stats-panel] Init: containerID=%q", containerID)
 	return s.startSession(containerID)
 }
 
 func (s *statsPanel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case statsSessionStartedMsg:
+		log.Printf("[containers][stats-panel] session started")
 		s.session = msg.session
 		return s.readOutput()
 	case statsOutputMsg:
@@ -126,6 +129,7 @@ func (s *statsPanel) Update(msg tea.Msg) tea.Cmd {
 			}
 		}
 
+		log.Printf("[containers][stats-panel] stats update received")
 		s.cpuChart.Push(msg.cpuPercetange)
 		s.cpuChart.Draw()
 		s.memChart.Push(msg.memoryPercentage)
@@ -179,6 +183,7 @@ func (s *statsPanel) View() string {
 }
 
 func (s *statsPanel) Close() tea.Cmd {
+	log.Printf("[containers][stats-panel] Close")
 	if s.session != nil {
 		s.session.Close()
 		s.session = nil

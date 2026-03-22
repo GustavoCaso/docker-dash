@@ -3,6 +3,7 @@ package images
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -38,12 +39,14 @@ func (l *layersPanel) Name() string {
 }
 
 func (l *layersPanel) Init(imageID string) tea.Cmd {
+	log.Printf("[images][layers-panel] Init: imageID=%q", imageID)
 	return l.fetchCmd(imageID)
 }
 
 func (l *layersPanel) Update(msg tea.Msg) tea.Cmd {
 	dm, ok := msg.(layersOutputMsg)
 	if ok {
+		log.Printf("[images][layers-panel] layersOutputMsg: count=%d err=%v", len(dm.output), dm.err)
 		if dm.err != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{Message: dm.err.Error(), IsError: true}

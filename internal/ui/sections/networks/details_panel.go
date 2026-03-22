@@ -2,6 +2,7 @@ package networks
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ func newDetailsPanel() panel.Panel {
 }
 
 func (d *detailsPanel) Init(content string) tea.Cmd {
+	log.Printf("[network][details-panel] Init: networkID=%q", content)
 	d.viewport.SetContent(content)
 	return nil
 }

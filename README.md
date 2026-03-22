@@ -55,17 +55,24 @@ host = "ssh://pi5@pi5"
 # Auto-refresh interval
 # Examples: "500ms", "5s", "1m", "2m30s"
 interval = "10s"
+
+[debug]
+enable = false
 ```
 
 ### CLI Flags
 
 | Flag | Description |
 |---|---|
-| `-config` | Path to config file (default: `~/.config/docker-dash/config.toml`) |
-| `-docker.host` | Docker daemon URL (overrides config file) |
-| `-refresh.interval` | Auto-refresh interval (overrides config file) |
+| `--config` | Path to config file (default: `~/.config/docker-dash/config.toml`) |
+| `--docker.host` | Docker daemon URL (overrides config file) |
+| `--refresh.interval` | Auto-refresh interval (overrides config file) |
+| `--debug` | Enable debug logging (overrides config file) |
 
 CLI flags take precedence over values in the config file.
+
+### Debug mode
+When `debug` is enabled we create a debug log file in the temporary folder of the system. 
 
 ### Keybindings
 
