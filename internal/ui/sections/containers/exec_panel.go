@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -58,6 +59,7 @@ func NewExecPanel(ctx context.Context, svc client.ContainerService) panel.Panel 
 }
 
 func (e *execPanel) Init(containerID string) tea.Cmd {
+	log.Printf("[containers][exec-panel] Init: containerID=%q", containerID)
 	e.output = ""
 	e.history = []string{}
 	e.historyIdx = 0
@@ -78,6 +80,7 @@ func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case execSessionStartedMsg:
+		log.Printf("[containers][exec-panel] session started")
 		e.session = msg.session
 		return e.readOutput()
 	case execOutputMsg:
@@ -89,6 +92,7 @@ func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 				}
 			})
 		}
+		log.Printf("[containers][exec-panel] output chunk: bytes=%d", len(msg.output))
 		e.output += msg.output
 		e.viewport.SetContent(noStyle.Width(e.width).Render(e.output))
 		e.viewport.GotoBottom()
@@ -111,6 +115,7 @@ func (e *execPanel) View() string {
 }
 
 func (e *execPanel) Close() tea.Cmd {
+	log.Printf("[containers][exec-panel] closing session")
 	e.input.Blur()
 	if e.session != nil {
 		e.session.Close()
@@ -146,6 +151,7 @@ func (e *execPanel) handleKeyInput(msg tea.KeyMsg) tea.Cmd {
 			e.viewport.SetContent("")
 			return nil
 		}
+		log.Printf("[containers][exec-panel] executing command: %q", cmd)
 		e.history = append(e.history, cmd)
 		e.historyIdx = len(e.history)
 		e.input.Reset()

@@ -3,6 +3,7 @@ package panel
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -54,6 +55,7 @@ func (f *filesPanel) Name() string {
 }
 
 func (f *filesPanel) Init(containerID string) tea.Cmd {
+	log.Printf("[files-panel] Init: containerID=%q", containerID)
 	f.loading = true
 	return tea.Batch(f.spinner.Tick, f.fetchCmd(containerID), f.extendHelpCmd())
 }
@@ -86,6 +88,7 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case fileNodeLoadedMsg:
+		log.Printf("[files-panel] fileNodeLoadedMsg: err=%v", msg.err)
 		f.loading = false
 		if msg.err != nil {
 			return func() tea.Msg {
@@ -100,6 +103,7 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 		return nil
 
 	case tea.KeyMsg:
+		log.Printf("[files-panel] KeyMsg: key=%q", msg.String())
 		switch {
 		case key.Matches(msg, keys.Keys.ScrollUp):
 			if f.cursor > 0 {
@@ -208,6 +212,7 @@ func (f *filesPanel) View() string {
 }
 
 func (f *filesPanel) Close() tea.Cmd {
+	log.Printf("[files-panel] Close")
 	f.loading = false
 	f.root = nil
 	f.visible = []*client.FileNode{}

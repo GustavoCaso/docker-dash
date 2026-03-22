@@ -3,6 +3,7 @@ package networks
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -149,6 +150,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case networksLoadedMsg:
+		log.Printf("[networks] networksLoadedMsg: count=%d", len(msg.items))
 		s.loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
@@ -162,6 +164,11 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case networksPrunedMsg:
+		log.Printf(
+			"[networks] networksPrunedMsg: deleted=%d spaceReclaimed=%d",
+			msg.report.ItemsDeleted,
+			msg.report.SpaceReclaimed,
+		)
 		if msg.err != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -175,6 +182,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
 		})
 	case networkRemovedMsg:
+		log.Printf("[networks] networkRemovedMsg: id=%q err=%v", msg.ID, msg.Error)
 		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -190,6 +198,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			}
 		})
 	case tea.KeyMsg:
+		log.Printf("[networks] KeyMsg: key=%q", msg.String())
 		if s.isFilter {
 			var filterCmds []tea.Cmd
 			var listCmd tea.Cmd

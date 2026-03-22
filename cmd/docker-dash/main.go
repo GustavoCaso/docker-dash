@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"log"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -23,6 +25,7 @@ func main() {
 		"Refresh interval. Override value from configuration file if exists",
 	)
 	host := flag.String("docker.host", "", "Docker host. Override value from configuration file if exists")
+	debug := flag.Bool("debug", false, "Enable debug logging to ./docker-dash-debug.log")
 	flag.Parse()
 
 	// Resolve config file path
@@ -48,6 +51,28 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Override refresh intervalconfiguration with %s\n", *refreshConfig)
 	}
 
+	if *debug {
+		cfg.Debug.Enabled = true
+	}
+
+	var debugFile *os.File
+	if cfg.Debug.Enabled {
+		tempFile, tempErr := os.CreateTemp("", "docker-dash-debug")
+		if tempErr != nil {
+			fmt.Fprintf(os.Stderr, "Error creating temp folder for debug log: %v\n", tempErr)
+			os.Exit(1)
+		}
+		_ = tempFile.Close()
+		var logErr error
+		debugFile, logErr = tea.LogToFile(tempFile.Name(), "[docker-dash]")
+		if logErr != nil {
+			fmt.Fprintf(os.Stderr, "Error opening debug log: %v\n", logErr)
+			os.Exit(1)
+		}
+	} else {
+		log.SetOutput(io.Discard)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Build Docker client from config
@@ -64,13 +89,22 @@ func main() {
 
 	_, runErr := p.Run()
 	cancel()
+
+	if cfg.Debug.Enabled {
+		fmt.Fprintf(os.Stderr, "debug file for this session is located at: %s\n", debugFile.Name())
+		_ = debugFile.Close()
+	}
+
 	if closeErr := dockerClient.Close(); closeErr != nil {
 		fmt.Fprintf(os.Stderr, "Warning: failed to close Docker client: %v\n", closeErr)
 	}
+
 	if runErr != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", runErr)
 		os.Exit(1)
 	}
+
+	os.Exit(0)
 }
 
 // setupDockerClient tries to connect to the Docker daemon and returns a client,

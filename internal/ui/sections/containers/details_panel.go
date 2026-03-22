@@ -3,6 +3,7 @@ package containers
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -36,12 +37,14 @@ func (d *detailsPanel) Name() string {
 }
 
 func (d *detailsPanel) Init(containerID string) tea.Cmd {
+	log.Printf("[containers][details-panel] Init: containerID=%q", containerID)
 	return d.fetchCmd(containerID)
 }
 
 func (d *detailsPanel) Update(msg tea.Msg) tea.Cmd {
 	dm, ok := msg.(detailsMsg)
 	if ok {
+		log.Printf("[containers][details-panel] detailsMsg received: err=%v", dm.err)
 		if dm.err != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{Message: dm.err.Error(), IsError: true}

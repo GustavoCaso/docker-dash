@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -167,6 +168,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		log.Printf("[app] WindowSizeMsg: width=%d height=%d", msg.Width, msg.Height)
 		m.width = msg.Width
 		m.height = msg.Height
 
@@ -189,17 +191,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
 	case message.ShowConfirmationMsg:
+		log.Printf("[app] ShowConfirmationMsg: title=%q", msg.Title)
 		m.confirmation.Init(msg.Title, msg.Body)
 		m.pendingCmd = msg.OnConfirm
 		m.showConfirmation = true
 		return m, nil
 
 	case message.HideConfirmationMsg:
+		log.Printf("[app] HideConfirmationMsg")
 		m.showConfirmation = false
 		m.pendingCmd = nil
 		return m, nil
 
 	case message.ShowBannerMsg:
+		log.Printf("[app] ShowBannerMsg: message=%q", msg.Message)
 		m.bannerMsg = msg.Message
 		if msg.IsError {
 			m.bannerKind = bannerError
@@ -217,23 +222,27 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		})
 
 	case message.BubbleUpMsg:
+		log.Printf("[app] BubbleUpMsg: key=%q", msg.KeyMsg.String())
 		if msg.OnlyActive {
 			return m.forwardMessageToActive(msg.KeyMsg)
 		}
 		return m.forwardMessageToAll(msg.KeyMsg)
 
 	case clearBannerMsg:
+		log.Printf("[app] clearBannerMsg")
 		m.bannerMsg = ""
 		m.bannerKind = bannerNone
 		return m, nil
 
 	case autoRefreshMsg:
+		log.Printf("[app] autoRefreshMsg")
 		_, cmd := m.forwardMessageToAll(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 		return m, tea.Batch(cmd, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
 			return autoRefreshMsg{}
 		}))
 
 	case message.AddContextualKeyBindingsMsg:
+		log.Printf("[app] AddContextualKeyBindingsMsg")
 		if m.activeKeys != nil {
 			m.activeKeys.ToggleContextual(msg.Bindings)
 		}
@@ -241,12 +250,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case message.ClearContextualKeyBindingsMsg:
+		log.Printf("[app] ClearContextualKeyBindingsMsg")
 		if m.activeKeys != nil {
 			m.activeKeys.DisableContextual()
 		}
 		return m, nil
 
 	case tea.KeyMsg:
+		log.Printf("[app] KeyMsg: key=%q", msg.String())
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit

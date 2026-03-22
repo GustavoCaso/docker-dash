@@ -115,3 +115,27 @@ func TestLoad_InvalidTOML(t *testing.T) {
 		t.Error("Load() with invalid TOML should return an error, got nil")
 	}
 }
+
+func TestDebugConfig(t *testing.T) {
+	content := `
+[debug]
+enabled = true
+`
+	tmpFile, err := os.CreateTemp(t.TempDir(), "config-*.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	cfg, err := config.Load(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Debug.Enabled {
+		t.Errorf("expected Debug.Enabled=true, got false")
+	}
+}

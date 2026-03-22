@@ -3,6 +3,7 @@ package containers
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -157,11 +158,17 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 	switch msg := msg.(type) {
 	case containersLoadedMsg:
+		log.Printf("[containers] containersLoadedMsg: count=%d", len(msg.items))
 		s.loading = false
 		cmd := s.list.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case containersPrunedMsg:
+		log.Printf(
+			"[containers] containersPrunedMsg: deleted=%d spaceReclaimed=%d",
+			msg.report.ItemsDeleted,
+			msg.report.SpaceReclaimed,
+		)
 		if msg.err != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -179,6 +186,12 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
 		})
 	case containerActionMsg:
+		log.Printf(
+			"[containers] containerActionMsg: action=%q containerID=%q err=%v",
+			msg.Action,
+			msg.ID,
+			msg.Error,
+		)
 		if msg.Error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -205,6 +218,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			}
 		})...)
 	case execCloseMsg:
+		log.Printf("[containers] execCloseMsg")
 		s.activePanel().Close()
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
@@ -212,19 +226,23 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 	case tea.MouseEvent:
 		cmds = append(cmds, s.activePanel().Update(msg))
 	case tea.KeyMsg:
+		log.Printf("[containers] KeyMsg: key=%q", msg.String())
 		switch {
 		case key.Matches(msg, keys.Keys.PanelNext):
 			currentPanel := s.activePanel()
 			s.activePanelIdx = (s.activePanelIdx + 1) % len(s.panels)
+			log.Printf("[containers] switching panel to: %q", s.panels[s.activePanelIdx].Name())
 			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.PanelPrev):
 			currentPanel := s.activePanel()
 			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
+			log.Printf("[containers] switching panel to: %q", s.panels[s.activePanelIdx].Name())
 			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		}
 
 		// When exec is active, route ALL keys directly to it.
 		if ep, ok := s.activePanel().(*execPanel); ok {
+			log.Print("[containers] forward message to exec panel")
 			cmds = append(cmds, ep.Update(msg))
 			return tea.Batch(cmds...)
 		}

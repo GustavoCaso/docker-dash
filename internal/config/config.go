@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Docker  DockerConfig  `toml:"docker"`
 	Refresh RefreshConfig `toml:"refresh"`
+	Debug   DebugConfig   `toml:"debug"`
 }
 
 // DockerConfig holds Docker client connection settings.
@@ -26,6 +27,12 @@ type DockerConfig struct {
 // RefreshConfig holds refresh configuration.
 type RefreshConfig struct {
 	Interval string `toml:"interval"`
+}
+
+// DebugConfig holds debug/logging settings.
+type DebugConfig struct {
+	// Enabled writes debug logs to ./docker-dash-debug.log when true.
+	Enabled bool `toml:"enabled"`
 }
 
 // DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml.

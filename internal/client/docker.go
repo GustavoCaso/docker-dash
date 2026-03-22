@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"slices"
 	"strconv"
@@ -96,11 +97,14 @@ func (c *dockerClient) Volumes() VolumeService       { return c.volumes }
 func (c *dockerClient) Networks() NetworkService     { return c.networks }
 
 func (c *dockerClient) Ping(ctx context.Context) error {
+	log.Printf("[docker] Ping")
 	_, err := c.cli.Ping(ctx)
+	log.Printf("[docker] Ping: done err=%v", err)
 	return err
 }
 
 func (c *dockerClient) Close() error {
+	log.Printf("[docker] Close")
 	return c.cli.Close()
 }
 
@@ -110,6 +114,7 @@ type containerService struct {
 }
 
 func (s *containerService) List(ctx context.Context) ([]Container, error) {
+	log.Printf("[docker] ContainerList: all=true")
 	containers, err := s.cli.ContainerList(ctx, container.ListOptions{All: true})
 	if err != nil {
 		return nil, err
@@ -164,13 +169,16 @@ func (s *containerService) List(ctx context.Context) ([]Container, error) {
 		}
 	}
 
+	log.Printf("[docker] ContainerList: returned count=%d err=%v", len(result), err)
 	return result, nil
 }
 
-func (s *containerService) Run(ctx context.Context, image Image) (string, error) {
+func (s *containerService) Run(ctx context.Context, img Image) (string, error) {
+	log.Printf("[docker] ContainerCreate+Start: image=%q", img.Name())
+
 	ports := nat.PortSet{}
 
-	for port := range image.Config.ExposedPorts {
+	for port := range img.Config.ExposedPorts {
 		natPort, err := nat.NewPort(nat.SplitProtoPort(port))
 		if err != nil {
 			return "", err
@@ -179,18 +187,18 @@ func (s *containerService) Run(ctx context.Context, image Image) (string, error)
 	}
 
 	config := &container.Config{
-		User:         image.Config.User,
-		WorkingDir:   image.Config.WorkingDir,
-		Labels:       image.Config.Labels,
-		Env:          image.Config.Env,
-		Cmd:          image.Config.Cmd,
-		Entrypoint:   image.Config.Entrypoint,
-		Image:        image.Name(),
-		Shell:        image.Config.Shell,
-		OnBuild:      image.Config.OnBuild,
-		Volumes:      image.Config.Volumes,
+		User:         img.Config.User,
+		WorkingDir:   img.Config.WorkingDir,
+		Labels:       img.Config.Labels,
+		Env:          img.Config.Env,
+		Cmd:          img.Config.Cmd,
+		Entrypoint:   img.Config.Entrypoint,
+		Image:        img.Name(),
+		Shell:        img.Config.Shell,
+		OnBuild:      img.Config.OnBuild,
+		Volumes:      img.Config.Volumes,
 		ExposedPorts: ports,
-		Healthcheck:  image.Config.Healthcheck,
+		Healthcheck:  img.Config.Healthcheck,
 	}
 
 	containerResponse, err := s.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
@@ -201,10 +209,12 @@ func (s *containerService) Run(ctx context.Context, image Image) (string, error)
 	if err != nil {
 		return "", err
 	}
+	log.Printf("[docker] ContainerCreate+Start: containerID=%q", containerResponse.ID)
 	return containerResponse.ID, nil
 }
 
 func (s *containerService) Get(ctx context.Context, id string) (*Container, error) {
+	log.Printf("[docker] ContainerInspect: id=%q", id)
 	c, err := s.cli.ContainerInspect(ctx, id)
 	if err != nil {
 		return nil, err
@@ -269,6 +279,7 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 		restartPolicy = fmt.Sprintf("%s:%d", restartPolicy, c.HostConfig.RestartPolicy.MaximumRetryCount)
 	}
 
+	log.Printf("[docker] ContainerInspect: done")
 	return &Container{
 		ID:      c.ID,
 		Name:    strings.TrimPrefix(c.Name, "/"),
@@ -297,22 +308,35 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 }
 
 func (s *containerService) Start(ctx context.Context, id string) error {
-	return s.cli.ContainerStart(ctx, id, container.StartOptions{})
+	log.Printf("[docker] ContainerStart: id=%q", id)
+	err := s.cli.ContainerStart(ctx, id, container.StartOptions{})
+	log.Printf("[docker] ContainerStart: done err=%v", err)
+	return err
 }
 
 func (s *containerService) Stop(ctx context.Context, id string) error {
-	return s.cli.ContainerStop(ctx, id, container.StopOptions{})
+	log.Printf("[docker] ContainerStop: id=%q", id)
+	err := s.cli.ContainerStop(ctx, id, container.StopOptions{})
+	log.Printf("[docker] ContainerStop: done err=%v", err)
+	return err
 }
 
 func (s *containerService) Restart(ctx context.Context, id string) error {
-	return s.cli.ContainerRestart(ctx, id, container.StopOptions{})
+	log.Printf("[docker] ContainerRestart: id=%q", id)
+	err := s.cli.ContainerRestart(ctx, id, container.StopOptions{})
+	log.Printf("[docker] ContainerRestart: done err=%v", err)
+	return err
 }
 
 func (s *containerService) Remove(ctx context.Context, id string, force bool) error {
-	return s.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: force})
+	log.Printf("[docker] ContainerRemove: id=%q force=%v", id, force)
+	err := s.cli.ContainerRemove(ctx, id, container.RemoveOptions{Force: force})
+	log.Printf("[docker] ContainerRemove: done err=%v", err)
+	return err
 }
 
 func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
+	log.Printf("[docker] ContainerLogs: id=%q follow=%v tail=%q", id, opts.Follow, opts.Tail)
 	now := time.Now()
 	reader, err := s.cli.ContainerLogs(ctx, id, container.LogsOptions{
 		ShowStdout: true,
@@ -333,6 +357,7 @@ func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions)
 		pw.CloseWithError(copyErr)
 	}()
 
+	log.Printf("[docker] ContainerLogs: session created")
 	return NewLogsSession(
 		io.NopCloser(pr),
 		func() { _ = reader.Close() },
@@ -340,6 +365,7 @@ func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions)
 }
 
 func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
+	log.Printf("[docker] ContainerExecCreate+Attach: id=%q", id)
 	execConfig := container.ExecOptions{
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -364,6 +390,7 @@ func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, e
 		pw.CloseWithError(copyErr)
 	}()
 
+	log.Printf("[docker] ContainerExecCreate+Attach: done")
 	return NewExecSession(
 		io.NopCloser(pr),
 		attachResp.Conn,
@@ -372,6 +399,7 @@ func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, e
 }
 
 func (s *containerService) Stats(ctx context.Context, id string) (*StatsSession, error) {
+	log.Printf("[docker] ContainerStats: id=%q stream=true", id)
 	reader, err := s.cli.ContainerStats(ctx, id, true)
 
 	if err != nil {
@@ -384,6 +412,7 @@ func (s *containerService) Stats(ctx context.Context, id string) (*StatsSession,
 		pw.CloseWithError(copyErr)
 	}()
 
+	log.Printf("[docker] ContainerStats: session created")
 	return NewStatsSession(
 		io.NopCloser(pr),
 		func() { _ = reader.Body.Close() },
@@ -391,14 +420,17 @@ func (s *containerService) Stats(ctx context.Context, id string) (*StatsSession,
 }
 
 func (s *containerService) Prune(ctx context.Context, _ PruneOptions) (PruneReport, error) {
+	log.Printf("[docker] ContainersPrune")
 	r, err := s.cli.ContainersPrune(ctx, filters.Args{})
 	if err != nil {
 		return PruneReport{}, err
 	}
+	log.Printf("[docker] ContainersPrune: deleted=%d spaceReclaimed=%d", len(r.ContainersDeleted), r.SpaceReclaimed)
 	return PruneReport{ItemsDeleted: len(r.ContainersDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
 func (s *containerService) FileTree(ctx context.Context, id string) (*FileNode, error) {
+	log.Printf("[docker] ContainerExport (file tree): id=%q", id)
 	reader, err := s.cli.ContainerExport(ctx, id)
 	if err != nil {
 		return &FileNode{}, err
@@ -406,6 +438,7 @@ func (s *containerService) FileTree(ctx context.Context, id string) (*FileNode, 
 
 	defer reader.Close()
 
+	log.Printf("[docker] ContainerExport: done")
 	return buildContainerFileTree(reader), nil
 }
 
@@ -480,6 +513,7 @@ type imageService struct {
 }
 
 func (s *imageService) List(ctx context.Context) ([]Image, error) {
+	log.Printf("[docker] ImageList: all=true")
 	images, err := s.cli.ImageList(ctx, image.ListOptions{All: true})
 	if err != nil {
 		return nil, err
@@ -496,11 +530,13 @@ func (s *imageService) List(ctx context.Context) ([]Image, error) {
 		result[i] = imageData
 	}
 
+	log.Printf("[docker] ImageList: returned count=%d", len(result))
 	return result, nil
 }
 
 // FetchLayers retrieves the layer history for an image.
 func (s *imageService) FetchLayers(ctx context.Context, imageID string) []Layer {
+	log.Printf("[docker] ImageHistory: id=%q", imageID)
 	history, err := s.cli.ImageHistory(ctx, imageID)
 	if err != nil {
 		return []Layer{}
@@ -516,6 +552,7 @@ func (s *imageService) FetchLayers(ctx context.Context, imageID string) []Layer 
 		})
 	}
 	slices.Reverse(layers)
+	log.Printf("[docker] ImageHistory: returned count=%d", len(layers))
 	return layers
 }
 
@@ -552,11 +589,14 @@ func (s *imageService) get(ctx context.Context, id string) (Image, error) {
 }
 
 func (s *imageService) Remove(ctx context.Context, id string, force bool) error {
+	log.Printf("[docker] ImageRemove: id=%q force=%v", id, force)
 	_, err := s.cli.ImageRemove(ctx, id, image.RemoveOptions{Force: force})
+	log.Printf("[docker] ImageRemove: done err=%v", err)
 	return err
 }
 
 func (s *imageService) Prune(ctx context.Context, opts PruneOptions) (PruneReport, error) {
+	log.Printf("[docker] ImagesPrune: all=%v", opts.All)
 	f := filters.Args{}
 	if opts.All {
 		f = filters.NewArgs(filters.Arg("dangling", "false"))
@@ -565,6 +605,7 @@ func (s *imageService) Prune(ctx context.Context, opts PruneOptions) (PruneRepor
 	if err != nil {
 		return PruneReport{}, err
 	}
+	log.Printf("[docker] ImagesPrune: deleted=%d spaceReclaimed=%d", len(r.ImagesDeleted), r.SpaceReclaimed)
 	return PruneReport{ItemsDeleted: len(r.ImagesDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
@@ -574,6 +615,7 @@ type volumeService struct {
 }
 
 func (s *volumeService) List(ctx context.Context) ([]Volume, error) {
+	log.Printf("[docker] DiskUsage (volumes)")
 	du, err := s.cli.DiskUsage(ctx, dockertypes.DiskUsageOptions{
 		Types: []dockertypes.DiskUsageObject{dockertypes.VolumeObject},
 	})
@@ -600,14 +642,19 @@ func (s *volumeService) List(ctx context.Context) ([]Volume, error) {
 		}
 	}
 
+	log.Printf("[docker] DiskUsage: returned count=%d", len(result))
 	return result, nil
 }
 
 func (s *volumeService) Remove(ctx context.Context, name string, force bool) error {
-	return s.cli.VolumeRemove(ctx, name, force)
+	log.Printf("[docker] VolumeRemove: name=%q force=%v", name, force)
+	err := s.cli.VolumeRemove(ctx, name, force)
+	log.Printf("[docker] VolumeRemove: done err=%v", err)
+	return err
 }
 
 func (s *volumeService) Prune(ctx context.Context, opts PruneOptions) (PruneReport, error) {
+	log.Printf("[docker] VolumesPrune: all=%v", opts.All)
 	f := filters.Args{}
 	if opts.All {
 		f = filters.NewArgs(filters.Arg("all", "true"))
@@ -616,6 +663,7 @@ func (s *volumeService) Prune(ctx context.Context, opts PruneOptions) (PruneRepo
 	if err != nil {
 		return PruneReport{}, err
 	}
+	log.Printf("[docker] VolumesPrune: deleted=%d spaceReclaimed=%d", len(r.VolumesDeleted), r.SpaceReclaimed)
 	return PruneReport{ItemsDeleted: len(r.VolumesDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
@@ -630,6 +678,7 @@ type networkService struct {
 }
 
 func (s *networkService) List(ctx context.Context) ([]Network, error) {
+	log.Printf("[docker] NetworkList")
 	networks, err := s.cli.NetworkList(ctx, network.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -669,18 +718,24 @@ func (s *networkService) List(ctx context.Context) ([]Network, error) {
 			IPAM:                NetworkIPAM{Subnet: subnet, Gateway: gateway},
 		}
 	}
+	log.Printf("[docker] NetworkList: returned count=%d", len(result))
 	return result, nil
 }
 
 func (s *networkService) Remove(ctx context.Context, id string) error {
-	return s.cli.NetworkRemove(ctx, id)
+	log.Printf("[docker] NetworkRemove: id=%q", id)
+	err := s.cli.NetworkRemove(ctx, id)
+	log.Printf("[docker] NetworkRemove: done err=%v", err)
+	return err
 }
 
 func (s *networkService) Prune(ctx context.Context, _ PruneOptions) (PruneReport, error) {
+	log.Printf("[docker] NetworksPrune")
 	r, err := s.cli.NetworksPrune(ctx, filters.Args{})
 	if err != nil {
 		return PruneReport{}, err
 	}
+	log.Printf("[docker] NetworksPrune: deleted=%d", len(r.NetworksDeleted))
 	return PruneReport{ItemsDeleted: len(r.NetworksDeleted), SpaceReclaimed: 0}, nil
 }
 
