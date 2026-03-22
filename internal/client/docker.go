@@ -353,8 +353,7 @@ func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions)
 
 	pr, pw := io.Pipe()
 	go func() {
-		_, copyErr := stdcopy.StdCopy(pw, pw, reader)
-		pw.CloseWithError(copyErr)
+		pw.CloseWithError(copyStream(pw, reader))
 	}()
 
 	log.Printf("[docker] ContainerLogs: session created")
@@ -362,6 +361,32 @@ func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions)
 		io.NopCloser(pr),
 		func() { _ = reader.Close() },
 	), nil
+}
+
+// maxMuxStreamType is the highest valid STREAM_TYPE value in Docker's multiplexed stream format.
+// Per the Docker API docs: 0=stdin, 1=stdout, 2=stderr.
+// Frames start with an 8-byte header: [STREAM_TYPE, 0, 0, 0, SIZE1, SIZE2, SIZE3, SIZE4].
+const maxMuxStreamType = 0x02
+
+// copyStream detects whether r is a Docker multiplexed stream or a raw stream,
+// then copies accordingly. This handles engines like OrbStack and Colima that
+// may not use Docker's multiplexed format.
+func copyStream(w io.Writer, r io.Reader) error {
+	var streamType [1]byte
+	_, err := io.ReadFull(r, streamType[:])
+	if err != nil {
+		return err
+	}
+
+	full := io.MultiReader(strings.NewReader(string(streamType[:])), r)
+
+	if streamType[0] <= maxMuxStreamType {
+		_, err = stdcopy.StdCopy(w, w, full)
+	} else {
+		log.Printf("[docker] ContainerLogs: raw stream detected (first byte=0x%02x), using io.Copy", streamType[0])
+		_, err = io.Copy(w, full)
+	}
+	return err
 }
 
 func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, error) {

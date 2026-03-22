@@ -3,6 +3,7 @@ package client
 import (
 	"archive/tar"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"io"
 	"testing"
@@ -306,6 +307,82 @@ func TestBuildContainerFileTree_ComplexTree(t *testing.T) {
 	}
 	if appConf.Depth != 3 {
 		t.Errorf("'app.conf' depth: got %d, want 3", appConf.Depth)
+	}
+}
+
+// buildMuxFrame builds a Docker multiplexed-stream frame for the given streamType and payload.
+// Frame format: [streamType, 0, 0, 0, size(4 bytes big-endian), payload...].
+func buildMuxFrame(streamType byte, payload []byte) []byte {
+	frame := make([]byte, 8+len(payload))
+	frame[0] = streamType
+	binary.BigEndian.PutUint32(frame[4:], uint32(len(payload)))
+	copy(frame[8:], payload)
+	return frame
+}
+
+func TestCopyStreamRaw(t *testing.T) {
+	// First byte > 0x02 → raw stream, io.Copy is used.
+	data := []byte{0x03, 'h', 'e', 'l', 'l', 'o'}
+	var buf bytes.Buffer
+	err := copyStream(&buf, bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("copyStream() raw error: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), data) {
+		t.Errorf("copyStream() raw output = %q, want %q", buf.Bytes(), data)
+	}
+}
+
+func TestCopyStreamMuxStdout(t *testing.T) {
+	// First byte == 0x01 (stdout) → Docker multiplexed format.
+	payload := []byte("hello logs")
+	frame := buildMuxFrame(0x01, payload)
+	var buf bytes.Buffer
+	err := copyStream(&buf, bytes.NewReader(frame))
+	if err != nil {
+		t.Fatalf("copyStream() mux error: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), payload) {
+		t.Errorf("copyStream() mux output = %q, want %q", buf.Bytes(), payload)
+	}
+}
+
+func TestCopyStreamMuxStderr(t *testing.T) {
+	// First byte == 0x02 (stderr) → Docker multiplexed format, written to same writer.
+	payload := []byte("error output")
+	frame := buildMuxFrame(0x02, payload)
+	var buf bytes.Buffer
+	err := copyStream(&buf, bytes.NewReader(frame))
+	if err != nil {
+		t.Fatalf("copyStream() mux stderr error: %v", err)
+	}
+	if !bytes.Equal(buf.Bytes(), payload) {
+		t.Errorf("copyStream() mux stderr output = %q, want %q", buf.Bytes(), payload)
+	}
+}
+
+func TestCopyStreamEmptyReader(t *testing.T) {
+	// Empty reader → io.ReadFull returns io.ErrUnexpectedEOF (or io.EOF for 0 bytes).
+	var buf bytes.Buffer
+	err := copyStream(&buf, bytes.NewReader(nil))
+	if err == nil {
+		t.Fatal("copyStream() on empty reader should return an error")
+	}
+}
+
+func TestCopyStreamMuxMultipleFrames(t *testing.T) {
+	// Multiple frames: stdout then stderr, both written to the same writer.
+	var input bytes.Buffer
+	input.Write(buildMuxFrame(0x01, []byte("line1\n")))
+	input.Write(buildMuxFrame(0x02, []byte("line2\n")))
+	var buf bytes.Buffer
+	err := copyStream(&buf, &input)
+	if err != nil {
+		t.Fatalf("copyStream() multiple frames error: %v", err)
+	}
+	got := buf.String()
+	if got != "line1\nline2\n" {
+		t.Errorf("copyStream() multiple frames = %q, want %q", got, "line1\nline2\n")
 	}
 }
 
