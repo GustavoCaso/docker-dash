@@ -26,7 +26,7 @@ func newDetailsPanel() panel.Panel {
 }
 
 func (d *detailsPanel) Init(content string) tea.Cmd {
-	log.Printf("[network][details-panel] Init: networkID=%q", content)
+	log.Print("[network][details-panel] Init")
 	d.viewport.SetContent(content)
 	return nil
 }
