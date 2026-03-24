@@ -2,6 +2,7 @@ package images
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,16 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
+
+// errMockImageService wraps an ImageService and overrides Pull to return an error.
+type errMockImageService struct {
+	client.ImageService
+	pullErr error
+}
+
+func (s *errMockImageService) Pull(_ context.Context, _, _ string) error {
+	return s.pullErr
+}
 
 type imageSectionModel struct {
 	section *Section
@@ -144,6 +155,145 @@ func TestImageListPrune(t *testing.T) {
 	waitFor(t, tm, "nginx")            // non-dangling images remain
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestPullImageKeyShowsForm(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+	if cmd == nil {
+		t.Fatal("pressing '+' should return a non-nil cmd")
+	}
+
+	msg := cmd()
+	formMsg, ok := msg.(message.ShowFormMsg)
+	if !ok {
+		t.Fatalf("expected ShowFormMsg, got %T", msg)
+	}
+	if formMsg.Form == nil {
+		t.Error("ShowFormMsg.Form should not be nil")
+	}
+}
+
+func TestPullImageCmdSuccess(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	cmd := section.pullImageCmd("nginx:latest", "")
+	if cmd == nil {
+		t.Fatal("pullImageCmd should return a non-nil tea.Cmd")
+	}
+
+	msg := cmd()
+	pullMsg, ok := msg.(imagePullMsg)
+	if !ok {
+		t.Fatalf("expected imagePullMsg, got %T", msg)
+	}
+	if pullMsg.err != nil {
+		t.Errorf("expected no error, got %v", pullMsg.err)
+	}
+	if pullMsg.image != "nginx:latest" {
+		t.Errorf("expected image %q, got %q", "nginx:latest", pullMsg.image)
+	}
+}
+
+func TestPullImageCmdError(t *testing.T) {
+	mc := client.NewMockClient()
+	errImageSvc := &errMockImageService{
+		ImageService: mc.Images(),
+		pullErr:      errors.New("pull failed"),
+	}
+	images, _ := mc.Images().List(context.Background())
+	section := New(context.Background(), images, mc)
+	section.imageService = errImageSvc
+	section.SetSize(120, 40)
+
+	cmd := section.pullImageCmd("bad:image", "")
+	msg := cmd()
+
+	pullMsg, ok := msg.(imagePullMsg)
+	if !ok {
+		t.Fatalf("expected imagePullMsg, got %T", msg)
+	}
+	if pullMsg.err == nil {
+		t.Error("expected an error from pullImageCmd")
+	}
+}
+
+func TestPullImageMsgSuccess_ShowsBanner(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	cmd := section.Update(imagePullMsg{image: "nginx:latest", err: nil})
+	if cmd == nil {
+		t.Fatal("imagePullMsg success should return a non-nil cmd")
+	}
+
+	// Run the batch to find the ShowBannerMsg.
+	found := false
+	msgs := runBatch(cmd)
+	for _, m := range msgs {
+		if banner, ok := m.(message.ShowBannerMsg); ok {
+			if !strings.Contains(banner.Message, "nginx:latest") {
+				t.Errorf("banner message should contain image name, got %q", banner.Message)
+			}
+			if banner.IsError {
+				t.Error("success banner should not be an error")
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected ShowBannerMsg in batch result")
+	}
+}
+
+func TestPullImageMsgError_ShowsErrorBanner(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	pullErr := errors.New("image not found")
+	cmd := section.Update(imagePullMsg{image: "bad:image", err: pullErr})
+	if cmd == nil {
+		t.Fatal("imagePullMsg error should return a non-nil cmd")
+	}
+
+	msg := cmd()
+	banner, ok := msg.(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", msg)
+	}
+	if !banner.IsError {
+		t.Error("error banner should have IsError=true")
+	}
+	if !strings.Contains(banner.Message, "image not found") {
+		t.Errorf("error banner should contain error text, got %q", banner.Message)
+	}
+}
+
+// runBatch executes a tea.Cmd and collects all messages, recursing into tea.BatchMsg.
+func runBatch(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			msgs = append(msgs, runBatch(c)...)
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
 }
 
 func waitFor(t *testing.T, tm *teatest.TestModel, s string) {

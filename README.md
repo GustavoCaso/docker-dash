@@ -102,8 +102,9 @@ When `debug` is enabled we create a debug log file in the temporary folder of th
 | Key        | Action                  |
 |------------|-------------------------|
 | `d`        | Delete image            |
-| `P`        | Prune all unused images          |
+| `P`        | Prune all unused images |
 | `c`        | Create and run container|
+| `+`        | Pull image              |
 
 **Volumes**
 

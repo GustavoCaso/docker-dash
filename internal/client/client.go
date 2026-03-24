@@ -33,6 +33,7 @@ type ContainerService interface {
 // ImageService manages Docker images.
 type ImageService interface {
 	List(ctx context.Context) ([]Image, error)
+	Pull(ctx context.Context, image string, platform string) error
 	FetchLayers(ctx context.Context, id string) []Layer
 	Remove(ctx context.Context, id string, force bool) error
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)

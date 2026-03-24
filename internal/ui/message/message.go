@@ -5,6 +5,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
 )
 
 // ShowBannerMsg is sent by components to display a banner notification.
@@ -48,5 +50,6 @@ type ShowConfirmationMsg struct {
 	OnConfirm tea.Cmd
 }
 
-// HideConfirmationMsg dismisses the confirmation modal.
-type HideConfirmationMsg struct{}
+type ShowFormMsg struct {
+	Form *form.Model
+}

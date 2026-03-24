@@ -20,6 +20,7 @@ type KeyMap struct {
 	Filter     key.Binding
 
 	CreateAndRunContainer key.Binding
+	PullImage             key.Binding
 
 	ContainerDelete    key.Binding
 	ContainerStartStop key.Binding
@@ -112,6 +113,10 @@ var Keys = &KeyMap{
 		key.WithKeys("c"),
 		key.WithHelp("c", "create and run container"),
 	),
+	PullImage: key.NewBinding(
+		key.WithKeys("+"),
+		key.WithHelp("+", "pull image"),
+	),
 	ContainerDelete: key.NewBinding(
 		key.WithKeys("D"),
 		key.WithHelp("D", "delete container"),
@@ -180,7 +185,7 @@ func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.CreateAndRunContainer, k.Prune, k.Filter},
-			{k.Help, k.Quit},
+			{k.Help, k.Quit, k.PullImage},
 		},
 		contextualKeys: []key.Binding{},
 	}

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"io"
 	"log"
 	"slices"
 	"strings"
@@ -114,4 +115,20 @@ func (s *imageService) Prune(ctx context.Context, opts PruneOptions) (PruneRepor
 	}
 	log.Printf("[docker] ImagesPrune: deleted=%d spaceReclaimed=%d", len(r.ImagesDeleted), r.SpaceReclaimed)
 	return PruneReport{ItemsDeleted: len(r.ImagesDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
+}
+
+func (s *imageService) Pull(ctx context.Context, imageRef, platform string) error {
+	body, err := s.cli.ImagePull(ctx, imageRef, image.PullOptions{
+		Platform: platform,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if _, copyErr := io.Copy(io.Discard, body); copyErr != nil {
+		return copyErr
+	}
+
+	return body.Close()
 }
