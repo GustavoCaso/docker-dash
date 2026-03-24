@@ -499,6 +499,10 @@ func (s *mockImageService) Prune(_ context.Context, opts PruneOptions) (PruneRep
 	return PruneReport{ItemsDeleted: count, SpaceReclaimed: spaceReclaimed}, nil
 }
 
+func (s *mockImageService) Pull(_ context.Context, imageRef, platform string) error {
+	return nil
+}
+
 // mockVolumeService provides mock volume data.
 type mockVolumeService struct {
 	volumes []Volume

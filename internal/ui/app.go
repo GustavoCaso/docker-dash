@@ -7,11 +7,13 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/confirmation"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/header"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/statusbar"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -77,6 +79,8 @@ type model struct {
 	confirmation     confirmation.Model
 	pendingCmd       tea.Cmd
 	showConfirmation bool
+	showForm         bool
+	formModel        *form.Model
 	refreshInterval  time.Duration
 }
 
@@ -147,22 +151,54 @@ func (m *model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+func (m *model) handleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
+		m.showForm = false
+		m.formModel = nil
+		return m, nil
+	}
+	updatedForm, cmd := m.formModel.Update(msg)
+	if f, ok := updatedForm.(*form.Model); ok {
+		m.formModel = f
+	}
+	if m.formModel.State() == huh.StateCompleted {
+		m.showForm = false
+		m.formModel = nil
+	}
+	return m, cmd
+}
+
+func (m *model) handleConfirmationUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	km, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil, false
+	}
+	switch km.String() {
+	case "y":
+		cmd := m.pendingCmd
+		m.showConfirmation = false
+		m.pendingCmd = nil
+		return m, cmd, true
+	case "n", "esc":
+		m.showConfirmation = false
+		m.pendingCmd = nil
+		return m, nil, true
+	}
+	// Swallow all other keys while modal is visible
+	return m, nil, true
+}
+
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.showForm {
+		if _, ok := msg.(tea.WindowSizeMsg); !ok {
+			return m.handleFormUpdate(msg)
+		}
+	}
+
 	if m.showConfirmation {
-		if km, ok := msg.(tea.KeyMsg); ok {
-			switch km.String() {
-			case "y":
-				cmd := m.pendingCmd
-				m.showConfirmation = false
-				m.pendingCmd = nil
-				return m, cmd
-			case "n", "esc":
-				m.showConfirmation = false
-				m.pendingCmd = nil
-				return m, nil
-			}
-			// Swallow all other keys while modal is visible
-			return m, nil
+		model, cmd, handled := m.handleConfirmationUpdate(msg)
+		if handled {
+			return model, cmd
 		}
 	}
 
@@ -197,11 +233,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showConfirmation = true
 		return m, nil
 
-	case message.HideConfirmationMsg:
-		log.Printf("[app] HideConfirmationMsg")
-		m.showConfirmation = false
-		m.pendingCmd = nil
-		return m, nil
+	case message.ShowFormMsg:
+		log.Print("[app] ShowFormMsg")
+		m.formModel = msg.Form
+		m.showForm = true
+		cmd := m.formModel.Init()
+		return m, cmd
 
 	case message.ShowBannerMsg:
 		log.Printf("[app] ShowBannerMsg: message=%q", msg.Message)
@@ -299,6 +336,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) View() string {
 	if m.width == 0 {
 		return "Loading..."
+	}
+
+	if m.showForm {
+		return lipgloss.Place(
+			m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			m.formModel.View(),
+		)
 	}
 
 	if m.showConfirmation {

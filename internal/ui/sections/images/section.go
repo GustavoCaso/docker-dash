@@ -2,6 +2,7 @@ package images
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -10,9 +11,11 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
@@ -43,6 +46,11 @@ type imageRemovedMsg struct {
 	ID    string
 	Idx   int
 	Error error
+}
+
+type imagePullMsg struct {
+	image string
+	err   error
 }
 
 // imageItem implements list.Item interface.
@@ -205,6 +213,22 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				IsError: false,
 			}
 		})
+	case imagePullMsg:
+		log.Printf("[images] imagePullMsg: err=%v", msg.err)
+		if msg.err != nil {
+			return func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Error pulling image: %s", msg.err.Error()),
+					IsError: true,
+				}
+			}
+		}
+
+		pullMessage := fmt.Sprintf("Image %s Pulled", msg.image)
+
+		return tea.Batch(s.updateImagesCmd(), func() tea.Msg {
+			return message.ShowBannerMsg{Message: pullMessage, IsError: false}
+		})
 	case containerRunMsg:
 		log.Printf("[images] containerRunMsg: containerID=%q err=%v", msg.containerID, msg.error)
 		s.loading = false
@@ -263,6 +287,45 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
+		case key.Matches(msg, keys.Keys.PullImage):
+			f := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().
+						Key("image").
+						Title("Image").
+						Validate(func(s string) error {
+							if strings.TrimSpace(s) == "" {
+								return errors.New("image name cannot be empty")
+							}
+							return nil
+						}),
+
+					huh.NewSelect[string]().
+						Key("platform").
+						Title("Platform").
+						Options(
+							huh.NewOption("auto", ""),
+							huh.NewOption("linux/amd64", "linux/amd64"),
+							huh.NewOption("linux/arm64", "linux/arm64"),
+							huh.NewOption("linux/arm/v7", "linux/arm/v7"),
+							huh.NewOption("linux/386", "linux/386"),
+							huh.NewOption("windows/amd64", "windows/amd64"),
+						),
+				),
+			)
+
+			pullForm := form.New("Pull Image", f, func(finishForm *huh.Form) tea.Cmd {
+				image := finishForm.GetString("image")
+				platform := finishForm.GetString("platform")
+
+				return s.pullImageCmd(image, platform)
+			})
+
+			return func() tea.Msg {
+				return message.ShowFormMsg{
+					Form: pullForm,
+				}
+			}
 		case key.Matches(msg, keys.Keys.Prune):
 			return s.confirmImagePrune()
 		case key.Matches(msg, keys.Keys.Delete):
@@ -387,6 +450,17 @@ func (s *Section) updateImagesCmd() tea.Cmd {
 			items[idx] = imageItem{image: img}
 		}
 		return imagesLoadedMsg{items: items}
+	}
+}
+
+func (s *Section) pullImageCmd(image, platform string) tea.Cmd {
+	ctx := s.ctx
+	svc := s.imageService
+
+	return func() tea.Msg {
+		err := svc.Pull(ctx, image, platform)
+
+		return imagePullMsg{err: err, image: image}
 	}
 }
 
