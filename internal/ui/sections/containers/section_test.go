@@ -313,25 +313,26 @@ func TestContainerDeleteUpdatesSelection(t *testing.T) {
 	}
 }
 
-func TestContainerDeleteLastItemClampsSelection(t *testing.T) {
+func TestContainerDeleteLastItemClearsPanel(t *testing.T) {
 	c := client.NewMockClient()
 	containers, _ := c.Containers().List(context.Background())
-	section := New(context.Background(), containers, c.Containers())
+
+	// Create a section with a single container so we can test the empty-list path.
+	singleContainer := containers[:1]
+	section := New(context.Background(), singleContainer, c.Containers())
 	section.SetSize(120, 40)
 
-	if len(section.list.Items()) == 0 {
-		t.Fatal("expected at least one container in mock data")
-	}
+	// Set content on the default details panel so we can verify it gets cleared.
+	dp := section.panels[0].(*detailsPanel)
+	dp.viewport.SetContent("stale container details")
 
-	// Delete all but the last item without checking cmd type (items still remain)
-	for len(section.list.Items()) > 1 {
-		section.removeItem(0)
-	}
-
-	// Delete the final item — no selected item remains, so cmd must be nil
+	// Delete the single item — activePanel().Close() should be called.
 	cmd := section.removeItem(0)
 	if cmd != nil {
-		t.Error("removeItem() should return nil cmd when list is empty")
+		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
+	}
+	if strings.TrimSpace(dp.viewport.View()) != "" {
+		t.Error("deleteLastItem() should clear the panel viewport content")
 	}
 }
 

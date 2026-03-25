@@ -169,19 +169,26 @@ func TestNetworkDeleteUpdatesSelection(t *testing.T) {
 	}
 }
 
-func TestNetworkDeleteLastItemClampsSelection(t *testing.T) {
+func TestNetworkDeleteLastItemClearsPanel(t *testing.T) {
 	c := client.NewMockClient()
 	networks, _ := c.Networks().List(context.Background())
-	section := New(context.Background(), networks, c.Networks())
+
+	// Create a section with a single network so we can test the empty-list path.
+	singleNetwork := networks[:1]
+	section := New(context.Background(), singleNetwork, c.Networks())
 	section.SetSize(120, 40)
 
-	if len(section.list.Items()) == 0 {
-		t.Fatal("expected at least one network in mock data")
-	}
+	// Set content on the details panel so we can verify it gets cleared.
+	dp := section.panels[0].(*detailsPanel)
+	dp.viewport.SetContent("stale network details")
 
-	// Delete all items — detailsPanel.Init() always returns nil (sync panel)
-	for len(section.list.Items()) > 0 {
-		section.removeItem(0)
+	// Delete the single item — activePanel().Close() should be called.
+	cmd := section.removeItem(0)
+	if cmd != nil {
+		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
+	}
+	if strings.TrimSpace(dp.viewport.View()) != "" {
+		t.Error("deleteLastItem() should clear the panel viewport content")
 	}
 }
 
