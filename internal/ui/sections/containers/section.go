@@ -333,9 +333,10 @@ func (s *Section) activePanel() panel.Panel {
 
 func (s *Section) removeItem(idx int) tea.Cmd {
 	s.list.RemoveItem(idx)
-	if len(s.list.Items()) > 0 {
-		s.list.Select(min(idx, len(s.list.Items())-1))
+	if len(s.list.Items()) == 0 {
+		return s.activePanel().Close()
 	}
+	s.list.Select(min(idx, len(s.list.Items())-1))
 	return s.updateActivePanel()
 }
 

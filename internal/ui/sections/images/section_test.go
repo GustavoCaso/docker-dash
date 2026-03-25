@@ -338,25 +338,26 @@ func TestImageDeleteUpdatesSelection(t *testing.T) {
 	}
 }
 
-func TestImageDeleteLastItemClampsSelection(t *testing.T) {
+func TestImageDeleteLastItemClearsPanel(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
+
+	// Create a section with a single image so we can test the empty-list path.
+	singleImage := images[:1]
+	section := New(context.Background(), singleImage, c)
 	section.SetSize(120, 40)
 
-	if len(section.list.Items()) == 0 {
-		t.Fatal("expected at least one image in mock data")
-	}
+	// Set content on the layers panel so we can verify it gets cleared.
+	lp := section.panels[0].(*layersPanel)
+	lp.viewport.SetContent("stale layer info")
 
-	// Delete all but the last item without checking cmd type (items still remain)
-	for len(section.list.Items()) > 1 {
-		section.removeItem(0)
-	}
-
-	// Delete the final item — no selected item remains, so cmd must be nil
+	// Delete the single item — activePanel().Close() should be called.
 	cmd := section.removeItem(0)
 	if cmd != nil {
-		t.Error("removeItem() should return nil cmd when list is empty")
+		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
+	}
+	if strings.TrimSpace(lp.viewport.View()) != "" {
+		t.Error("deleteLastItem() should clear the panel viewport content")
 	}
 }
 

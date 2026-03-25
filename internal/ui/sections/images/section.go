@@ -288,31 +288,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			s.loading = true
 			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
 		case key.Matches(msg, keys.Keys.PullImage):
-			f := huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().
-						Key("image").
-						Title("Image").
-						Validate(func(s string) error {
-							if strings.TrimSpace(s) == "" {
-								return errors.New("image name cannot be empty")
-							}
-							return nil
-						}),
-
-					huh.NewSelect[string]().
-						Key("platform").
-						Title("Platform").
-						Options(
-							huh.NewOption("auto", ""),
-							huh.NewOption("linux/amd64", "linux/amd64"),
-							huh.NewOption("linux/arm64", "linux/arm64"),
-							huh.NewOption("linux/arm/v7", "linux/arm/v7"),
-							huh.NewOption("linux/386", "linux/386"),
-							huh.NewOption("windows/amd64", "windows/amd64"),
-						),
-				),
-			)
+			f := pullImageForm()
 
 			pullForm := form.New("Pull Image", f, func(finishForm *huh.Form) tea.Cmd {
 				image := finishForm.GetString("image")
@@ -530,9 +506,10 @@ func (s *Section) activePanel() panel.Panel {
 
 func (s *Section) removeItem(idx int) tea.Cmd {
 	s.list.RemoveItem(idx)
-	if len(s.list.Items()) > 0 {
-		s.list.Select(min(idx, len(s.list.Items())-1))
+	if len(s.list.Items()) == 0 {
+		return s.activePanel().Close()
 	}
+	s.list.Select(min(idx, len(s.list.Items())-1))
 	return s.updateActivePanel()
 }
 
@@ -546,4 +523,32 @@ func (s *Section) updateActivePanel() tea.Cmd {
 		return nil
 	}
 	return s.activePanel().Init(item.ID())
+}
+
+func pullImageForm() *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Key("image").
+				Title("Image").
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return errors.New("image name cannot be empty")
+					}
+					return nil
+				}),
+
+			huh.NewSelect[string]().
+				Key("platform").
+				Title("Platform").
+				Options(
+					huh.NewOption("auto", ""),
+					huh.NewOption("linux/amd64", "linux/amd64"),
+					huh.NewOption("linux/arm64", "linux/arm64"),
+					huh.NewOption("linux/arm/v7", "linux/arm/v7"),
+					huh.NewOption("linux/386", "linux/386"),
+					huh.NewOption("windows/amd64", "windows/amd64"),
+				),
+		),
+	)
 }
