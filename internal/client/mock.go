@@ -212,7 +212,7 @@ func (s *mockContainerService) List(ctx context.Context) ([]Container, error) {
 	return s.containers, nil
 }
 
-func (s *mockContainerService) Run(ctx context.Context, image Image) (string, error) {
+func (s *mockContainerService) Run(_ context.Context, _ Image, _ RunOptions) (string, error) {
 	return "", nil
 }
 

@@ -82,35 +82,77 @@ func (s *containerService) List(ctx context.Context) ([]Container, error) {
 	return result, nil
 }
 
-func (s *containerService) Run(ctx context.Context, img Image) (string, error) {
-	log.Printf("[docker] ContainerCreate+Start: image=%q", img.Name())
+func (s *containerService) Run(ctx context.Context, img Image, opts RunOptions) (string, error) {
+	log.Printf("[docker] ContainerCreate+Start: image=%q name=%q", img.Name(), opts.Name)
 
 	ports := nat.PortSet{}
 
-	for port := range img.Config.ExposedPorts {
-		natPort, err := nat.NewPort(nat.SplitProtoPort(port))
+	if img.Config != nil {
+		for port := range img.Config.ExposedPorts {
+			natPort, err := nat.NewPort(nat.SplitProtoPort(port))
+			if err != nil {
+				return "", err
+			}
+			ports[natPort] = struct{}{}
+		}
+	}
+
+	// Parse port bindings from opts.Ports (format: "hostPort:containerPort").
+	portBindings := nat.PortMap{}
+	for _, p := range opts.Ports {
+		parts := strings.SplitN(p, ":", 2) //nolint:mnd // splitting "hostPort:containerPort"
+		if len(parts) != 2 {               //nolint:mnd // need exactly host:container
+			continue
+		}
+		natPort, err := nat.NewPort("tcp", parts[1])
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("invalid port mapping %q: %w", p, err)
 		}
 		ports[natPort] = struct{}{}
+		portBindings[natPort] = append(portBindings[natPort], nat.PortBinding{
+			HostIP:   "0.0.0.0",
+			HostPort: parts[0],
+		})
 	}
 
-	config := &container.Config{
-		User:         img.Config.User,
-		WorkingDir:   img.Config.WorkingDir,
-		Labels:       img.Config.Labels,
-		Env:          img.Config.Env,
-		Cmd:          img.Config.Cmd,
-		Entrypoint:   img.Config.Entrypoint,
-		Image:        img.Name(),
-		Shell:        img.Config.Shell,
-		OnBuild:      img.Config.OnBuild,
-		Volumes:      img.Config.Volumes,
-		ExposedPorts: ports,
-		Healthcheck:  img.Config.Healthcheck,
+	// Merge image env with user-supplied env (user values take precedence).
+	var baseEnv []string
+	if img.Config != nil {
+		baseEnv = img.Config.Env
+	}
+	env := make([]string, 0, len(baseEnv)+len(opts.Env))
+	env = append(env, baseEnv...)
+	env = append(env, opts.Env...)
+
+	var config *container.Config
+	if img.Config != nil {
+		config = &container.Config{
+			User:         img.Config.User,
+			WorkingDir:   img.Config.WorkingDir,
+			Labels:       img.Config.Labels,
+			Env:          env,
+			Cmd:          img.Config.Cmd,
+			Entrypoint:   img.Config.Entrypoint,
+			Image:        img.Name(),
+			Shell:        img.Config.Shell,
+			OnBuild:      img.Config.OnBuild,
+			Volumes:      img.Config.Volumes,
+			ExposedPorts: ports,
+			Healthcheck:  img.Config.Healthcheck,
+		}
+	} else {
+		config = &container.Config{
+			Env:          env,
+			Image:        img.Name(),
+			ExposedPorts: ports,
+		}
 	}
 
-	containerResponse, err := s.cli.ContainerCreate(ctx, config, nil, nil, nil, "")
+	hostConfig := &container.HostConfig{
+		PortBindings: portBindings,
+	}
+
+	containerResponse, err := s.cli.ContainerCreate(ctx, config, hostConfig, nil, nil, opts.Name)
 	if err != nil {
 		return "", err
 	}

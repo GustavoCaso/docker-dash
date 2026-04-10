@@ -14,10 +14,17 @@ type Client interface {
 	Close() error
 }
 
+// RunOptions configures how a container is created from an image.
+type RunOptions struct {
+	Name  string
+	Ports []string // e.g. ["8080:80", "443:443"]
+	Env   []string // e.g. ["KEY=VAL", "FOO=BAR"]
+}
+
 // ContainerService manages Docker containers.
 type ContainerService interface {
 	List(ctx context.Context) ([]Container, error)
-	Run(ctx context.Context, image Image) (string, error)
+	Run(ctx context.Context, image Image, opts RunOptions) (string, error)
 	Get(ctx context.Context, id string) (*Container, error)
 	Start(ctx context.Context, id string) error
 	Stop(ctx context.Context, id string) error

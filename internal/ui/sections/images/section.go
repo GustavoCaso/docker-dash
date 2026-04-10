@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -307,7 +309,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Delete):
 			return s.confirmImageDelete()
 		case key.Matches(msg, keys.Keys.CreateAndRunContainer):
-			return s.createContainerCmdAndRun()
+			return s.showRunContainerForm()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			currentPanel := s.activePanel()
 			var listCmd tea.Cmd
@@ -440,8 +442,7 @@ func (s *Section) pullImageCmd(image, platform string) tea.Cmd {
 	}
 }
 
-func (s *Section) createContainerCmdAndRun() tea.Cmd {
-	svc := s.containerService
+func (s *Section) showRunContainerForm() tea.Cmd {
 	items := s.list.Items()
 	idx := s.list.Index()
 	if idx < 0 || idx >= len(items) {
@@ -452,13 +453,138 @@ func (s *Section) createContainerCmdAndRun() tea.Cmd {
 	if !ok {
 		return nil
 	}
+
+	f := runContainerForm(dockerImage.image)
+	runForm := form.New(
+		fmt.Sprintf("Run Container from %s", dockerImage.Title()),
+		f,
+		func(finishForm *huh.Form) tea.Cmd {
+			name := finishForm.GetString("name")
+			portsRaw := finishForm.GetString("ports")
+			envRaw := finishForm.GetString("env")
+
+			opts := client.RunOptions{
+				Name:  name,
+				Ports: parseCSV(portsRaw),
+				Env:   parseCSV(envRaw),
+			}
+
+			return s.createContainerCmdAndRun(dockerImage.image, opts)
+		},
+	)
+
+	return func() tea.Msg {
+		return message.ShowFormMsg{Form: runForm}
+	}
+}
+
+func (s *Section) createContainerCmdAndRun(img client.Image, opts client.RunOptions) tea.Cmd {
+	svc := s.containerService
 	s.loading = true
 	ctx := s.ctx
 	return func() tea.Msg {
-		containerID, err := svc.Run(ctx, dockerImage.image)
-
+		containerID, err := svc.Run(ctx, img, opts)
 		return containerRunMsg{containerID: containerID, error: err}
 	}
+}
+
+// parseCSV splits a comma-separated string into a trimmed slice, ignoring empty entries.
+func parseCSV(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func runContainerForm(img client.Image) *huh.Form {
+	portsDesc := "Comma-separated host:container pairs, e.g. 8080:80,443:443"
+	if exposed := exposedPortsList(img); exposed != "" {
+		portsDesc = fmt.Sprintf("Image exposes: %s — map as host:container, e.g. 8080:80", exposed)
+	}
+
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Key("name").
+				Title("Container Name").
+				Description("Optional. Leave blank to let Docker generate a name."),
+
+			huh.NewInput().
+				Key("ports").
+				Title("Port Mappings").
+				Description(portsDesc).
+				Validate(validatePorts),
+
+			huh.NewInput().
+				Key("env").
+				Title("Environment Variables").
+				Description("Comma-separated KEY=VAL pairs, e.g. DEBUG=1").
+				Validate(validateEnv),
+		),
+	)
+}
+
+// validatePorts checks that each comma-separated entry is in "hostPort:containerPort" format
+// with valid port numbers (1–65535). An empty value is accepted (all fields are optional).
+func validatePorts(s string) error {
+	for _, entry := range parseCSV(s) {
+		parts := strings.SplitN(entry, ":", 2) //nolint:mnd // splitting "hostPort:containerPort"
+		if len(parts) != 2 {                   //nolint:mnd // need exactly host:container
+			return fmt.Errorf("invalid port mapping %q: expected host:container", entry)
+		}
+		if err := validatePort(parts[0], entry); err != nil {
+			return err
+		}
+		// Container port may include a protocol suffix like "80/tcp"; strip it before validating.
+		containerPort := strings.SplitN(parts[1], "/", 2)[0] //nolint:mnd // strip optional /proto
+		if err := validatePort(containerPort, entry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const maxPort = 65535
+
+func validatePort(portStr, entry string) error {
+	n, err := strconv.Atoi(portStr)
+	if err != nil || n < 1 || n > maxPort {
+		return fmt.Errorf("invalid port in %q: %q must be a number between 1 and 65535", entry, portStr)
+	}
+	return nil
+}
+
+// validateEnv checks that each comma-separated entry is in "KEY=VALUE" format,
+// where KEY is a non-empty identifier. An empty value is accepted.
+func validateEnv(s string) error {
+	for _, entry := range parseCSV(s) {
+		parts := strings.SplitN(entry, "=", 2) //nolint:mnd // splitting "KEY=VALUE"
+		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+			return fmt.Errorf("invalid env var %q: expected KEY=VALUE", entry)
+		}
+	}
+	return nil
+}
+
+// exposedPortsList returns a human-readable list of ports the image exposes,
+// e.g. "80/tcp, 443/tcp". Returns empty string if none are defined.
+func exposedPortsList(img client.Image) string {
+	if img.Config == nil || len(img.Config.ExposedPorts) == 0 {
+		return ""
+	}
+	ports := make([]string, 0, len(img.Config.ExposedPorts))
+	for port := range img.Config.ExposedPorts {
+		ports = append(ports, port)
+	}
+	slices.Sort(ports)
+	return strings.Join(ports, ", ")
 }
 
 func (s *Section) pruneImagesCmd() tea.Cmd {
