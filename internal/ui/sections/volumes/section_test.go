@@ -67,11 +67,11 @@ func TestResetClearsFlags(t *testing.T) {
 	s := New(context.Background(), volumes, c.Volumes())
 	s.SetSize(120, 40)
 
-	s.isFilter = true
+	s.IsFilter = true
 
 	cmd := s.Reset()
 
-	if s.isFilter {
+	if s.IsFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
 	if cmd != nil {
@@ -117,20 +117,20 @@ func TestVolumeDeleteUpdatesSelection(t *testing.T) {
 	section := New(context.Background(), volumes, c.Volumes())
 	section.SetSize(120, 40)
 
-	initialCount := len(section.list.Items())
+	initialCount := len(section.List.Items())
 	if initialCount == 0 {
 		t.Fatal("expected at least one volume in mock data")
 	}
 
 	// Select the first item and delete it
-	section.list.Select(0)
+	section.List.Select(0)
 	section.removeItem(0)
 
-	if len(section.list.Items()) != initialCount-1 {
-		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.list.Items()))
+	if len(section.List.Items()) != initialCount-1 {
+		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
 	}
-	if section.list.Index() != 0 {
-		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.list.Index())
+	if section.List.Index() != 0 {
+		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.List.Index())
 	}
 }
 
@@ -140,20 +140,20 @@ func TestVolumeDeleteLastItemClampsSelection(t *testing.T) {
 	section := New(context.Background(), volumes, c.Volumes())
 	section.SetSize(120, 40)
 
-	count := len(section.list.Items())
+	count := len(section.List.Items())
 	if count == 0 {
 		t.Fatal("expected at least one volume in mock data")
 	}
 
 	// Select and delete items until one remains
-	for len(section.list.Items()) > 1 {
-		section.removeItem(len(section.list.Items()) - 1)
+	for len(section.List.Items()) > 1 {
+		section.removeItem(len(section.List.Items()) - 1)
 	}
 
 	// Delete the last item
 	section.removeItem(0)
 
-	if len(section.list.Items()) != 0 {
-		t.Errorf("expected 0 items, got %d", len(section.list.Items()))
+	if len(section.List.Items()) != 0 {
+		t.Errorf("expected 0 items, got %d", len(section.List.Items()))
 	}
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -22,6 +21,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -72,17 +72,14 @@ func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 
 // Section wraps bubbles/list.
 type Section struct {
-	ctx                          context.Context
-	list                         list.Model
-	imageService                 client.ImageService
-	containerService             client.ContainerService
-	panels                       []panel.Panel
-	activePanelIdx               int
-	originalWidth, orginalHeight int
-	panelWidth, panelHeight      int
-	loading                      bool
-	isFilter                     bool
-	spinner                      spinner.Model
+	base.Section
+	ctx              context.Context
+	imageService     client.ImageService
+	containerService client.ContainerService
+	panels           []panel.Panel
+	activePanelIdx   int
+	panelWidth       int
+	panelHeight      int
 }
 
 // New creates a new image section.
@@ -92,30 +89,23 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 		items[i] = imageItem{image: img}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(true)
-
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
 	il := &Section{
 		ctx:              ctx,
-		list:             l,
 		imageService:     client.Images(),
 		containerService: client.Containers(),
 		panels:           []panel.Panel{NewLayersPanel(ctx, client.Images())},
 		activePanelIdx:   0,
-		spinner:          sp,
+		Section: base.Section{
+			List:    base.NewList(items),
+			Spinner: base.NewSpinner(),
+		},
 	}
 
 	return il
 }
 
 func (s *Section) Init() tea.Cmd {
-	selected := s.list.SelectedItem()
+	selected := s.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}
@@ -128,8 +118,8 @@ func (s *Section) Init() tea.Cmd {
 
 // SetSize sets dimensions.
 func (s *Section) SetSize(width, height int) {
-	s.originalWidth = width
-	s.orginalHeight = height
+	s.Width = width
+	s.Height = height
 
 	// Account for details menu height
 	menuHeight := lipgloss.Height(s.detailsMenu())
@@ -144,7 +134,7 @@ func (s *Section) SetSize(width, height int) {
 	listWidth := int(float64(width) * theme.SplitRatio)
 	detailWidth := width - listWidth
 
-	s.list.SetSize(listWidth-listX, height-listY)
+	s.List.SetSize(listWidth-listX, height-listY)
 	s.panelWidth = detailWidth - panelX - menuX
 	// TODO: Figure out the + 1
 	s.panelHeight = height - menuHeight - menuY - panelY + 1
@@ -156,16 +146,14 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
 	// Handle spinner ticks while loading
-	if s.loading {
-		var spinnerCmd tea.Cmd
-		s.spinner, spinnerCmd = s.spinner.Update(msg)
+	if spinnerCmd := s.UpdateSpinner(msg); spinnerCmd != nil {
 		cmds = append(cmds, spinnerCmd)
 	}
 
 	switch msg := msg.(type) {
 	case imagesLoadedMsg:
 		log.Printf("[images] imagesLoadedMsg: count=%d", len(msg.items))
-		s.loading = false
+		s.Loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -174,7 +162,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		cmd := s.list.SetItems(msg.items)
+		cmd := s.List.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case imagesPrunedMsg:
@@ -233,7 +221,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		})
 	case containerRunMsg:
 		log.Printf("[images] containerRunMsg: containerID=%q err=%v", msg.containerID, msg.error)
-		s.loading = false
+		s.Loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -264,16 +252,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 	case tea.KeyMsg:
 		log.Printf("[images] KeyMsg: key=%q", msg.String())
-		if s.isFilter {
-			var filterCmds []tea.Cmd
-			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
-			filterCmds = append(filterCmds, listCmd)
-
-			if key.Matches(msg, keys.Keys.Esc) {
-				s.isFilter = !s.isFilter
-				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
-			}
+		if handled, filterCmds := s.HandleFilterKey(msg); handled {
 			return tea.Batch(filterCmds...)
 		}
 
@@ -287,8 +266,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
 			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Refresh):
-			s.loading = true
-			return tea.Batch(s.spinner.Tick, s.updateImagesCmd())
+			s.Loading = true
+			return tea.Batch(s.Spinner.Tick, s.updateImagesCmd())
 		case key.Matches(msg, keys.Keys.PullImage):
 			f := pullImageForm()
 
@@ -313,13 +292,10 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			currentPanel := s.activePanel()
 			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
+			s.List, listCmd = s.List.Update(msg)
 			return tea.Batch(listCmd, currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
-			s.isFilter = !s.isFilter
-			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
-			return tea.Batch(listCmd, s.extendFilterHelpCommand())
+			return tea.Batch(s.ToggleFilter(msg)...)
 		}
 	}
 
@@ -331,19 +307,10 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the list.
 func (s *Section) View() string {
-	s.SetSize(s.originalWidth, s.orginalHeight)
-
-	listContent := s.list.View()
+	s.SetSize(s.Width, s.Height)
 
 	// Overlay spinner in bottom right corner when loading
-	if s.loading {
-		spinnerText := s.spinner.View() + " Refreshing..."
-		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, s.list.Width())
-	}
-
-	listView := theme.ListStyle.
-		Width(s.list.Width()).
-		Render(listContent)
+	listView := s.RenderList("Refreshing...")
 
 	detailContent := s.activePanel().View()
 
@@ -375,30 +342,19 @@ func (s *Section) detailsMenu() string {
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
 }
 
-// Reset reset internal state to when a component isfirst initialized.
+// Reset reset internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
-	s.isFilter = false
+	s.IsFilter = false
 	cmd := s.activePanel().Close()
-	s.SetSize(s.originalWidth, s.orginalHeight)
+	s.SetSize(s.Width, s.Height)
 	return cmd
-}
-
-func (s *Section) extendFilterHelpCommand() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			key.NewBinding(
-				key.WithKeys("esc"),
-				key.WithHelp("esc", "exit"),
-			),
-		}}
-	}
 }
 
 func (s *Section) deleteImageCmd() tea.Cmd {
 	ctx := s.ctx
 	svc := s.imageService
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -443,8 +399,8 @@ func (s *Section) pullImageCmd(image, platform string) tea.Cmd {
 }
 
 func (s *Section) showRunContainerForm() tea.Cmd {
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -480,7 +436,7 @@ func (s *Section) showRunContainerForm() tea.Cmd {
 
 func (s *Section) createContainerCmdAndRun(img client.Image, opts client.RunOptions) tea.Cmd {
 	svc := s.containerService
-	s.loading = true
+	s.Loading = true
 	ctx := s.ctx
 	return func() tea.Msg {
 		containerID, err := svc.Run(ctx, img, opts)
@@ -607,8 +563,8 @@ func (s *Section) confirmImagePrune() tea.Cmd {
 }
 
 func (s *Section) confirmImageDelete() tea.Cmd {
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -631,16 +587,16 @@ func (s *Section) activePanel() panel.Panel {
 }
 
 func (s *Section) removeItem(idx int) tea.Cmd {
-	s.list.RemoveItem(idx)
-	if len(s.list.Items()) == 0 {
+	s.List.RemoveItem(idx)
+	if len(s.List.Items()) == 0 {
 		return s.activePanel().Close()
 	}
-	s.list.Select(min(idx, len(s.list.Items())-1))
+	s.List.Select(min(idx, len(s.List.Items())-1))
 	return s.updateActivePanel()
 }
 
 func (s *Section) updateActivePanel() tea.Cmd {
-	selected := s.list.SelectedItem()
+	selected := s.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}

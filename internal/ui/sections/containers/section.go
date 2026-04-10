@@ -8,7 +8,6 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -61,17 +61,13 @@ const (
 
 // Section wraps bubbles/list for displaying containers.
 type Section struct {
+	base.Section
 	ctx            context.Context
-	list           list.Model
-	isFilter       bool
 	service        client.ContainerService
-	width, height  int
 	panels         []panel.Panel
 	activePanelIdx int
 	panelWidth     int
 	panelHeight    int
-	loading        bool
-	spinner        spinner.Model
 }
 
 // New creates a new container list.
@@ -81,20 +77,9 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 		items[i] = containerItem{container: c}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(true)
-
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
 	cl := &Section{
 		ctx:     ctx,
-		list:    l,
 		service: svc,
-		spinner: sp,
 		panels: []panel.Panel{
 			NewDetailsPanel(ctx, svc),
 			NewLogsPanel(ctx, svc),
@@ -103,13 +88,17 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 			NewExecPanel(ctx, svc),
 		},
 		activePanelIdx: 0,
+		Section: base.Section{
+			List:    base.NewList(items),
+			Spinner: base.NewSpinner(),
+		},
 	}
 
 	return cl
 }
 
 func (s *Section) Init() tea.Cmd {
-	selected := s.list.SelectedItem()
+	selected := s.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}
@@ -122,8 +111,8 @@ func (s *Section) Init() tea.Cmd {
 
 // SetSize sets dimensions.
 func (s *Section) SetSize(width, height int) {
-	s.width = width
-	s.height = height
+	s.Width = width
+	s.Height = height
 
 	// Account for details menu height
 	menuHeight := lipgloss.Height(s.detailsMenu())
@@ -138,7 +127,7 @@ func (s *Section) SetSize(width, height int) {
 	listWidth := int(float64(width) * theme.SplitRatio)
 	detailWidth := width - listWidth
 
-	s.list.SetSize(listWidth-listX, height-listY)
+	s.List.SetSize(listWidth-listX, height-listY)
 	s.panelWidth = detailWidth - panelX - menuX
 	// TODO: Figure out the + 1
 	s.panelHeight = height - menuHeight - menuY - panelY + 1
@@ -150,17 +139,15 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
 	// Handle spinner ticks while loading
-	if s.loading {
-		var spinnerCmd tea.Cmd
-		s.spinner, spinnerCmd = s.spinner.Update(msg)
+	if spinnerCmd := s.UpdateSpinner(msg); spinnerCmd != nil {
 		cmds = append(cmds, spinnerCmd)
 	}
 
 	switch msg := msg.(type) {
 	case containersLoadedMsg:
 		log.Printf("[containers] containersLoadedMsg: count=%d", len(msg.items))
-		s.loading = false
-		cmd := s.list.SetItems(msg.items)
+		s.Loading = false
+		cmd := s.List.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case containersPrunedMsg:
@@ -247,23 +234,14 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(cmds...)
 		}
 
-		if s.isFilter {
-			var filterCmds []tea.Cmd
-			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
-			filterCmds = append(filterCmds, listCmd)
-
-			if key.Matches(msg, keys.Keys.Esc) {
-				s.isFilter = !s.isFilter
-				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
-			}
+		if handled, filterCmds := s.HandleFilterKey(msg); handled {
 			return tea.Batch(filterCmds...)
 		}
 
 		switch {
 		case key.Matches(msg, keys.Keys.Refresh):
-			s.loading = true
-			return tea.Batch(s.spinner.Tick, s.updateContainersCmd())
+			s.Loading = true
+			return tea.Batch(s.Spinner.Tick, s.updateContainersCmd())
 		case key.Matches(msg, keys.Keys.Prune):
 			return s.confirmContainerPrune()
 		case key.Matches(msg, keys.Keys.ContainerDelete):
@@ -275,13 +253,10 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			currentPanel := s.activePanel()
 			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
+			s.List, listCmd = s.List.Update(msg)
 			return tea.Batch(listCmd, currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
-			s.isFilter = !s.isFilter
-			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
-			return tea.Batch(listCmd, s.extendFilterHelpCommand())
+			return tea.Batch(s.ToggleFilter(msg)...)
 		}
 	}
 
@@ -292,18 +267,10 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the list.
 func (s *Section) View() string {
-	s.SetSize(s.width, s.height)
-	listContent := s.list.View()
+	s.SetSize(s.Width, s.Height)
 
 	// Overlay spinner in bottom right corner when loading
-	if s.loading {
-		spinnerText := s.spinner.View() + " Refreshing..."
-		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, s.list.Width())
-	}
-
-	listView := theme.ListStyle.
-		Width(s.list.Width()).
-		Render(listContent)
+	listView := s.RenderList("Refreshing...")
 
 	detailContent := s.activePanel().View()
 
@@ -321,9 +288,9 @@ func (s *Section) View() string {
 
 // Reset resets internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
-	s.isFilter = false
+	s.IsFilter = false
 	cmd := s.activePanel().Close()
-	s.SetSize(s.width, s.height)
+	s.SetSize(s.Width, s.Height)
 	return cmd
 }
 
@@ -332,16 +299,16 @@ func (s *Section) activePanel() panel.Panel {
 }
 
 func (s *Section) removeItem(idx int) tea.Cmd {
-	s.list.RemoveItem(idx)
-	if len(s.list.Items()) == 0 {
+	s.List.RemoveItem(idx)
+	if len(s.List.Items()) == 0 {
 		return s.activePanel().Close()
 	}
-	s.list.Select(min(idx, len(s.list.Items())-1))
+	s.List.Select(min(idx, len(s.List.Items())-1))
 	return s.updateActivePanel()
 }
 
 func (s *Section) updateActivePanel() tea.Cmd {
-	selected := s.list.SelectedItem()
+	selected := s.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}
@@ -355,8 +322,8 @@ func (s *Section) updateActivePanel() tea.Cmd {
 func (s *Section) deleteContainerCmd() tea.Cmd {
 	ctx := s.ctx
 	svc := s.service
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -375,8 +342,8 @@ func (s *Section) deleteContainerCmd() tea.Cmd {
 func (s *Section) toggleContainerCmd() tea.Cmd {
 	ctx := s.ctx
 	svc := s.service
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -403,8 +370,8 @@ func (s *Section) toggleContainerCmd() tea.Cmd {
 
 func (s *Section) restartContainerCmd() tea.Cmd {
 	svc := s.service
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -435,17 +402,6 @@ func (s *Section) updateContainersCmd() tea.Cmd {
 	}
 }
 
-func (s *Section) extendFilterHelpCommand() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			key.NewBinding(
-				key.WithKeys("esc"),
-				key.WithHelp("esc", "exit"),
-			),
-		}}
-	}
-}
-
 func (s *Section) pruneContainersCmd() tea.Cmd {
 	ctx, svc := s.ctx, s.service
 	return func() tea.Msg {
@@ -466,8 +422,8 @@ func (s *Section) confirmContainerPrune() tea.Cmd {
 }
 
 func (s *Section) confirmContainerDelete() tea.Cmd {
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -486,8 +442,8 @@ func (s *Section) confirmContainerDelete() tea.Cmd {
 }
 
 func (s *Section) confirmContainerToggle() tea.Cmd {
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -510,8 +466,8 @@ func (s *Section) confirmContainerToggle() tea.Cmd {
 }
 
 func (s *Section) confirmContainerRestart() tea.Cmd {
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}

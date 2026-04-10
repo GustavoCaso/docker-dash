@@ -8,15 +8,14 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
-	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -62,17 +61,13 @@ func (n networkItem) FilterValue() string { return n.network.Name }
 
 // Section wraps bubbles/list for displaying networks.
 type Section struct {
+	base.Section
 	ctx            context.Context
-	list           list.Model
-	isFilter       bool
 	networkService client.NetworkService
 	panels         []panel.Panel
 	activePanelIdx int
-	width, height  int
 	panelWidth     int
 	panelHeight    int
-	loading        bool
-	spinner        spinner.Model
 }
 
 // New creates a new network section.
@@ -82,27 +77,20 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 		items[i] = networkItem{network: n}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowHelp(false)
-	l.SetShowStatusBar(true)
-
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
 	return &Section{
 		ctx:            ctx,
-		list:           l,
 		networkService: svc,
 		panels:         []panel.Panel{newDetailsPanel()},
 		activePanelIdx: 0,
-		spinner:        sp,
+		Section: base.Section{
+			List:    base.NewList(items),
+			Spinner: base.NewSpinner(),
+		},
 	}
 }
 
 func (s *Section) Init() tea.Cmd {
-	selected := s.list.SelectedItem()
+	selected := s.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}
@@ -115,8 +103,8 @@ func (s *Section) Init() tea.Cmd {
 
 // SetSize sets dimensions.
 func (s *Section) SetSize(width, height int) {
-	s.width = width
-	s.height = height
+	s.Width = width
+	s.Height = height
 
 	// Account for details menu height
 	menuHeight := lipgloss.Height(s.detailsMenu())
@@ -131,7 +119,7 @@ func (s *Section) SetSize(width, height int) {
 	listWidth := int(float64(width) * theme.SplitRatio)
 	detailWidth := width - listWidth
 
-	s.list.SetSize(listWidth-listX, height-listY)
+	s.List.SetSize(listWidth-listX, height-listY)
 	s.panelWidth = detailWidth - panelX - menuX
 	// TODO: Figure out the + 1
 	s.panelHeight = height - menuHeight - menuY - panelY + 1
@@ -142,16 +130,14 @@ func (s *Section) SetSize(width, height int) {
 func (s *Section) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
-	if s.loading {
-		var spinnerCmd tea.Cmd
-		s.spinner, spinnerCmd = s.spinner.Update(msg)
+	if spinnerCmd := s.UpdateSpinner(msg); spinnerCmd != nil {
 		cmds = append(cmds, spinnerCmd)
 	}
 
 	switch msg := msg.(type) {
 	case networksLoadedMsg:
 		log.Printf("[networks] networksLoadedMsg: count=%d", len(msg.items))
-		s.loading = false
+		s.Loading = false
 		if msg.error != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{
@@ -160,7 +146,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		cmd := s.list.SetItems(msg.items)
+		cmd := s.List.SetItems(msg.items)
 		cmds = append(cmds, cmd)
 		return tea.Batch(cmds...)
 	case networksPrunedMsg:
@@ -199,16 +185,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		})
 	case tea.KeyMsg:
 		log.Printf("[networks] KeyMsg: key=%q", msg.String())
-		if s.isFilter {
-			var filterCmds []tea.Cmd
-			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
-			filterCmds = append(filterCmds, listCmd)
-
-			if key.Matches(msg, keys.Keys.Esc) {
-				s.isFilter = !s.isFilter
-				filterCmds = append(filterCmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
-			}
+		if handled, filterCmds := s.HandleFilterKey(msg); handled {
 			return tea.Batch(filterCmds...)
 		}
 
@@ -222,8 +199,8 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
 			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Refresh):
-			s.loading = true
-			return tea.Batch(s.spinner.Tick, s.updateNetworksCmd())
+			s.Loading = true
+			return tea.Batch(s.Spinner.Tick, s.updateNetworksCmd())
 		case key.Matches(msg, keys.Keys.Prune):
 			return s.confirmNetworkPrune()
 		case key.Matches(msg, keys.Keys.NetworkDelete):
@@ -231,13 +208,10 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
 			currentPanel := s.activePanel()
 			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
+			s.List, listCmd = s.List.Update(msg)
 			return tea.Batch(listCmd, currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
-			s.isFilter = !s.isFilter
-			var listCmd tea.Cmd
-			s.list, listCmd = s.list.Update(msg)
-			return tea.Batch(listCmd, s.extendFilterHelpCommand())
+			return tea.Batch(s.ToggleFilter(msg)...)
 		}
 	}
 
@@ -248,17 +222,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the section.
 func (s *Section) View() string {
-	s.SetSize(s.width, s.height)
-	listContent := s.list.View()
+	s.SetSize(s.Width, s.Height)
 
-	if s.loading {
-		spinnerText := s.spinner.View() + " Loading..."
-		listContent = helper.OverlayBottomRight(1, listContent, spinnerText, s.list.Width())
-	}
-
-	listView := theme.ListStyle.
-		Width(s.list.Width()).
-		Render(listContent)
+	listView := s.RenderList("Loading...")
 
 	detailContent := s.activePanel().View()
 
@@ -292,9 +258,9 @@ func (s *Section) detailsMenu() string {
 
 // Reset resets internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
-	s.isFilter = false
+	s.IsFilter = false
 	cmd := s.activePanel().Close()
-	s.SetSize(s.width, s.height)
+	s.SetSize(s.Width, s.Height)
 	return cmd
 }
 
@@ -303,16 +269,16 @@ func (s *Section) activePanel() panel.Panel {
 }
 
 func (s *Section) removeItem(idx int) tea.Cmd {
-	s.list.RemoveItem(idx)
-	if len(s.list.Items()) == 0 {
+	s.List.RemoveItem(idx)
+	if len(s.List.Items()) == 0 {
 		return s.activePanel().Close()
 	}
-	s.list.Select(min(idx, len(s.list.Items())-1))
+	s.List.Select(min(idx, len(s.List.Items())-1))
 	return s.updateActivePanel()
 }
 
 func (s *Section) updateActivePanel() tea.Cmd {
-	selected := s.list.SelectedItem()
+	selected := s.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}
@@ -342,8 +308,8 @@ func (s *Section) updateNetworksCmd() tea.Cmd {
 func (s *Section) deleteNetworkCmd() tea.Cmd {
 	ctx := s.ctx
 	svc := s.networkService
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -379,8 +345,8 @@ func (s *Section) confirmNetworkPrune() tea.Cmd {
 }
 
 func (s *Section) confirmNetworkDelete() tea.Cmd {
-	items := s.list.Items()
-	idx := s.list.Index()
+	items := s.List.Items()
+	idx := s.List.Index()
 	if idx < 0 || idx >= len(items) {
 		return nil
 	}
@@ -395,16 +361,5 @@ func (s *Section) confirmNetworkDelete() tea.Cmd {
 			Body:      fmt.Sprintf("Delete network %s?", item.network.Name),
 			OnConfirm: deleteCmd,
 		}
-	}
-}
-
-func (s *Section) extendFilterHelpCommand() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			key.NewBinding(
-				key.WithKeys("esc"),
-				key.WithHelp("esc", "exit"),
-			),
-		}}
 	}
 }

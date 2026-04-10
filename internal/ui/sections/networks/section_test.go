@@ -109,11 +109,11 @@ func TestResetClearsFlags(t *testing.T) {
 	s := New(context.Background(), networks, c.Networks())
 	s.SetSize(120, 40)
 
-	s.isFilter = true
+	s.IsFilter = true
 
 	cmd := s.Reset()
 
-	if s.isFilter {
+	if s.IsFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
 	if cmd != nil {
@@ -153,19 +153,19 @@ func TestNetworkDeleteUpdatesSelection(t *testing.T) {
 	section := New(context.Background(), networks, c.Networks())
 	section.SetSize(120, 40)
 
-	initialCount := len(section.list.Items())
+	initialCount := len(section.List.Items())
 	if initialCount == 0 {
 		t.Fatal("expected at least one network in mock data")
 	}
 
-	section.list.Select(0)
+	section.List.Select(0)
 	section.removeItem(0)
 
-	if len(section.list.Items()) != initialCount-1 {
-		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.list.Items()))
+	if len(section.List.Items()) != initialCount-1 {
+		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
 	}
-	if section.list.Index() != 0 {
-		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.list.Index())
+	if section.List.Index() != 0 {
+		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.List.Index())
 	}
 }
 
@@ -198,18 +198,18 @@ func TestNetworkDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
 	section := New(context.Background(), networks, c.Networks())
 	section.SetSize(120, 40)
 
-	count := len(section.list.Items())
+	count := len(section.List.Items())
 	if count < 2 {
 		t.Fatal("expected at least two networks in mock data")
 	}
 
 	// Select and delete the last item — selection should clamp to new last
 	last := count - 1
-	section.list.Select(last)
+	section.List.Select(last)
 	section.removeItem(last)
 
-	if section.list.Index() != last-1 {
-		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.list.Index())
+	if section.List.Index() != last-1 {
+		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.List.Index())
 	}
 }
 
@@ -220,7 +220,7 @@ func TestPanelClosedOnUpDownNavigation(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Navigate to second network
-	section.list.Select(1)
+	section.List.Select(1)
 	// Initialize the details panel with content
 	section.activePanel().Init("network2 content")
 
@@ -245,7 +245,7 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Navigate to second network
-	section.list.Select(1)
+	section.List.Select(1)
 	// Initialize the details panel
 	section.activePanel().Init("network2 content")
 

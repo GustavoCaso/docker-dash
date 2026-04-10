@@ -252,11 +252,11 @@ func TestResetClearsFilterFlag(t *testing.T) {
 	cl := New(context.Background(), containers, dockerClient.Containers())
 	cl.SetSize(120, 40)
 
-	cl.isFilter = true
+	cl.IsFilter = true
 
 	cl.Reset()
 
-	if cl.isFilter {
+	if cl.IsFilter {
 		t.Error("Reset() should set isFilter to false")
 	}
 }
@@ -291,19 +291,19 @@ func TestContainerDeleteUpdatesSelection(t *testing.T) {
 	section := New(context.Background(), containers, c.Containers())
 	section.SetSize(120, 40)
 
-	initialCount := len(section.list.Items())
+	initialCount := len(section.List.Items())
 	if initialCount == 0 {
 		t.Fatal("expected at least one container in mock data")
 	}
 
-	section.list.Select(0)
+	section.List.Select(0)
 	cmd := section.removeItem(0)
 
-	if len(section.list.Items()) != initialCount-1 {
-		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.list.Items()))
+	if len(section.List.Items()) != initialCount-1 {
+		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
 	}
-	if section.list.Index() != 0 {
-		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.list.Index())
+	if section.List.Index() != 0 {
+		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.List.Index())
 	}
 	if cmd == nil {
 		t.Fatal("removeItem() should return non-nil cmd when items remain")
@@ -342,18 +342,18 @@ func TestContainerDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
 	section := New(context.Background(), containers, c.Containers())
 	section.SetSize(120, 40)
 
-	count := len(section.list.Items())
+	count := len(section.List.Items())
 	if count < 2 {
 		t.Fatal("expected at least two containers in mock data")
 	}
 
 	// Select and delete the last item — selection should clamp to new last
 	last := count - 1
-	section.list.Select(last)
+	section.List.Select(last)
 	cmd := section.removeItem(last)
 
-	if section.list.Index() != last-1 {
-		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.list.Index())
+	if section.List.Index() != last-1 {
+		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.List.Index())
 	}
 	if cmd == nil {
 		t.Fatal("removeItem() should return non-nil cmd when items remain")
@@ -397,7 +397,7 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Navigate to logs panel (index 1) on second container
-	section.list.Select(1) // Select second container
+	section.List.Select(1) // Select second container
 	section.activePanelIdx = 1
 	logsPanel := section.panels[1].(*logsPanel)
 
