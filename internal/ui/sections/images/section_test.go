@@ -112,19 +112,25 @@ func TestImageListRefresh(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestImageListRunContainer(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx")
-	// Select an image
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Run container
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
-	// Wait for async operation, then flush output
-	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitFor(t, tm, "nginx")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+func TestRunContainerKeyShowsForm(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c)
+	section.SetSize(120, 40)
+
+	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if cmd == nil {
+		t.Fatal("pressing 'c' should return a non-nil cmd")
+	}
+
+	msg := cmd()
+	formMsg, ok := msg.(message.ShowFormMsg)
+	if !ok {
+		t.Fatalf("expected ShowFormMsg, got %T", msg)
+	}
+	if formMsg.Form == nil {
+		t.Error("ShowFormMsg.Form should not be nil")
+	}
 }
 
 func TestResetClearsFlags(t *testing.T) {
@@ -408,6 +414,59 @@ func TestPanelClosedOnUpDownNavigation(t *testing.T) {
 	cmd := section.activePanel().Init("sha256:image3")
 	if cmd == nil {
 		t.Error("Panel should be able to reinitialize after navigation")
+	}
+}
+
+func TestValidatePorts(t *testing.T) {
+	tests := []struct {
+		input   string
+		wantErr bool
+	}{
+		{"", false},
+		{"8080:80", false},
+		{"8080:80,443:443", false},
+		{"  8080:80 , 443:443 ", false},
+		{"8080:80/tcp", false}, // container port with protocol suffix
+		{"nocodon", true},      // missing colon
+		{"abc:80", true},       // non-numeric host port
+		{"8080:abc", true},     // non-numeric container port
+		{"0:80", true},         // port out of range (0)
+		{"8080:65536", true},   // port out of range (>65535)
+		{"8080:", true},        // empty container port
+		{":80", true},          // empty host port
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			err := validatePorts(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validatePorts(%q) error=%v, wantErr=%v", tt.input, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateEnv(t *testing.T) {
+	tests := []struct {
+		input   string
+		wantErr bool
+	}{
+		{"", false},
+		{"KEY=VALUE", false},
+		{"KEY=VALUE,FOO=BAR", false},
+		{"KEY=", false},          // empty value is allowed
+		{"KEY=VAL=EXTRA", false}, // value may contain '='
+		{"  KEY=VAL , FOO=1 ", false},
+		{"NOEQUALS", true}, // missing '='
+		{"=VALUE", true},   // empty key
+		{"  =VALUE", true}, // whitespace-only key
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			err := validateEnv(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateEnv(%q) error=%v, wantErr=%v", tt.input, err, tt.wantErr)
+			}
+		})
 	}
 }
 
