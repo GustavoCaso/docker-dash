@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
@@ -64,10 +63,6 @@ type Section struct {
 	base.Section
 	ctx            context.Context
 	networkService client.NetworkService
-	panels         []panel.Panel
-	activePanelIdx int
-	panelWidth     int
-	panelHeight    int
 }
 
 // New creates a new network section.
@@ -80,50 +75,28 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 	return &Section{
 		ctx:            ctx,
 		networkService: svc,
-		panels:         []panel.Panel{newDetailsPanel()},
-		activePanelIdx: 0,
 		Section: base.Section{
 			List:    base.NewList(items),
 			Spinner: base.NewSpinner(),
+			Panels:  []panel.Panel{newDetailsPanel()},
+			ActivePanelInitFn: func(item list.Item) string {
+				ni, ok := item.(networkItem)
+				if !ok {
+					return ""
+				}
+				return formatNetworkDetails(ni.network)
+			},
 		},
 	}
 }
 
 func (s *Section) Init() tea.Cmd {
-	selected := s.List.SelectedItem()
-	if selected == nil {
-		return nil
-	}
-	item, ok := selected.(networkItem)
-	if !ok {
-		return nil
-	}
-	return s.activePanel().Init(formatNetworkDetails(item.network))
+	return s.UpdateActivePanel()
 }
 
 // SetSize sets dimensions.
 func (s *Section) SetSize(width, height int) {
-	s.Width = width
-	s.Height = height
-
-	// Account for details menu height
-	menuHeight := lipgloss.Height(s.detailsMenu())
-	menuX, menuY := theme.Tab.GetFrameSize()
-
-	// Account for padding and borders
-	listX, listY := theme.ListStyle.GetFrameSize()
-
-	// Panel Style
-	panelX, panelY := theme.NoBorders.GetFrameSize()
-
-	listWidth := int(float64(width) * theme.SplitRatio)
-	detailWidth := width - listWidth
-
-	s.List.SetSize(listWidth-listX, height-listY)
-	s.panelWidth = detailWidth - panelX - menuX
-	// TODO: Figure out the + 1
-	s.panelHeight = height - menuHeight - menuY - panelY + 1
-	s.activePanel().SetSize(s.panelWidth, s.panelHeight)
+	s.SetSizeWithPanels(width, height)
 }
 
 // Update handles messages.
@@ -177,7 +150,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		return tea.Batch(s.removeItem(msg.Idx), func() tea.Msg {
+		return tea.Batch(s.RemoveItemAndUpdatePanel(msg.Idx), func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Network %s deleted", msg.Name),
 				IsError: false,
@@ -189,15 +162,11 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(filterCmds...)
 		}
 
+		if handled, cmd := s.HandlePanelKeys(msg, "networks"); handled {
+			return cmd
+		}
+
 		switch {
-		case key.Matches(msg, keys.Keys.PanelNext):
-			currentPanel := s.activePanel()
-			s.activePanelIdx = (s.activePanelIdx + 1) % len(s.panels)
-			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
-		case key.Matches(msg, keys.Keys.PanelPrev):
-			currentPanel := s.activePanel()
-			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
-			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.Loading = true
 			return tea.Batch(s.Spinner.Tick, s.updateNetworksCmd())
@@ -206,88 +175,36 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.NetworkDelete):
 			return s.confirmNetworkDelete()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
-			currentPanel := s.activePanel()
+			currentPanel := s.ActivePanel()
 			var listCmd tea.Cmd
 			s.List, listCmd = s.List.Update(msg)
-			return tea.Batch(listCmd, currentPanel.Close(), s.updateActivePanel())
+			return tea.Batch(listCmd, currentPanel.Close(), s.UpdateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
 			return tea.Batch(s.ToggleFilter(msg)...)
 		}
 	}
 
-	cmds = append(cmds, s.activePanel().Update(msg))
+	cmds = append(cmds, s.ActivePanel().Update(msg))
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the section.
 func (s *Section) View() string {
-	s.SetSize(s.Width, s.Height)
-
-	listView := s.RenderList("Loading...")
-
-	detailContent := s.activePanel().View()
-
-	details := theme.NoBorders.
-		Width(s.panelWidth).
-		Height(s.panelHeight).
-		Render(detailContent)
-
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listView,
-		lipgloss.JoinVertical(lipgloss.Top, s.detailsMenu(), details),
-	)
+	return s.RenderWithPanels("Loading...")
 }
 
-func (s *Section) detailsMenu() string {
-	sectionsMenu := make([]string, 0, len(s.panels))
-	for idx, p := range s.panels {
-		if idx == s.activePanelIdx {
-			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
-		} else {
-			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
-		}
-	}
-
-	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
-	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, s.panelWidth-lipgloss.Width(detailsMenu))))
-
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
-}
 
 // Reset resets internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
 	s.IsFilter = false
-	cmd := s.activePanel().Close()
-	s.SetSize(s.Width, s.Height)
+	cmd := s.ActivePanel().Close()
+	s.SetSizeWithPanels(s.Width, s.Height)
 	return cmd
 }
 
-func (s *Section) activePanel() panel.Panel {
-	return s.panels[s.activePanelIdx]
-}
 
-func (s *Section) removeItem(idx int) tea.Cmd {
-	s.List.RemoveItem(idx)
-	if len(s.List.Items()) == 0 {
-		return s.activePanel().Close()
-	}
-	s.List.Select(min(idx, len(s.List.Items())-1))
-	return s.updateActivePanel()
-}
 
-func (s *Section) updateActivePanel() tea.Cmd {
-	selected := s.List.SelectedItem()
-	if selected == nil {
-		return nil
-	}
-	item, ok := selected.(networkItem)
-	if !ok {
-		return nil
-	}
-	return s.activePanel().Init(formatNetworkDetails(item.network))
-}
 
 func (s *Section) updateNetworksCmd() tea.Cmd {
 	ctx := s.ctx

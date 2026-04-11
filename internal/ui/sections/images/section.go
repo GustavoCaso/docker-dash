@@ -13,7 +13,6 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
@@ -76,10 +75,6 @@ type Section struct {
 	ctx              context.Context
 	imageService     client.ImageService
 	containerService client.ContainerService
-	panels           []panel.Panel
-	activePanelIdx   int
-	panelWidth       int
-	panelHeight      int
 }
 
 // New creates a new image section.
@@ -93,11 +88,17 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 		ctx:              ctx,
 		imageService:     client.Images(),
 		containerService: client.Containers(),
-		panels:           []panel.Panel{NewLayersPanel(ctx, client.Images())},
-		activePanelIdx:   0,
 		Section: base.Section{
 			List:    base.NewList(items),
 			Spinner: base.NewSpinner(),
+			Panels:  []panel.Panel{NewLayersPanel(ctx, client.Images())},
+			ActivePanelInitFn: func(item list.Item) string {
+				ii, ok := item.(imageItem)
+				if !ok {
+					return ""
+				}
+				return ii.ID()
+			},
 		},
 	}
 
@@ -105,40 +106,12 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 }
 
 func (s *Section) Init() tea.Cmd {
-	selected := s.List.SelectedItem()
-	if selected == nil {
-		return nil
-	}
-	item, ok := selected.(imageItem)
-	if !ok {
-		return nil
-	}
-	return s.panels[s.activePanelIdx].Init(item.ID())
+	return s.UpdateActivePanel()
 }
 
 // SetSize sets dimensions.
 func (s *Section) SetSize(width, height int) {
-	s.Width = width
-	s.Height = height
-
-	// Account for details menu height
-	menuHeight := lipgloss.Height(s.detailsMenu())
-	menuX, menuY := theme.Tab.GetFrameSize()
-
-	// Account for padding and borders
-	listX, listY := theme.ListStyle.GetFrameSize()
-
-	// Panel Style
-	panelX, panelY := theme.NoBorders.GetFrameSize()
-
-	listWidth := int(float64(width) * theme.SplitRatio)
-	detailWidth := width - listWidth
-
-	s.List.SetSize(listWidth-listX, height-listY)
-	s.panelWidth = detailWidth - panelX - menuX
-	// TODO: Figure out the + 1
-	s.panelHeight = height - menuHeight - menuY - panelY + 1
-	s.activePanel().SetSize(s.panelWidth, s.panelHeight)
+	s.SetSizeWithPanels(width, height)
 }
 
 // Update handles messages.
@@ -197,7 +170,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
-		return tea.Batch(s.removeItem(msg.Idx), func() tea.Msg {
+		return tea.Batch(s.RemoveItemAndUpdatePanel(msg.Idx), func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Image %s deleted", helper.ShortID(msg.ID)),
 				IsError: false,
@@ -256,15 +229,11 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 			return tea.Batch(filterCmds...)
 		}
 
+		if handled, cmd := s.HandlePanelKeys(msg, "images"); handled {
+			return cmd
+		}
+
 		switch {
-		case key.Matches(msg, keys.Keys.PanelNext):
-			currentPanel := s.activePanel()
-			s.activePanelIdx = (s.activePanelIdx + 1) % len(s.panels)
-			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
-		case key.Matches(msg, keys.Keys.PanelPrev):
-			currentPanel := s.activePanel()
-			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
-			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
 		case key.Matches(msg, keys.Keys.Refresh):
 			s.Loading = true
 			return tea.Batch(s.Spinner.Tick, s.updateImagesCmd())
@@ -290,63 +259,32 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.CreateAndRunContainer):
 			return s.showRunContainerForm()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
-			currentPanel := s.activePanel()
+			currentPanel := s.ActivePanel()
 			var listCmd tea.Cmd
 			s.List, listCmd = s.List.Update(msg)
-			return tea.Batch(listCmd, currentPanel.Close(), s.updateActivePanel())
+			return tea.Batch(listCmd, currentPanel.Close(), s.UpdateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
 			return tea.Batch(s.ToggleFilter(msg)...)
 		}
 	}
 
 	// Send the remaining of msg to active panel
-	cmds = append(cmds, s.activePanel().Update(msg))
+	cmds = append(cmds, s.ActivePanel().Update(msg))
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the list.
 func (s *Section) View() string {
-	s.SetSize(s.Width, s.Height)
-
-	// Overlay spinner in bottom right corner when loading
-	listView := s.RenderList("Refreshing...")
-
-	detailContent := s.activePanel().View()
-
-	details := theme.NoBorders.
-		Width(s.panelWidth).
-		Height(s.panelHeight).
-		Render(detailContent)
-
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listView,
-		lipgloss.JoinVertical(lipgloss.Top, s.detailsMenu(), details),
-	)
+	return s.RenderWithPanels("Refreshing...")
 }
 
-func (s *Section) detailsMenu() string {
-	sectionsMenu := make([]string, 0, len(s.panels))
-	for idx, p := range s.panels {
-		if idx == s.activePanelIdx {
-			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
-		} else {
-			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
-		}
-	}
-
-	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
-	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, s.panelWidth-lipgloss.Width(detailsMenu))))
-
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
-}
 
 // Reset reset internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
 	s.IsFilter = false
-	cmd := s.activePanel().Close()
-	s.SetSize(s.Width, s.Height)
+	cmd := s.ActivePanel().Close()
+	s.SetSizeWithPanels(s.Width, s.Height)
 	return cmd
 }
 
@@ -580,31 +518,6 @@ func (s *Section) confirmImageDelete() tea.Cmd {
 			OnConfirm: deleteCmd,
 		}
 	}
-}
-
-func (s *Section) activePanel() panel.Panel {
-	return s.panels[s.activePanelIdx]
-}
-
-func (s *Section) removeItem(idx int) tea.Cmd {
-	s.List.RemoveItem(idx)
-	if len(s.List.Items()) == 0 {
-		return s.activePanel().Close()
-	}
-	s.List.Select(min(idx, len(s.List.Items())-1))
-	return s.updateActivePanel()
-}
-
-func (s *Section) updateActivePanel() tea.Cmd {
-	selected := s.List.SelectedItem()
-	if selected == nil {
-		return nil
-	}
-	item, ok := selected.(imageItem)
-	if !ok {
-		return nil
-	}
-	return s.activePanel().Init(item.ID())
 }
 
 func pullImageForm() *huh.Form {

@@ -328,7 +328,7 @@ func TestImageDeleteUpdatesSelection(t *testing.T) {
 	}
 
 	section.List.Select(0)
-	cmd := section.removeItem(0)
+	cmd := section.RemoveItemAndUpdatePanel(0)
 
 	if len(section.List.Items()) != initialCount-1 {
 		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
@@ -354,11 +354,11 @@ func TestImageDeleteLastItemClearsPanel(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Set content on the layers panel so we can verify it gets cleared.
-	lp := section.panels[0].(*layersPanel)
+	lp := section.Panels[0].(*layersPanel)
 	lp.viewport.SetContent("stale layer info")
 
 	// Delete the single item — activePanel().Close() should be called.
-	cmd := section.removeItem(0)
+	cmd := section.RemoveItemAndUpdatePanel(0)
 	if cmd != nil {
 		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
 	}
@@ -381,7 +381,7 @@ func TestImageDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
 	// Select and delete the last item — selection should clamp to new last
 	last := count - 1
 	section.List.Select(last)
-	cmd := section.removeItem(last)
+	cmd := section.RemoveItemAndUpdatePanel(last)
 
 	if section.List.Index() != last-1 {
 		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.List.Index())
@@ -403,7 +403,7 @@ func TestPanelClosedOnUpDownNavigation(t *testing.T) {
 	// Navigate to second image
 	section.List.Select(1)
 	// Initialize the layers panel with content
-	section.activePanel().Init("sha256:image2")
+	section.ActivePanel().Init("sha256:image2")
 
 	// Navigate down to next image - this should close the current panel
 	section.Update(tea.KeyMsg{Type: tea.KeyDown})
@@ -411,7 +411,7 @@ func TestPanelClosedOnUpDownNavigation(t *testing.T) {
 	// Verify the panel Close() was called (panel is ready for new content)
 	// We can't directly verify viewport content is cleared, but we can verify
 	// the panel can be initialized again without issues
-	cmd := section.activePanel().Init("sha256:image3")
+	cmd := section.ActivePanel().Init("sha256:image3")
 	if cmd == nil {
 		t.Error("Panel should be able to reinitialize after navigation")
 	}
@@ -479,13 +479,13 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	// Navigate to second image
 	section.List.Select(1)
 	// Initialize the layers panel
-	section.activePanel().Init("sha256:image2")
+	section.ActivePanel().Init("sha256:image2")
 
 	// Navigate up to previous image - this should close the current panel
 	section.Update(tea.KeyMsg{Type: tea.KeyUp})
 
 	// Verify the panel can be reinitialized
-	cmd := section.activePanel().Init("sha256:image1")
+	cmd := section.ActivePanel().Init("sha256:image1")
 	if cmd == nil {
 		t.Error("Panel should be able to reinitialize after navigation")
 	}

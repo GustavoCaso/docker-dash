@@ -193,7 +193,7 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
 	// Instead if moving four time to the right, we move one to the left
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
-	ep := section.panels[section.activePanelIdx].(*execPanel)
+	ep := section.Panels[section.ActivePanelIdx].(*execPanel)
 
 	// Give the viewport content tall enough to scroll
 	lines := strings.Repeat("output line\n", 50)
@@ -219,15 +219,15 @@ func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	cl.SetSize(120, 40)
 
 	// Navigate to logs panel (index 1)
-	cl.activePanelIdx = 1
-	lp := cl.panels[1].(*logsPanel)
+	cl.ActivePanelIdx = 1
+	lp := cl.Panels[1].(*logsPanel)
 
 	pr, pw := io.Pipe()
 	lp.logsSession = client.NewLogsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
 	lp.logsOutput = "some logs"
 
 	// Simulate exec close which calls activePanel().Close()
-	cl.activePanel().Close()
+	cl.ActivePanel().Close()
 
 	if lp.logsOutput != "" {
 		t.Errorf("Close() should clear logsOutput, got %q", lp.logsOutput)
@@ -297,7 +297,7 @@ func TestContainerDeleteUpdatesSelection(t *testing.T) {
 	}
 
 	section.List.Select(0)
-	cmd := section.removeItem(0)
+	cmd := section.RemoveItemAndUpdatePanel(0)
 
 	if len(section.List.Items()) != initialCount-1 {
 		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
@@ -323,11 +323,11 @@ func TestContainerDeleteLastItemClearsPanel(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Set content on the default details panel so we can verify it gets cleared.
-	dp := section.panels[0].(*detailsPanel)
+	dp := section.Panels[0].(*detailsPanel)
 	dp.viewport.SetContent("stale container details")
 
 	// Delete the single item — activePanel().Close() should be called.
-	cmd := section.removeItem(0)
+	cmd := section.RemoveItemAndUpdatePanel(0)
 	if cmd != nil {
 		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
 	}
@@ -350,7 +350,7 @@ func TestContainerDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
 	// Select and delete the last item — selection should clamp to new last
 	last := count - 1
 	section.List.Select(last)
-	cmd := section.removeItem(last)
+	cmd := section.RemoveItemAndUpdatePanel(last)
 
 	if section.List.Index() != last-1 {
 		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.List.Index())
@@ -370,8 +370,8 @@ func TestPanelClosedOnUpDownNavigation(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Navigate to stats panel (index 2)
-	section.activePanelIdx = 2
-	statsPanel := section.panels[2].(*statsPanel)
+	section.ActivePanelIdx = 2
+	statsPanel := section.Panels[2].(*statsPanel)
 
 	// Set some state on the stats panel to verify it gets cleared
 	pr, pw := io.Pipe()
@@ -398,8 +398,8 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 
 	// Navigate to logs panel (index 1) on second container
 	section.List.Select(1) // Select second container
-	section.activePanelIdx = 1
-	logsPanel := section.panels[1].(*logsPanel)
+	section.ActivePanelIdx = 1
+	logsPanel := section.Panels[1].(*logsPanel)
 
 	// Set some state on the logs panel
 	pr, pw := io.Pipe()

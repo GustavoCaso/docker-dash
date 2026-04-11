@@ -4,12 +4,16 @@
 package base
 
 import (
+	"log"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -20,6 +24,11 @@ import (
 // a loading spinner, filter-mode tracking, and the current terminal size.
 // Embed this struct in each concrete section type and delegate the shared
 // behaviour to its methods.
+//
+// For sections that display a detail panel alongside the list, populate
+// Panels and ActivePanelInitFn in New() and use the panel-aware helpers
+// (SetSizeWithPanels, HandlePanelKeys, UpdateActivePanel, RemoveItemAndUpdatePanel,
+// RenderWithPanels).
 type Section struct {
 	List     list.Model
 	Spinner  spinner.Model
@@ -27,6 +36,16 @@ type Section struct {
 	IsFilter bool
 	Width    int
 	Height   int
+
+	// Panel support — populated by sections that have a detail panel.
+	Panels         []panel.Panel
+	ActivePanelIdx int
+	PanelWidth     int
+	PanelHeight    int
+
+	// ActivePanelInitFn extracts the string passed to Panel.Init from the
+	// currently-selected list item.  Set this in New() for panel sections.
+	ActivePanelInitFn func(list.Item) string
 }
 
 // NewList returns a bubbles list pre-configured with the standard section
@@ -127,4 +146,124 @@ func (b *Section) RenderList(loadingText string) string {
 	return theme.ListStyle.
 		Width(b.List.Width()).
 		Render(content)
+}
+
+// ActivePanel returns the currently active detail panel.
+func (b *Section) ActivePanel() panel.Panel {
+	return b.Panels[b.ActivePanelIdx]
+}
+
+// DetailsMenu renders the tab bar that appears above the active detail panel.
+func (b *Section) DetailsMenu() string {
+	sectionsMenu := make([]string, 0, len(b.Panels))
+	for idx, p := range b.Panels {
+		if idx == b.ActivePanelIdx {
+			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
+		} else {
+			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
+		}
+	}
+
+	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
+	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, b.PanelWidth-lipgloss.Width(detailsMenu))))
+
+	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
+}
+
+// SetSizeWithPanels sets dimensions for a section that shows a list alongside
+// a detail panel.  It calculates the split widths, resizes both the list and
+// the active panel, and stores PanelWidth/PanelHeight for use in View.
+func (b *Section) SetSizeWithPanels(width, height int) {
+	b.Width = width
+	b.Height = height
+
+	// Account for details menu height
+	menuHeight := lipgloss.Height(b.DetailsMenu())
+	menuX, menuY := theme.Tab.GetFrameSize()
+
+	// Account for padding and borders
+	listX, listY := theme.ListStyle.GetFrameSize()
+
+	// Panel Style
+	panelX, panelY := theme.NoBorders.GetFrameSize()
+
+	listWidth := int(float64(width) * theme.SplitRatio)
+	detailWidth := width - listWidth
+
+	b.List.SetSize(listWidth-listX, height-listY)
+	b.PanelWidth = detailWidth - panelX - menuX
+	// TODO: Figure out the + 1
+	b.PanelHeight = height - menuHeight - menuY - panelY + 1
+	b.ActivePanel().SetSize(b.PanelWidth, b.PanelHeight)
+}
+
+// HandlePanelKeys handles PanelNext and PanelPrev key bindings, cycling through
+// b.Panels.  sectionName is used only for log output.
+// Returns (true, cmd) when a panel key was matched, (false, nil) otherwise.
+func (b *Section) HandlePanelKeys(msg tea.KeyMsg, sectionName string) (bool, tea.Cmd) {
+	switch {
+	case key.Matches(msg, keys.Keys.PanelNext):
+		currentPanel := b.ActivePanel()
+		b.ActivePanelIdx = (b.ActivePanelIdx + 1) % len(b.Panels)
+		log.Printf("[%s] switching panel to: %q", sectionName, b.Panels[b.ActivePanelIdx].Name())
+		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
+	case key.Matches(msg, keys.Keys.PanelPrev):
+		currentPanel := b.ActivePanel()
+		b.ActivePanelIdx = (b.ActivePanelIdx - 1 + len(b.Panels)) % len(b.Panels)
+		log.Printf("[%s] switching panel to: %q", sectionName, b.Panels[b.ActivePanelIdx].Name())
+		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
+	}
+	return false, nil
+}
+
+// UpdateActivePanel calls ActivePanelInitFn on the selected list item and
+// passes the result to the active panel's Init method.
+// Returns nil when no item is selected or ActivePanelInitFn is not set.
+func (b *Section) UpdateActivePanel() tea.Cmd {
+	if b.ActivePanelInitFn == nil {
+		return nil
+	}
+	selected := b.List.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	id := b.ActivePanelInitFn(selected)
+	if id == "" {
+		return nil
+	}
+	return b.ActivePanel().Init(id)
+}
+
+// RemoveItemAndUpdatePanel removes the item at idx from the list, clamps the
+// selection, and re-initialises the active panel for the new selection.
+// When the list becomes empty it closes the active panel instead.
+func (b *Section) RemoveItemAndUpdatePanel(idx int) tea.Cmd {
+	b.List.RemoveItem(idx)
+	if len(b.List.Items()) == 0 {
+		return b.ActivePanel().Close()
+	}
+	b.List.Select(min(idx, len(b.List.Items())-1))
+	return b.UpdateActivePanel()
+}
+
+// RenderWithPanels renders the full split-pane view: list on the left,
+// tab menu + active panel on the right.  loadingText is shown in the spinner
+// overlay while loading.
+func (b *Section) RenderWithPanels(loadingText string) string {
+	b.SetSizeWithPanels(b.Width, b.Height)
+
+	listView := b.RenderList(loadingText)
+
+	detailContent := b.ActivePanel().View()
+
+	details := theme.NoBorders.
+		Width(b.PanelWidth).
+		Height(b.PanelHeight).
+		Render(detailContent)
+
+	return lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		listView,
+		lipgloss.JoinVertical(lipgloss.Top, b.DetailsMenu(), details),
+	)
 }

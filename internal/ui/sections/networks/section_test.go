@@ -159,7 +159,7 @@ func TestNetworkDeleteUpdatesSelection(t *testing.T) {
 	}
 
 	section.List.Select(0)
-	section.removeItem(0)
+	section.RemoveItemAndUpdatePanel(0)
 
 	if len(section.List.Items()) != initialCount-1 {
 		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
@@ -179,11 +179,11 @@ func TestNetworkDeleteLastItemClearsPanel(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Set content on the details panel so we can verify it gets cleared.
-	dp := section.panels[0].(*detailsPanel)
+	dp := section.Panels[0].(*detailsPanel)
 	dp.viewport.SetContent("stale network details")
 
 	// Delete the single item — activePanel().Close() should be called.
-	cmd := section.removeItem(0)
+	cmd := section.RemoveItemAndUpdatePanel(0)
 	if cmd != nil {
 		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
 	}
@@ -206,7 +206,7 @@ func TestNetworkDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
 	// Select and delete the last item — selection should clamp to new last
 	last := count - 1
 	section.List.Select(last)
-	section.removeItem(last)
+	section.RemoveItemAndUpdatePanel(last)
 
 	if section.List.Index() != last-1 {
 		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.List.Index())
@@ -222,17 +222,17 @@ func TestPanelClosedOnUpDownNavigation(t *testing.T) {
 	// Navigate to second network
 	section.List.Select(1)
 	// Initialize the details panel with content
-	section.activePanel().Init("network2 content")
+	section.ActivePanel().Init("network2 content")
 
 	// Navigate down to next network - this should close the current panel (clearing viewport)
 	section.Update(tea.KeyMsg{Type: tea.KeyDown})
 
 	// Verify the panel Close() was called by reinitializing successfully
 	// The panel should not panic and should accept new content
-	section.activePanel().Init("network3 content")
+	section.ActivePanel().Init("network3 content")
 
 	// Verify the panel view is generated without errors
-	view := section.activePanel().View()
+	view := section.ActivePanel().View()
 	if view == "" {
 		t.Error("Panel view should not be empty after reinitialization")
 	}
@@ -247,16 +247,16 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	// Navigate to second network
 	section.List.Select(1)
 	// Initialize the details panel
-	section.activePanel().Init("network2 content")
+	section.ActivePanel().Init("network2 content")
 
 	// Navigate up to previous network - this should close the current panel
 	section.Update(tea.KeyMsg{Type: tea.KeyUp})
 
 	// Verify the panel can be reinitialized without issues
-	section.activePanel().Init("network1 content")
+	section.ActivePanel().Init("network1 content")
 
 	// Verify the panel view is generated
-	view := section.activePanel().View()
+	view := section.ActivePanel().View()
 	if view == "" {
 		t.Error("Panel view should not be empty after reinitialization")
 	}

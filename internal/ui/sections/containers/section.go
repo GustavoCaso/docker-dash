@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
@@ -62,12 +60,8 @@ const (
 // Section wraps bubbles/list for displaying containers.
 type Section struct {
 	base.Section
-	ctx            context.Context
-	service        client.ContainerService
-	panels         []panel.Panel
-	activePanelIdx int
-	panelWidth     int
-	panelHeight    int
+	ctx     context.Context
+	service client.ContainerService
 }
 
 // New creates a new container list.
@@ -80,17 +74,24 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
-		panels: []panel.Panel{
-			NewDetailsPanel(ctx, svc),
-			NewLogsPanel(ctx, svc),
-			NewStatsPanel(ctx, svc),
-			panel.NewFilesPanel(ctx, svc),
-			NewExecPanel(ctx, svc),
-		},
-		activePanelIdx: 0,
 		Section: base.Section{
 			List:    base.NewList(items),
 			Spinner: base.NewSpinner(),
+			Panels: []panel.Panel{
+				NewDetailsPanel(ctx, svc),
+				NewLogsPanel(ctx, svc),
+				NewStatsPanel(ctx, svc),
+				panel.NewFilesPanel(ctx, svc),
+				NewExecPanel(ctx, svc),
+			},
+			ActivePanelIdx: 0,
+			ActivePanelInitFn: func(item list.Item) string {
+				ci, ok := item.(containerItem)
+				if !ok {
+					return ""
+				}
+				return ci.container.ID
+			},
 		},
 	}
 
@@ -98,40 +99,12 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 }
 
 func (s *Section) Init() tea.Cmd {
-	selected := s.List.SelectedItem()
-	if selected == nil {
-		return nil
-	}
-	cItem, ok := selected.(containerItem)
-	if !ok {
-		return nil
-	}
-	return s.activePanel().Init(cItem.container.ID)
+	return s.UpdateActivePanel()
 }
 
 // SetSize sets dimensions.
 func (s *Section) SetSize(width, height int) {
-	s.Width = width
-	s.Height = height
-
-	// Account for details menu height
-	menuHeight := lipgloss.Height(s.detailsMenu())
-	menuX, menuY := theme.Tab.GetFrameSize()
-
-	// Account for padding and borders
-	listX, listY := theme.ListStyle.GetFrameSize()
-
-	// Panel Style
-	panelX, panelY := theme.NoBorders.GetFrameSize()
-
-	listWidth := int(float64(width) * theme.SplitRatio)
-	detailWidth := width - listWidth
-
-	s.List.SetSize(listWidth-listX, height-listY)
-	s.panelWidth = detailWidth - panelX - menuX
-	// TODO: Figure out the + 1
-	s.panelHeight = height - menuHeight - menuY - panelY + 1
-	s.activePanel().SetSize(s.panelWidth, s.panelHeight)
+	s.SetSizeWithPanels(width, height)
 }
 
 // Update handles messages.
@@ -190,7 +163,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 
 		// For delete, remove from list
 		if msg.Action == "deleting" {
-			cmds = append(cmds, s.removeItem(msg.Idx))
+			cmds = append(cmds, s.RemoveItemAndUpdatePanel(msg.Idx))
 		}
 
 		// Refresh list after start/stop/restart
@@ -206,29 +179,21 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		})...)
 	case execCloseMsg:
 		log.Printf("[containers] execCloseMsg")
-		s.activePanel().Close()
+		s.ActivePanel().Close()
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
 		}
 	case tea.MouseEvent:
-		cmds = append(cmds, s.activePanel().Update(msg))
+		cmds = append(cmds, s.ActivePanel().Update(msg))
 	case tea.KeyMsg:
 		log.Printf("[containers] KeyMsg: key=%q", msg.String())
-		switch {
-		case key.Matches(msg, keys.Keys.PanelNext):
-			currentPanel := s.activePanel()
-			s.activePanelIdx = (s.activePanelIdx + 1) % len(s.panels)
-			log.Printf("[containers] switching panel to: %q", s.panels[s.activePanelIdx].Name())
-			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
-		case key.Matches(msg, keys.Keys.PanelPrev):
-			currentPanel := s.activePanel()
-			s.activePanelIdx = (s.activePanelIdx - 1 + len(s.panels)) % len(s.panels)
-			log.Printf("[containers] switching panel to: %q", s.panels[s.activePanelIdx].Name())
-			return tea.Batch(currentPanel.Close(), s.updateActivePanel())
+
+		if handled, cmd := s.HandlePanelKeys(msg, "containers"); handled {
+			return cmd
 		}
 
 		// When exec is active, route ALL keys directly to it.
-		if ep, ok := s.activePanel().(*execPanel); ok {
+		if ep, ok := s.ActivePanel().(*execPanel); ok {
 			log.Print("[containers] forward message to exec panel")
 			cmds = append(cmds, ep.Update(msg))
 			return tea.Batch(cmds...)
@@ -251,72 +216,31 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		case key.Matches(msg, keys.Keys.ContainerRestart):
 			return s.confirmContainerRestart()
 		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
-			currentPanel := s.activePanel()
+			currentPanel := s.ActivePanel()
 			var listCmd tea.Cmd
 			s.List, listCmd = s.List.Update(msg)
-			return tea.Batch(listCmd, currentPanel.Close(), s.updateActivePanel())
+			return tea.Batch(listCmd, currentPanel.Close(), s.UpdateActivePanel())
 		case key.Matches(msg, keys.Keys.Filter):
 			return tea.Batch(s.ToggleFilter(msg)...)
 		}
 	}
 
-	cmds = append(cmds, s.activePanel().Update(msg))
+	cmds = append(cmds, s.ActivePanel().Update(msg))
 
 	return tea.Batch(cmds...)
 }
 
 // View renders the list.
 func (s *Section) View() string {
-	s.SetSize(s.Width, s.Height)
-
-	// Overlay spinner in bottom right corner when loading
-	listView := s.RenderList("Refreshing...")
-
-	detailContent := s.activePanel().View()
-
-	details := theme.NoBorders.
-		Width(s.panelWidth).
-		Height(s.panelHeight).
-		Render(detailContent)
-
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listView,
-		lipgloss.JoinVertical(lipgloss.Top, s.detailsMenu(), details),
-	)
+	return s.RenderWithPanels("Refreshing...")
 }
 
 // Reset resets internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
 	s.IsFilter = false
-	cmd := s.activePanel().Close()
-	s.SetSize(s.Width, s.Height)
+	cmd := s.ActivePanel().Close()
+	s.SetSizeWithPanels(s.Width, s.Height)
 	return cmd
-}
-
-func (s *Section) activePanel() panel.Panel {
-	return s.panels[s.activePanelIdx]
-}
-
-func (s *Section) removeItem(idx int) tea.Cmd {
-	s.List.RemoveItem(idx)
-	if len(s.List.Items()) == 0 {
-		return s.activePanel().Close()
-	}
-	s.List.Select(min(idx, len(s.List.Items())-1))
-	return s.updateActivePanel()
-}
-
-func (s *Section) updateActivePanel() tea.Cmd {
-	selected := s.List.SelectedItem()
-	if selected == nil {
-		return nil
-	}
-	cItem, ok := selected.(containerItem)
-	if !ok {
-		return nil
-	}
-	return s.activePanel().Init(cItem.container.ID)
 }
 
 func (s *Section) deleteContainerCmd() tea.Cmd {
@@ -485,18 +409,4 @@ func (s *Section) confirmContainerRestart() tea.Cmd {
 	}
 }
 
-func (s *Section) detailsMenu() string {
-	sectionsMenu := make([]string, 0, len(s.panels))
-	for idx, p := range s.panels {
-		if idx == s.activePanelIdx {
-			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
-		} else {
-			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
-		}
-	}
 
-	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
-	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, s.panelWidth-lipgloss.Width(detailsMenu))))
-
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
-}
