@@ -280,7 +280,7 @@ func (s *Section) View() string {
 }
 
 
-// Reset reset internal state to when a component is first initialized.
+// Reset resets internal state to when a component is first initialized.
 func (s *Section) Reset() tea.Cmd {
 	s.IsFilter = false
 	cmd := s.ActivePanel().Close()
