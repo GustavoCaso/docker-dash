@@ -24,6 +24,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/images"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/networks"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/volumes"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/compose"
 )
 
 type bannerType int
@@ -64,12 +65,14 @@ type model struct {
 	imageSection     sections.Section
 	volumeSection    sections.Section
 	networkSection   sections.Section
+	composeSection   sections.Section
 	statusBar        *statusbar.StatusBar
 	keys             *keys.KeyMap
 	imagesKeys       *keys.ViewKeyMap
 	containerKeys    *keys.ViewKeyMap
 	volumeKeys       *keys.ViewKeyMap
 	networkKeys      *keys.ViewKeyMap
+	composeKeys      *keys.ViewKeyMap
 	activeKeys       *keys.ViewKeyMap
 	width            int
 	height           int
@@ -89,9 +92,10 @@ func InitialModel(ctx context.Context, version string, cfg *config.Config, clien
 	imagesList, imagesErr := client.Images().List(ctx)
 	volumesList, volumesErr := client.Volumes().List(ctx)
 	networksList, networksErr := client.Networks().List(ctx)
+	composeList, composeErr := client.Compose().List(ctx)
 
 	var initErr string
-	for _, err := range []error{containersErr, imagesErr, volumesErr, networksErr} {
+	for _, err := range []error{containersErr, imagesErr, volumesErr, networksErr, composeErr} {
 		if err != nil {
 			initErr = "Failed to load data: " + err.Error()
 			break
@@ -116,11 +120,13 @@ func InitialModel(ctx context.Context, version string, cfg *config.Config, clien
 		containerKeys:    keys.Keys.ContainerKeyMap(),
 		volumeKeys:       keys.Keys.VolumeKeyMap(),
 		networkKeys:      keys.Keys.NetworkKeyMap(),
+		composeKeys:      keys.Keys.ComposeKeyMap(),
 		header:           header.New(version),
 		containerSection: containers.New(ctx, containersList, client.Containers()),
 		imageSection:     images.New(ctx, imagesList, client),
 		volumeSection:    volumes.New(ctx, volumesList, client.Volumes()),
 		networkSection:   networks.New(ctx, networksList, client.Networks()),
+		composeSection:   compose.New(ctx, composeList, client.Compose()),
 		statusBar:        statusbar.New(),
 		initErr:          initErr,
 		confirmation:     confirmation.New(),
@@ -140,6 +146,7 @@ func (m *model) Init() tea.Cmd {
 		m.containerSection.Init(),
 		m.volumeSection.Init(),
 		m.networkSection.Init(),
+		m.composeSection.Init(),
 	}
 
 	if m.refreshInterval > 0 {
@@ -224,6 +231,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.imageSection.SetSize(msg.Width, contentHeight)
 		m.volumeSection.SetSize(msg.Width, contentHeight)
 		m.networkSection.SetSize(msg.Width, contentHeight)
+		m.composeSection.SetSize(msg.Width, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
 
 	case message.ShowConfirmationMsg:
@@ -370,6 +378,9 @@ func (m *model) View() string {
 	case header.ViewNetworks:
 		listView = m.networkSection.View()
 		listKeyMap = m.networkKeys
+	case header.ViewCompose:
+		listView = m.composeSection.View()
+		listKeyMap = m.composeKeys
 	}
 
 	m.activeKeys = listKeyMap
@@ -404,6 +415,7 @@ func (m *model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.imageSection.Update(msg),
 		m.volumeSection.Update(msg),
 		m.networkSection.Update(msg),
+		m.composeSection.Update(msg),
 	}
 	return m, tea.Batch(cmds...)
 }
@@ -419,6 +431,8 @@ func (m *model) activeSection() sections.Section {
 		section = m.volumeSection
 	case header.ViewNetworks:
 		section = m.networkSection
+	case header.ViewCompose:
+		section = m.composeSection
 	}
 	return section
 }

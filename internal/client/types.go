@@ -147,6 +147,21 @@ type Network struct {
 	IPAM                NetworkIPAM
 }
 
+// ComposeProject represents a Docker Compose project detected from container labels.
+type ComposeProject struct {
+	Name        string
+	WorkingDir  string
+	ConfigFiles string
+	Services    []ComposeServiceInfo
+}
+
+// ComposeServiceInfo holds information about a single service within a Compose project.
+type ComposeServiceInfo struct {
+	Name  string
+	State string
+	Image string
+}
+
 // PruneReport summarises the result of a prune operation.
 type PruneReport struct {
 	ItemsDeleted   int

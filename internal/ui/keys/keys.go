@@ -229,3 +229,16 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 		contextualKeys: []key.Binding{},
 	}
 }
+
+func (k KeyMap) ComposeKeyMap() *ViewKeyMap {
+	return &ViewKeyMap{
+		short: k.navigationKeys(),
+		full: [][]key.Binding{
+			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
+			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Refresh, k.Filter},
+			{k.Help, k.Quit},
+		},
+		contextualKeys: []key.Binding{},
+	}
+}

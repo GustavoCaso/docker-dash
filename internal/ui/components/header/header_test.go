@@ -37,6 +37,11 @@ func TestHeaderMoveRight(t *testing.T) {
 	}
 
 	h.MoveRight()
+	if h.ActiveView() != ViewCompose {
+		t.Errorf("expected ViewCompose after fourth MoveRight, got %v", h.ActiveView())
+	}
+
+	h.MoveRight()
 	if h.ActiveView() != ViewImages {
 		t.Errorf("expected ViewImages after wrapping MoveRight, got %v", h.ActiveView())
 	}
@@ -46,23 +51,28 @@ func TestHeaderMoveLeft(t *testing.T) {
 	h := New("test")
 
 	h.MoveLeft()
+	if h.ActiveView() != ViewCompose {
+		t.Errorf("expected ViewCompose after MoveLeft from start, got %v", h.ActiveView())
+	}
+
+	h.MoveLeft()
 	if h.ActiveView() != ViewNetworks {
-		t.Errorf("expected ViewNetworks after MoveLeft from start, got %v", h.ActiveView())
+		t.Errorf("expected ViewNetworks after second MoveLeft, got %v", h.ActiveView())
 	}
 
 	h.MoveLeft()
 	if h.ActiveView() != ViewVolumes {
-		t.Errorf("expected ViewVolumes after second MoveLeft, got %v", h.ActiveView())
+		t.Errorf("expected ViewVolumes after third MoveLeft, got %v", h.ActiveView())
 	}
 
 	h.MoveLeft()
 	if h.ActiveView() != ViewContainers {
-		t.Errorf("expected ViewContainers after third MoveLeft, got %v", h.ActiveView())
+		t.Errorf("expected ViewContainers after fourth MoveLeft, got %v", h.ActiveView())
 	}
 
 	h.MoveLeft()
 	if h.ActiveView() != ViewImages {
-		t.Errorf("expected ViewImages after fourth MoveLeft, got %v", h.ActiveView())
+		t.Errorf("expected ViewImages after fifth MoveLeft, got %v", h.ActiveView())
 	}
 }
 
@@ -72,7 +82,7 @@ func TestHeaderViewContainsSectionNames(t *testing.T) {
 
 	output := h.View()
 
-	for _, expected := range []string{"Images", "Containers", "Volumes", "Networks"} {
+	for _, expected := range []string{"Images", "Containers", "Volumes", "Networks", "Compose"} {
 		if !strings.Contains(output, expected) {
 			t.Errorf("expected View() output to contain %q", expected)
 		}

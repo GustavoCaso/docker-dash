@@ -15,6 +15,7 @@ type MockClient struct {
 	images     *mockImageService
 	volumes    *mockVolumeService
 	networks   *mockNetworkService
+	compose    *mockComposeProjectService
 }
 
 // NewMockClient creates a new mock Docker client with sample data.
@@ -24,15 +25,17 @@ func NewMockClient() *MockClient {
 		images:     newMockImageService(),
 		volumes:    newMockVolumeService(),
 		networks:   newMockNetworkService(),
+		compose:    newMockComposeProjectService(),
 	}
 }
 
-func (c *MockClient) Containers() ContainerService   { return c.containers }
-func (c *MockClient) Images() ImageService           { return c.images }
-func (c *MockClient) Volumes() VolumeService         { return c.volumes }
-func (c *MockClient) Networks() NetworkService       { return c.networks }
-func (c *MockClient) Ping(ctx context.Context) error { return nil }
-func (c *MockClient) Close() error                   { return nil }
+func (c *MockClient) Containers() ContainerService        { return c.containers }
+func (c *MockClient) Images() ImageService                { return c.images }
+func (c *MockClient) Volumes() VolumeService              { return c.volumes }
+func (c *MockClient) Networks() NetworkService            { return c.networks }
+func (c *MockClient) Compose() ComposeProjectService      { return c.compose }
+func (c *MockClient) Ping(ctx context.Context) error      { return nil }
+func (c *MockClient) Close() error                        { return nil }
 
 // mockContainerService provides mock container data.
 type mockContainerService struct {
@@ -689,4 +692,39 @@ func (s *mockNetworkService) Prune(_ context.Context, _ PruneOptions) (PruneRepo
 	}
 	s.networks = remaining
 	return PruneReport{ItemsDeleted: count, SpaceReclaimed: 0}, nil
+}
+
+// mockComposeProjectService provides mock Compose project data.
+type mockComposeProjectService struct {
+	projects []ComposeProject
+}
+
+func newMockComposeProjectService() *mockComposeProjectService {
+	return &mockComposeProjectService{
+		projects: []ComposeProject{
+			{
+				Name:        "web-app",
+				WorkingDir:  "/home/user/projects/web-app",
+				ConfigFiles: "/home/user/projects/web-app/docker-compose.yml",
+				Services: []ComposeServiceInfo{
+					{Name: "api", State: "running", Image: "node:18-alpine"},
+					{Name: "db", State: "running", Image: "postgres:15"},
+					{Name: "cache", State: "running", Image: "redis:7-alpine"},
+				},
+			},
+			{
+				Name:        "monitoring",
+				WorkingDir:  "/home/user/projects/monitoring",
+				ConfigFiles: "/home/user/projects/monitoring/compose.yaml",
+				Services: []ComposeServiceInfo{
+					{Name: "prometheus", State: "running", Image: "prom/prometheus:latest"},
+					{Name: "grafana", State: "exited", Image: "grafana/grafana:latest"},
+				},
+			},
+		},
+	}
+}
+
+func (s *mockComposeProjectService) List(_ context.Context) ([]ComposeProject, error) {
+	return s.projects, nil
 }

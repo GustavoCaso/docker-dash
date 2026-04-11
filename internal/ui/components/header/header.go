@@ -14,6 +14,7 @@ const (
 	ViewImages
 	ViewVolumes
 	ViewNetworks
+	ViewCompose
 )
 
 func (v View) String() string {
@@ -26,6 +27,8 @@ func (v View) String() string {
 		return "Volumes"
 	case ViewNetworks:
 		return "Networks"
+	case ViewCompose:
+		return "Compose"
 	default:
 		return "Unknown"
 	}
@@ -54,6 +57,7 @@ func New(version string) *Header {
 			{icon: theme.IconContainer, label: "Containers", view: ViewContainers},
 			{icon: theme.IconVolume, label: "Volumes", view: ViewVolumes},
 			{icon: theme.IconNetwork, label: "Networks", view: ViewNetworks},
+			{icon: theme.IconCompose, label: "Compose", view: ViewCompose},
 		},
 		activeIndex: 0,
 	}

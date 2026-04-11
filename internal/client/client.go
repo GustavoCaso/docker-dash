@@ -10,8 +10,14 @@ type Client interface {
 	Images() ImageService
 	Volumes() VolumeService
 	Networks() NetworkService
+	Compose() ComposeProjectService
 	Ping(ctx context.Context) error
 	Close() error
+}
+
+// ComposeProjectService manages Docker Compose projects detected from running containers.
+type ComposeProjectService interface {
+	List(ctx context.Context) ([]ComposeProject, error)
 }
 
 // RunOptions configures how a container is created from an image.
