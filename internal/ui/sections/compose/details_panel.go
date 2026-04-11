@@ -78,12 +78,12 @@ func formatProjectDetails(p client.ComposeProject) string {
 		for _, svc := range p.Services {
 			stateStyle := theme.GetContainerStatusStyle(svc.State)
 			icon := theme.GetContainerStatusIcon(svc.State)
-			line := fmt.Sprintf("  %s %s", icon, value.Render(svc.Name))
-			line += "  " + stateStyle.Render(svc.State)
+			fmt.Fprintf(&content, "  %s %s  %s\n", icon, value.Render(svc.Name), stateStyle.Render(svc.State))
 			if svc.Image != "" {
-				line += "  " + label.Render(svc.Image)
+				fmt.Fprintf(&content, " %s", svc.Image)
+				content.WriteString("\n")
 			}
-			content.WriteString(line + "\n")
+			content.WriteString("\n")
 		}
 	}
 

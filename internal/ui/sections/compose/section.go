@@ -83,8 +83,7 @@ func New(ctx context.Context, projects []client.ComposeProject, svc client.Compo
 }
 
 func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
-	switch msg := msg.(type) {
-	case composeLoadedMsg:
+	if msg, ok := msg.(composeLoadedMsg); ok {
 		log.Printf("[compose] composeLoadedMsg: count=%d", len(msg.items))
 		s.Loading = false
 		if msg.error != nil {
@@ -98,8 +97,8 @@ func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 		// Rebuild the ActivePanelInitFn closure with the updated project data.
 		projects := msg.projects
 		s.ActivePanelInitFn = func(item list.Item) string {
-			ci, ok := item.(composeItem)
-			if !ok {
+			ci, itemOk := item.(composeItem)
+			if !itemOk {
 				return ""
 			}
 			for _, p := range projects {
@@ -111,6 +110,7 @@ func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		return s.List.SetItems(msg.items), true
 	}
+
 	return nil, false
 }
 
