@@ -354,6 +354,8 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
+	//nolint:nestif // The complexity is acceptable because Update function
+	// hanldes all the logic
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		log.Printf("[%s] KeyMsg: key=%q", b.Name, keyMsg.String())
 

@@ -353,5 +353,3 @@ func (s *Section) confirmContainerRestart() tea.Cmd {
 		}
 	}
 }
-
-
