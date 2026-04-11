@@ -60,7 +60,7 @@ func (n networkItem) FilterValue() string { return n.network.Name }
 
 // Section wraps bubbles/list for displaying networks.
 type Section struct {
-	base.Section
+	*base.Section
 	ctx            context.Context
 	networkService client.NetworkService
 }
@@ -75,22 +75,17 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 	s := &Section{
 		ctx:            ctx,
 		networkService: svc,
-		Section: base.Section{
-			List:    base.NewList(items),
-			Spinner: base.NewSpinner(),
-			Panels:  []panel.Panel{newDetailsPanel()},
-			ActivePanelInitFn: func(item list.Item) string {
-				ni, ok := item.(networkItem)
-				if !ok {
-					return ""
-				}
-				return formatNetworkDetails(ni.network)
-			},
-		},
+		Section:        base.New("networks", items, []panel.Panel{newDetailsPanel()}),
 	}
 
-	s.Name = "networks"
 	s.LoadingText = "Loading..."
+	s.ActivePanelInitFn = func(item list.Item) string {
+		ni, ok := item.(networkItem)
+		if !ok {
+			return ""
+		}
+		return formatNetworkDetails(ni.network)
+	}
 	s.RefreshCmd = s.updateNetworksCmd
 	s.PruneCmd = s.confirmNetworkPrune
 	s.HandleMsg = s.handleMsg

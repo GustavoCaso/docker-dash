@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -59,7 +60,7 @@ func (v volumeItem) FilterValue() string { return v.volume.Name }
 
 // Section wraps bubbles/list for displaying volumes.
 type Section struct {
-	base.Section
+	*base.Section
 	ctx           context.Context
 	volumeService client.VolumeService
 }
@@ -74,13 +75,9 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 	s := &Section{
 		ctx:           ctx,
 		volumeService: svc,
-		Section: base.Section{
-			List:    base.NewList(items),
-			Spinner: base.NewSpinner(),
-		},
+		Section:       base.New("volumes", items, []panel.Panel{}),
 	}
 
-	s.Name = "volumes"
 	s.LoadingText = "Loading..."
 	s.RefreshCmd = s.updateVolumesCmd
 	s.PruneCmd = s.confirmVolumePrune

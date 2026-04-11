@@ -71,7 +71,7 @@ func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 
 // Section wraps bubbles/list.
 type Section struct {
-	base.Section
+	*base.Section
 	ctx              context.Context
 	imageService     client.ImageService
 	containerService client.ContainerService
@@ -88,22 +88,21 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 		ctx:              ctx,
 		imageService:     client.Images(),
 		containerService: client.Containers(),
-		Section: base.Section{
-			List:    base.NewList(items),
-			Spinner: base.NewSpinner(),
-			Panels:  []panel.Panel{NewLayersPanel(ctx, client.Images())},
-			ActivePanelInitFn: func(item list.Item) string {
-				ii, ok := item.(imageItem)
-				if !ok {
-					return ""
-				}
-				return ii.ID()
-			},
-		},
+		Section: base.New(
+			"images",
+			items,
+			[]panel.Panel{NewLayersPanel(ctx, client.Images())},
+		),
 	}
 
-	il.Name = "images"
 	il.LoadingText = "Refreshing..."
+	il.ActivePanelInitFn = func(item list.Item) string {
+		ii, ok := item.(imageItem)
+		if !ok {
+			return ""
+		}
+		return ii.ID()
+	}
 	il.RefreshCmd = il.updateImagesCmd
 	il.PruneCmd = il.confirmImagePrune
 	il.HandleMsg = il.handleMsg

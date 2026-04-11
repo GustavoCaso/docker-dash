@@ -1,6 +1,10 @@
 package sections
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
+)
 
 type Section interface {
 	// Initialize Section
@@ -11,6 +15,16 @@ type Section interface {
 	Update(msg tea.Msg) tea.Cmd
 	// View renders the list.
 	View() string
+	// ActivePanel returns the active panel
+	ActivePanel() panel.Panel
+	// RemoveItem removes the item at idx from the list and clamps the selection.
+	// Use this for sections without a detail panel; for panel sections use
+	// RemoveItemAndUpdatePanel instead.
+	RemoveItem(idx int)
+	// RemoveItemAndUpdatePanel removes the item at idx from the list, clamps the
+	// selection, and re-initialises the active panel for the new selection.
+	// When the list becomes empty it closes the active panel instead.
+	RemoveItemAndUpdatePanel(idx int) tea.Cmd
 	// Reset reset internal state to when a component isfirst initialized.
 	Reset() tea.Cmd
 }

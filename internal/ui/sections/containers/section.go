@@ -59,7 +59,7 @@ const (
 
 // Section wraps bubbles/list for displaying containers.
 type Section struct {
-	base.Section
+	*base.Section
 	ctx     context.Context
 	service client.ContainerService
 }
@@ -74,29 +74,23 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
-		Section: base.Section{
-			List:    base.NewList(items),
-			Spinner: base.NewSpinner(),
-			Panels: []panel.Panel{
-				NewDetailsPanel(ctx, svc),
-				NewLogsPanel(ctx, svc),
-				NewStatsPanel(ctx, svc),
-				panel.NewFilesPanel(ctx, svc),
-				NewExecPanel(ctx, svc),
-			},
-			ActivePanelIdx: 0,
-			ActivePanelInitFn: func(item list.Item) string {
-				ci, ok := item.(containerItem)
-				if !ok {
-					return ""
-				}
-				return ci.container.ID
-			},
-		},
+		Section: base.New("containers", items, []panel.Panel{
+			NewDetailsPanel(ctx, svc),
+			NewLogsPanel(ctx, svc),
+			NewStatsPanel(ctx, svc),
+			panel.NewFilesPanel(ctx, svc),
+			NewExecPanel(ctx, svc),
+		}),
 	}
 
-	cl.Name = "containers"
 	cl.LoadingText = "Refreshing..."
+	cl.ActivePanelInitFn = func(item list.Item) string {
+		ci, ok := item.(containerItem)
+		if !ok {
+			return ""
+		}
+		return ci.container.ID
+	}
 	cl.RefreshCmd = cl.updateContainersCmd
 	cl.PruneCmd = cl.confirmContainerPrune
 	cl.HandleMsg = cl.handleMsg

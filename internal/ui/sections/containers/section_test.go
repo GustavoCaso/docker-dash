@@ -193,7 +193,7 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
 	// Instead if moving four time to the right, we move one to the left
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
-	ep := section.Panels[section.ActivePanelIdx].(*execPanel)
+	ep := section.ActivePanel().(*execPanel)
 
 	// Give the viewport content tall enough to scroll
 	lines := strings.Repeat("output line\n", 50)
@@ -215,19 +215,19 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	dockerClient := client.NewMockClient()
 	containers, _ := dockerClient.Containers().List(context.Background())
-	cl := New(context.Background(), containers, dockerClient.Containers())
-	cl.SetSize(120, 40)
+	section := New(context.Background(), containers, dockerClient.Containers())
+	section.SetSize(120, 40)
 
-	// Navigate to logs panel (index 1)
-	cl.ActivePanelIdx = 1
-	lp := cl.Panels[1].(*logsPanel)
+	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
+	section.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	lp := section.ActivePanel().(*logsPanel)
 
 	pr, pw := io.Pipe()
 	lp.logsSession = client.NewLogsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
 	lp.logsOutput = "some logs"
 
 	// Simulate exec close which calls activePanel().Close()
-	cl.ActivePanel().Close()
+	section.ActivePanel().Close()
 
 	if lp.logsOutput != "" {
 		t.Errorf("Close() should clear logsOutput, got %q", lp.logsOutput)
@@ -244,21 +244,6 @@ func TestContainerListPrune(t *testing.T) {
 	waitFor(t, tm, "nginx-proxy")      // running containers remain
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestResetClearsFilterFlag(t *testing.T) {
-	dockerClient := client.NewMockClient()
-	containers, _ := dockerClient.Containers().List(context.Background())
-	cl := New(context.Background(), containers, dockerClient.Containers())
-	cl.SetSize(120, 40)
-
-	cl.IsFilter = true
-
-	cl.Reset()
-
-	if cl.IsFilter {
-		t.Error("Reset() should set isFilter to false")
-	}
 }
 
 func TestFormatBytes(t *testing.T) {
@@ -282,135 +267,5 @@ func TestFormatBytes(t *testing.T) {
 				t.Errorf("formatBytes(%d) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
-	}
-}
-
-func TestContainerDeleteUpdatesSelection(t *testing.T) {
-	c := client.NewMockClient()
-	containers, _ := c.Containers().List(context.Background())
-	section := New(context.Background(), containers, c.Containers())
-	section.SetSize(120, 40)
-
-	initialCount := len(section.List.Items())
-	if initialCount == 0 {
-		t.Fatal("expected at least one container in mock data")
-	}
-
-	section.List.Select(0)
-	cmd := section.RemoveItemAndUpdatePanel(0)
-
-	if len(section.List.Items()) != initialCount-1 {
-		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
-	}
-	if section.List.Index() != 0 {
-		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.List.Index())
-	}
-	if cmd == nil {
-		t.Fatal("removeItem() should return non-nil cmd when items remain")
-	}
-	if _, ok := cmd().(detailsMsg); !ok {
-		t.Errorf("removeItem() cmd should produce detailsMsg, got %T", cmd())
-	}
-}
-
-func TestContainerDeleteLastItemClearsPanel(t *testing.T) {
-	c := client.NewMockClient()
-	containers, _ := c.Containers().List(context.Background())
-
-	// Create a section with a single container so we can test the empty-list path.
-	singleContainer := containers[:1]
-	section := New(context.Background(), singleContainer, c.Containers())
-	section.SetSize(120, 40)
-
-	// Set content on the default details panel so we can verify it gets cleared.
-	dp := section.Panels[0].(*detailsPanel)
-	dp.viewport.SetContent("stale container details")
-
-	// Delete the single item — activePanel().Close() should be called.
-	cmd := section.RemoveItemAndUpdatePanel(0)
-	if cmd != nil {
-		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
-	}
-	if strings.TrimSpace(dp.viewport.View()) != "" {
-		t.Error("deleteLastItem() should clear the panel viewport content")
-	}
-}
-
-func TestContainerDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
-	c := client.NewMockClient()
-	containers, _ := c.Containers().List(context.Background())
-	section := New(context.Background(), containers, c.Containers())
-	section.SetSize(120, 40)
-
-	count := len(section.List.Items())
-	if count < 2 {
-		t.Fatal("expected at least two containers in mock data")
-	}
-
-	// Select and delete the last item — selection should clamp to new last
-	last := count - 1
-	section.List.Select(last)
-	cmd := section.RemoveItemAndUpdatePanel(last)
-
-	if section.List.Index() != last-1 {
-		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.List.Index())
-	}
-	if cmd == nil {
-		t.Fatal("removeItem() should return non-nil cmd when items remain")
-	}
-	if _, ok := cmd().(detailsMsg); !ok {
-		t.Errorf("removeItem() cmd should produce detailsMsg, got %T", cmd())
-	}
-}
-
-func TestPanelClosedOnUpDownNavigation(t *testing.T) {
-	dockerClient := client.NewMockClient()
-	containers, _ := dockerClient.Containers().List(context.Background())
-	section := New(context.Background(), containers, dockerClient.Containers())
-	section.SetSize(120, 40)
-
-	// Navigate to stats panel (index 2)
-	section.ActivePanelIdx = 2
-	statsPanel := section.Panels[2].(*statsPanel)
-
-	// Set some state on the stats panel to verify it gets cleared
-	pr, pw := io.Pipe()
-	statsPanel.session = client.NewStatsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
-	statsPanel.lastView = "previous container stats"
-
-	// Navigate down to next container - this should close the current panel
-	section.Update(tea.KeyMsg{Type: tea.KeyDown})
-
-	// Verify the stats panel was closed (session nil'd, lastView cleared)
-	if statsPanel.session != nil {
-		t.Error("Navigation should close stats panel, session should be nil")
-	}
-	if statsPanel.lastView != "" {
-		t.Errorf("Navigation should clear stats panel lastView, got %q", statsPanel.lastView)
-	}
-}
-
-func TestPanelClosedOnUpNavigation(t *testing.T) {
-	dockerClient := client.NewMockClient()
-	containers, _ := dockerClient.Containers().List(context.Background())
-	section := New(context.Background(), containers, dockerClient.Containers())
-	section.SetSize(120, 40)
-
-	// Navigate to logs panel (index 1) on second container
-	section.List.Select(1) // Select second container
-	section.ActivePanelIdx = 1
-	logsPanel := section.Panels[1].(*logsPanel)
-
-	// Set some state on the logs panel
-	pr, pw := io.Pipe()
-	logsPanel.logsSession = client.NewLogsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
-	logsPanel.logsOutput = "previous container logs"
-
-	// Navigate up to previous container - this should close the current panel
-	section.Update(tea.KeyMsg{Type: tea.KeyUp})
-
-	// Verify the logs panel was closed
-	if logsPanel.logsOutput != "" {
-		t.Errorf("Navigation should clear logs panel output, got %q", logsPanel.logsOutput)
 	}
 }

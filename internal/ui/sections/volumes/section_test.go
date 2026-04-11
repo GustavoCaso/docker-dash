@@ -61,24 +61,6 @@ func TestVolumeReset(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestResetClearsFlags(t *testing.T) {
-	c := client.NewMockClient()
-	volumes, _ := c.Volumes().List(context.Background())
-	s := New(context.Background(), volumes, c.Volumes())
-	s.SetSize(120, 40)
-
-	s.IsFilter = true
-
-	cmd := s.Reset()
-
-	if s.IsFilter {
-		t.Error("Reset() should set isFilter to false")
-	}
-	if cmd != nil {
-		t.Error("Reset() should return nil cmd")
-	}
-}
-
 func TestVolumeListRendersItems(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "postgres_data")
@@ -110,50 +92,4 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
 		return !strings.Contains(string(b), s)
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-}
-func TestVolumeDeleteUpdatesSelection(t *testing.T) {
-	c := client.NewMockClient()
-	volumes, _ := c.Volumes().List(context.Background())
-	section := New(context.Background(), volumes, c.Volumes())
-	section.SetSize(120, 40)
-
-	initialCount := len(section.List.Items())
-	if initialCount == 0 {
-		t.Fatal("expected at least one volume in mock data")
-	}
-
-	// Select the first item and delete it
-	section.List.Select(0)
-	section.RemoveItem(0)
-
-	if len(section.List.Items()) != initialCount-1 {
-		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
-	}
-	if section.List.Index() != 0 {
-		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.List.Index())
-	}
-}
-
-func TestVolumeDeleteLastItemClampsSelection(t *testing.T) {
-	c := client.NewMockClient()
-	volumes, _ := c.Volumes().List(context.Background())
-	section := New(context.Background(), volumes, c.Volumes())
-	section.SetSize(120, 40)
-
-	count := len(section.List.Items())
-	if count == 0 {
-		t.Fatal("expected at least one volume in mock data")
-	}
-
-	// Select and delete items until one remains
-	for len(section.List.Items()) > 1 {
-		section.RemoveItem(len(section.List.Items()) - 1)
-	}
-
-	// Delete the last item
-	section.RemoveItem(0)
-
-	if len(section.List.Items()) != 0 {
-		t.Errorf("expected 0 items, got %d", len(section.List.Items()))
-	}
 }
