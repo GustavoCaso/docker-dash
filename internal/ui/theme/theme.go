@@ -39,8 +39,9 @@ const (
 	IconImage     = "\ue7ba" // Layers/image icon
 	IconVolume    = "\uf0a0" // Hard drive/volume icon
 	IconNetwork   = "\uef09" // Network icon
+	IconCompose   = "\uf51e" // Code/compose icon
 
-	// Contianer Status icons.
+	// Container Status icons.
 	IconRunning = "\uf04b" // Play icon (running)
 	IconStopped = "\uf04d" // Stop icon (stopped)
 	IconPaused  = "\uf04c" // Pause icon

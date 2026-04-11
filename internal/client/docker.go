@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -20,6 +21,7 @@ type dockerClient struct {
 	images     *imageService
 	volumes    *volumeService
 	networks   *networkService
+	compose    *composeProjectService
 }
 
 // NewDockerClientFromConfig creates a dockerClient using settings from cfg.
@@ -70,6 +72,11 @@ func NewDockerClientFromConfig(cfg config.DockerConfig) (Client, error) {
 	c.images = &imageService{cli: cli}
 	c.volumes = &volumeService{cli: cli}
 	c.networks = &networkService{cli: cli}
+	c.compose, err = newComposeProjectService(cfg, cli)
+	if err != nil {
+		_ = cli.Close()
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -78,10 +85,11 @@ func isSSHHost(host string) bool {
 	return strings.HasPrefix(host, "ssh://")
 }
 
-func (c *dockerClient) Containers() ContainerService { return c.containers }
-func (c *dockerClient) Images() ImageService         { return c.images }
-func (c *dockerClient) Volumes() VolumeService       { return c.volumes }
-func (c *dockerClient) Networks() NetworkService     { return c.networks }
+func (c *dockerClient) Containers() ContainerService   { return c.containers }
+func (c *dockerClient) Images() ImageService           { return c.images }
+func (c *dockerClient) Volumes() VolumeService         { return c.volumes }
+func (c *dockerClient) Networks() NetworkService       { return c.networks }
+func (c *dockerClient) Compose() ComposeProjectService { return c.compose }
 
 func (c *dockerClient) Ping(ctx context.Context) error {
 	log.Printf("[docker] Ping")
@@ -92,7 +100,7 @@ func (c *dockerClient) Ping(ctx context.Context) error {
 
 func (c *dockerClient) Close() error {
 	log.Printf("[docker] Close")
-	return c.cli.Close()
+	return errors.Join(c.cli.Close(), c.compose.Close())
 }
 
 // timeFromUnix converts Unix timestamp to time.Time.

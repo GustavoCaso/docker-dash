@@ -26,6 +26,11 @@ type KeyMap struct {
 	ContainerStartStop key.Binding
 	ContainerRestart   key.Binding
 
+	ComposeUp        key.Binding
+	ComposeDown      key.Binding
+	ComposeStartStop key.Binding
+	ComposeRestart   key.Binding
+
 	NetworkDelete key.Binding
 
 	PanelNext key.Binding
@@ -129,6 +134,22 @@ var Keys = &KeyMap{
 		key.WithKeys("ctrl+R"),
 		key.WithHelp("ctrl+R", "restart container"),
 	),
+	ComposeUp: key.NewBinding(
+		key.WithKeys("u"),
+		key.WithHelp("u", "compose up"),
+	),
+	ComposeDown: key.NewBinding(
+		key.WithKeys("D"),
+		key.WithHelp("D", "compose down"),
+	),
+	ComposeStartStop: key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "start/stop project"),
+	),
+	ComposeRestart: key.NewBinding(
+		key.WithKeys("ctrl+R"),
+		key.WithHelp("ctrl+R", "restart project"),
+	),
 	NetworkDelete: key.NewBinding(
 		key.WithKeys("D"),
 		key.WithHelp("D", "delete network"),
@@ -224,6 +245,20 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.NetworkDelete, k.Prune, k.Filter},
+			{k.Help, k.Quit},
+		},
+		contextualKeys: []key.Binding{},
+	}
+}
+
+func (k KeyMap) ComposeKeyMap() *ViewKeyMap {
+	return &ViewKeyMap{
+		short: k.navigationKeys(),
+		full: [][]key.Binding{
+			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
+			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.ComposeUp, k.ComposeDown, k.ComposeStartStop, k.ComposeRestart},
+			{k.Refresh, k.Filter},
 			{k.Help, k.Quit},
 		},
 		contextualKeys: []key.Binding{},

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"time"
 )
 
 // Client provides the interface.
@@ -10,8 +11,47 @@ type Client interface {
 	Images() ImageService
 	Volumes() VolumeService
 	Networks() NetworkService
+	Compose() ComposeProjectService
 	Ping(ctx context.Context) error
 	Close() error
+}
+
+// ComposeUpOptions configures how a Compose project is brought up.
+type ComposeUpOptions struct {
+	Build         bool
+	RemoveOrphans bool
+	Wait          bool
+}
+
+// ComposeDownOptions configures how a Compose project is brought down.
+type ComposeDownOptions struct {
+	RemoveOrphans bool
+	Volumes       bool
+	Images        string
+}
+
+// ComposeStartOptions configures how a Compose project is started.
+type ComposeStartOptions struct{}
+
+// ComposeStopOptions configures how a Compose project is stopped.
+type ComposeStopOptions struct {
+	Timeout *time.Duration
+}
+
+// ComposeRestartOptions configures how a Compose project is restarted.
+type ComposeRestartOptions struct {
+	Timeout *time.Duration
+	NoDeps  bool
+}
+
+// ComposeProjectService manages Docker Compose projects detected from running containers.
+type ComposeProjectService interface {
+	List(ctx context.Context) ([]ComposeProject, error)
+	Up(ctx context.Context, project ComposeProject, opts ComposeUpOptions) error
+	Down(ctx context.Context, project ComposeProject, opts ComposeDownOptions) error
+	Start(ctx context.Context, project ComposeProject, opts ComposeStartOptions) error
+	Stop(ctx context.Context, project ComposeProject, opts ComposeStopOptions) error
+	Restart(ctx context.Context, project ComposeProject, opts ComposeRestartOptions) error
 }
 
 // RunOptions configures how a container is created from an image.
