@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -71,7 +72,11 @@ func NewDockerClientFromConfig(cfg config.DockerConfig) (Client, error) {
 	c.images = &imageService{cli: cli}
 	c.volumes = &volumeService{cli: cli}
 	c.networks = &networkService{cli: cli}
-	c.compose = &composeProjectService{cli: cli}
+	c.compose, err = newComposeProjectService(cfg, cli)
+	if err != nil {
+		_ = cli.Close()
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -95,7 +100,7 @@ func (c *dockerClient) Ping(ctx context.Context) error {
 
 func (c *dockerClient) Close() error {
 	log.Printf("[docker] Close")
-	return c.cli.Close()
+	return errors.Join(c.cli.Close(), c.compose.Close())
 }
 
 // timeFromUnix converts Unix timestamp to time.Time.

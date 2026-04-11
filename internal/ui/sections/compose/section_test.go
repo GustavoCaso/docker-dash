@@ -6,10 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
 type composeSectionModel struct {
@@ -91,4 +93,49 @@ func TestComposeRefresh(t *testing.T) {
 
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestComposeKeyShowsConfirmation(t *testing.T) {
+	model := newModel()
+
+	cmd := model.section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if cmd == nil {
+		t.Fatal("expected confirmation command")
+	}
+
+	msg := cmd()
+	confirmation, ok := msg.(message.ShowConfirmationMsg)
+	if !ok {
+		t.Fatalf("expected ShowConfirmationMsg, got %T", msg)
+	}
+
+	if confirmation.Title != "Compose Up" {
+		t.Fatalf("unexpected confirmation title: %s", confirmation.Title)
+	}
+}
+
+func TestComposeLoadedMsgRefreshesActivePanel(t *testing.T) {
+	model := newModel()
+
+	updated := client.ComposeProject{
+		Name:             "web-app",
+		WorkingDir:       "/tmp/alternate",
+		ConfigFiles:      "/tmp/alternate/compose.yml",
+		EnvironmentFiles: "/tmp/alternate/.env",
+		Services: []client.ComposeServiceInfo{
+			{Name: "api", State: "running", Image: "node:18-alpine"},
+		},
+	}
+
+	items := []list.Item{composeItem{project: updated}}
+	cmd, handled := model.section.handleMsg(composeLoadedMsg{items: items})
+	if !handled {
+		t.Fatal("expected composeLoadedMsg to be handled")
+	}
+	_ = cmd
+
+	details := model.section.ActivePanel().View()
+	if !strings.Contains(details, updated.WorkingDir) {
+		t.Fatalf("expected details to show refreshed project, got %q", details)
+	}
 }

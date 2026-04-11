@@ -69,6 +69,10 @@ func formatProjectDetails(p client.ComposeProject) string {
 		fmt.Fprintf(&content, "%s%s\n", label.Render("Config Files"), value.Render(p.ConfigFiles))
 	}
 
+	if p.EnvironmentFiles != "" {
+		fmt.Fprintf(&content, "%s%s\n", label.Render("Env Files"), value.Render(p.EnvironmentFiles))
+	}
+
 	fmt.Fprintf(&content, "%s%d\n", label.Render("Services"), len(p.Services))
 
 	if len(p.Services) > 0 {

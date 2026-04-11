@@ -3,6 +3,7 @@ package client
 import (
 	"io"
 	"io/fs"
+	"strings"
 	"time"
 
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
@@ -149,10 +150,11 @@ type Network struct {
 
 // ComposeProject represents a Docker Compose project detected from container labels.
 type ComposeProject struct {
-	Name        string
-	WorkingDir  string
-	ConfigFiles string
-	Services    []ComposeServiceInfo
+	Name             string
+	WorkingDir       string
+	ConfigFiles      string
+	EnvironmentFiles string
+	Services         []ComposeServiceInfo
 }
 
 // ComposeServiceInfo holds information about a single service within a Compose project.
@@ -160,6 +162,10 @@ type ComposeServiceInfo struct {
 	Name  string
 	State string
 	Image string
+}
+
+func (p ComposeProject) Identity() string {
+	return strings.Join([]string{p.Name, p.WorkingDir, p.ConfigFiles, p.EnvironmentFiles}, "\x00")
 }
 
 // PruneReport summarises the result of a prune operation.

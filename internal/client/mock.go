@@ -728,3 +728,45 @@ func newMockComposeProjectService() *mockComposeProjectService {
 func (s *mockComposeProjectService) List(_ context.Context) ([]ComposeProject, error) {
 	return s.projects, nil
 }
+
+func (s *mockComposeProjectService) Up(_ context.Context, project ComposeProject, _ ComposeUpOptions) error {
+	return s.setProjectState(project, "running")
+}
+
+func (s *mockComposeProjectService) Down(_ context.Context, project ComposeProject, _ ComposeDownOptions) error {
+	for idx, existing := range s.projects {
+		if existing.Identity() == project.Identity() {
+			s.projects = append(s.projects[:idx], s.projects[idx+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("compose project not found: %s", project.Name)
+}
+
+func (s *mockComposeProjectService) Start(_ context.Context, project ComposeProject, _ ComposeStartOptions) error {
+	return s.setProjectState(project, "running")
+}
+
+func (s *mockComposeProjectService) Stop(_ context.Context, project ComposeProject, _ ComposeStopOptions) error {
+	return s.setProjectState(project, "exited")
+}
+
+func (s *mockComposeProjectService) Restart(_ context.Context, project ComposeProject, _ ComposeRestartOptions) error {
+	return s.setProjectState(project, "running")
+}
+
+func (s *mockComposeProjectService) setProjectState(project ComposeProject, state string) error {
+	for projectIdx, existing := range s.projects {
+		if existing.Identity() != project.Identity() {
+			continue
+		}
+
+		for serviceIdx := range s.projects[projectIdx].Services {
+			s.projects[projectIdx].Services[serviceIdx].State = state
+		}
+		return nil
+	}
+
+	return fmt.Errorf("compose project not found: %s", project.Name)
+}
