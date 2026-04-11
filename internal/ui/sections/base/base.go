@@ -137,10 +137,7 @@ func (b *Section) ToggleFilter(msg tea.KeyMsg) []tea.Cmd {
 func (b *Section) ExtendFilterHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			key.NewBinding(
-				key.WithKeys("esc"),
-				key.WithHelp("esc", "exit"),
-			),
+			keys.Keys.Esc,
 		}}
 	}
 }
@@ -359,6 +356,10 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		log.Printf("[%s] KeyMsg: key=%q", b.Name, keyMsg.String())
 
+		if handled, filterCmds := b.HandleFilterKey(keyMsg); handled {
+			return tea.Batch(filterCmds...)
+		}
+
 		if len(b.Panels) > 0 {
 			if handled, cmd := b.HandlePanelKeys(keyMsg); handled {
 				return cmd
@@ -370,10 +371,6 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 				cmds = append(cmds, cmd)
 				return tea.Batch(cmds...)
 			}
-		}
-
-		if handled, filterCmds := b.HandleFilterKey(keyMsg); handled {
-			return tea.Batch(filterCmds...)
 		}
 
 		switch {
