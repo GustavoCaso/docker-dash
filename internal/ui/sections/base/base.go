@@ -29,6 +29,12 @@ import (
 // Panels and ActivePanelInitFn in New() and use the panel-aware helpers
 // (SetSizeWithPanels, HandlePanelKeys, UpdateActivePanel, RemoveItemAndUpdatePanel,
 // RenderWithPanels).
+//
+// To eliminate per-section boilerplate, set the strategy callbacks (Name,
+// LoadingText, RefreshCmd, PruneCmd, HandleMsg, HandleKey) in New().  The
+// shared Init, SetSize, View, Reset, and Update methods on Section will then
+// handle the full lifecycle; each concrete section only needs handleMsg and
+// handleKey for its domain-specific logic.
 type Section struct {
 	List     list.Model
 	Spinner  spinner.Model
@@ -46,6 +52,20 @@ type Section struct {
 	// ActivePanelInitFn extracts the string passed to Panel.Init from the
 	// currently-selected list item.  Set this in New() for panel sections.
 	ActivePanelInitFn func(list.Item) string
+
+	// Strategy callbacks — set in New() of each concrete section.
+	Name        string
+	LoadingText string
+	RefreshCmd  func() tea.Cmd
+	PruneCmd    func() tea.Cmd
+	// HandleMsg handles section-specific messages inside Update.
+	// Returns (cmd, true) when the message was consumed, (nil, false) otherwise.
+	HandleMsg func(msg tea.Msg) (tea.Cmd, bool)
+	// HandleKey handles section-specific key bindings inside Update.
+	// It is called before the shared filter/refresh/prune/navigation keys, so it
+	// can intercept any key (e.g. exec-panel routing in the containers section).
+	// Returns (cmd, true) when the key was consumed, (nil, false) otherwise.
+	HandleKey func(msg tea.KeyMsg) (tea.Cmd, bool)
 }
 
 // NewList returns a bubbles list pre-configured with the standard section
@@ -198,19 +218,19 @@ func (b *Section) SetSizeWithPanels(width, height int) {
 }
 
 // HandlePanelKeys handles PanelNext and PanelPrev key bindings, cycling through
-// b.Panels.  sectionName is used only for log output.
+// b.Panels.  b.Name is used for log output.
 // Returns (true, cmd) when a panel key was matched, (false, nil) otherwise.
-func (b *Section) HandlePanelKeys(msg tea.KeyMsg, sectionName string) (bool, tea.Cmd) {
+func (b *Section) HandlePanelKeys(msg tea.KeyMsg) (bool, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keys.Keys.PanelNext):
 		currentPanel := b.ActivePanel()
 		b.ActivePanelIdx = (b.ActivePanelIdx + 1) % len(b.Panels)
-		log.Printf("[%s] switching panel to: %q", sectionName, b.Panels[b.ActivePanelIdx].Name())
+		log.Printf("[%s] switching panel to: %q", b.Name, b.Panels[b.ActivePanelIdx].Name())
 		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
 	case key.Matches(msg, keys.Keys.PanelPrev):
 		currentPanel := b.ActivePanel()
 		b.ActivePanelIdx = (b.ActivePanelIdx - 1 + len(b.Panels)) % len(b.Panels)
-		log.Printf("[%s] switching panel to: %q", sectionName, b.Panels[b.ActivePanelIdx].Name())
+		log.Printf("[%s] switching panel to: %q", b.Name, b.Panels[b.ActivePanelIdx].Name())
 		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
 	}
 	return false, nil
@@ -266,4 +286,122 @@ func (b *Section) RenderWithPanels(loadingText string) string {
 		listView,
 		lipgloss.JoinVertical(lipgloss.Top, b.DetailsMenu(), details),
 	)
+}
+
+// RemoveItem removes the item at idx from the list and clamps the selection.
+// Use this for sections without a detail panel; for panel sections use
+// RemoveItemAndUpdatePanel instead.
+func (b *Section) RemoveItem(idx int) {
+	b.List.RemoveItem(idx)
+	if len(b.List.Items()) > 0 {
+		b.List.Select(min(idx, len(b.List.Items())-1))
+	}
+}
+
+// Init implements the bubbletea Model Init method.  For panel sections it
+// initialises the active panel for the currently-selected item; for sections
+// without panels it is a no-op (UpdateActivePanel returns nil when
+// ActivePanelInitFn is not set).
+func (b *Section) Init() tea.Cmd {
+	return b.UpdateActivePanel()
+}
+
+// SetSize sets dimensions, using a split-pane layout when panels are
+// configured and a single-column layout otherwise.
+func (b *Section) SetSize(width, height int) {
+	if len(b.Panels) > 0 {
+		b.SetSizeWithPanels(width, height)
+	} else {
+		b.SetListSize(width, height)
+	}
+}
+
+// View renders the section.
+func (b *Section) View() string {
+	if len(b.Panels) > 0 {
+		return b.RenderWithPanels(b.LoadingText)
+	}
+	b.SetListSize(b.Width, b.Height)
+	return lipgloss.JoinHorizontal(lipgloss.Top, b.RenderList(b.LoadingText))
+}
+
+// Reset resets internal state to the initial condition.
+func (b *Section) Reset() tea.Cmd {
+	b.IsFilter = false
+	if len(b.Panels) > 0 {
+		cmd := b.ActivePanel().Close()
+		b.SetSizeWithPanels(b.Width, b.Height)
+		return cmd
+	}
+	b.SetListSize(b.Width, b.Height)
+	return nil
+}
+
+// Update handles messages.  It drives the shared scaffolding (spinner, panel
+// navigation, filter mode, refresh, prune, list navigation) and delegates
+// domain-specific work to the HandleMsg and HandleKey callbacks.
+func (b *Section) Update(msg tea.Msg) tea.Cmd {
+	var cmds []tea.Cmd
+
+	if spinnerCmd := b.UpdateSpinner(msg); spinnerCmd != nil {
+		cmds = append(cmds, spinnerCmd)
+	}
+
+	if b.HandleMsg != nil {
+		if cmd, handled := b.HandleMsg(msg); handled {
+			cmds = append(cmds, cmd)
+			return tea.Batch(cmds...)
+		}
+	}
+
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		log.Printf("[%s] KeyMsg: key=%q", b.Name, keyMsg.String())
+
+		if len(b.Panels) > 0 {
+			if handled, cmd := b.HandlePanelKeys(keyMsg); handled {
+				return cmd
+			}
+		}
+
+		if b.HandleKey != nil {
+			if cmd, handled := b.HandleKey(keyMsg); handled {
+				cmds = append(cmds, cmd)
+				return tea.Batch(cmds...)
+			}
+		}
+
+		if handled, filterCmds := b.HandleFilterKey(keyMsg); handled {
+			return tea.Batch(filterCmds...)
+		}
+
+		switch {
+		case key.Matches(keyMsg, keys.Keys.Refresh):
+			if b.RefreshCmd != nil {
+				b.Loading = true
+				return tea.Batch(b.Spinner.Tick, b.RefreshCmd())
+			}
+		case key.Matches(keyMsg, keys.Keys.Prune):
+			if b.PruneCmd != nil {
+				return b.PruneCmd()
+			}
+		case key.Matches(keyMsg, keys.Keys.Up, keys.Keys.Down):
+			if len(b.Panels) > 0 {
+				currentPanel := b.ActivePanel()
+				var listCmd tea.Cmd
+				b.List, listCmd = b.List.Update(keyMsg)
+				return tea.Batch(listCmd, currentPanel.Close(), b.UpdateActivePanel())
+			}
+			var listCmd tea.Cmd
+			b.List, listCmd = b.List.Update(keyMsg)
+			return listCmd
+		case key.Matches(keyMsg, keys.Keys.Filter):
+			return tea.Batch(b.ToggleFilter(keyMsg)...)
+		}
+	}
+
+	if len(b.Panels) > 0 {
+		cmds = append(cmds, b.ActivePanel().Update(msg))
+	}
+
+	return tea.Batch(cmds...)
 }

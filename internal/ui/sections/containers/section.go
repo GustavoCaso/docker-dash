@@ -95,34 +95,22 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 		},
 	}
 
+	cl.Name = "containers"
+	cl.LoadingText = "Refreshing..."
+	cl.RefreshCmd = cl.updateContainersCmd
+	cl.PruneCmd = cl.confirmContainerPrune
+	cl.HandleMsg = cl.handleMsg
+	cl.HandleKey = cl.handleKey
+
 	return cl
 }
 
-func (s *Section) Init() tea.Cmd {
-	return s.UpdateActivePanel()
-}
-
-// SetSize sets dimensions.
-func (s *Section) SetSize(width, height int) {
-	s.SetSizeWithPanels(width, height)
-}
-
-// Update handles messages.
-func (s *Section) Update(msg tea.Msg) tea.Cmd {
-	var cmds []tea.Cmd
-
-	// Handle spinner ticks while loading
-	if spinnerCmd := s.UpdateSpinner(msg); spinnerCmd != nil {
-		cmds = append(cmds, spinnerCmd)
-	}
-
+func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case containersLoadedMsg:
 		log.Printf("[containers] containersLoadedMsg: count=%d", len(msg.items))
 		s.Loading = false
-		cmd := s.List.SetItems(msg.items)
-		cmds = append(cmds, cmd)
-		return tea.Batch(cmds...)
+		return s.List.SetItems(msg.items), true
 	case containersPrunedMsg:
 		log.Printf(
 			"[containers] containersPrunedMsg: deleted=%d spaceReclaimed=%d",
@@ -135,7 +123,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: "Error pruning containers: " + msg.err.Error(),
 					IsError: true,
 				}
-			}
+			}, true
 		}
 		summary := fmt.Sprintf(
 			"Pruned %d containers, reclaimed %s",
@@ -144,7 +132,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		)
 		return tea.Batch(s.updateContainersCmd(), func() tea.Msg {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
-		})
+		}), true
 	case containerActionMsg:
 		log.Printf(
 			"[containers] containerActionMsg: action=%q containerID=%q err=%v",
@@ -158,89 +146,46 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: fmt.Sprintf("Error %s container: %s", msg.Action, msg.Error.Error()),
 					IsError: true,
 				}
-			}
+			}, true
 		}
-
-		// For delete, remove from list
+		var cmds []tea.Cmd
 		if msg.Action == "deleting" {
 			cmds = append(cmds, s.RemoveItemAndUpdatePanel(msg.Idx))
 		}
-
-		// Refresh list after start/stop/restart
 		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" {
 			cmds = append(cmds, s.updateContainersCmd())
 		}
-
 		return tea.Batch(append(cmds, func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Container %s %s", helper.ShortID(msg.ID), msg.Action),
 				IsError: false,
 			}
-		})...)
+		})...), true
 	case execCloseMsg:
 		log.Printf("[containers] execCloseMsg")
 		s.ActivePanel().Close()
 		return func() tea.Msg {
 			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
-		}
-	case tea.MouseEvent:
-		cmds = append(cmds, s.ActivePanel().Update(msg))
-	case tea.KeyMsg:
-		log.Printf("[containers] KeyMsg: key=%q", msg.String())
-
-		if handled, cmd := s.HandlePanelKeys(msg, "containers"); handled {
-			return cmd
-		}
-
-		// When exec is active, route ALL keys directly to it.
-		if ep, ok := s.ActivePanel().(*execPanel); ok {
-			log.Print("[containers] forward message to exec panel")
-			cmds = append(cmds, ep.Update(msg))
-			return tea.Batch(cmds...)
-		}
-
-		if handled, filterCmds := s.HandleFilterKey(msg); handled {
-			return tea.Batch(filterCmds...)
-		}
-
-		switch {
-		case key.Matches(msg, keys.Keys.Refresh):
-			s.Loading = true
-			return tea.Batch(s.Spinner.Tick, s.updateContainersCmd())
-		case key.Matches(msg, keys.Keys.Prune):
-			return s.confirmContainerPrune()
-		case key.Matches(msg, keys.Keys.ContainerDelete):
-			return s.confirmContainerDelete()
-		case key.Matches(msg, keys.Keys.ContainerStartStop):
-			return s.confirmContainerToggle()
-		case key.Matches(msg, keys.Keys.ContainerRestart):
-			return s.confirmContainerRestart()
-		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
-			currentPanel := s.ActivePanel()
-			var listCmd tea.Cmd
-			s.List, listCmd = s.List.Update(msg)
-			return tea.Batch(listCmd, currentPanel.Close(), s.UpdateActivePanel())
-		case key.Matches(msg, keys.Keys.Filter):
-			return tea.Batch(s.ToggleFilter(msg)...)
-		}
+		}, true
 	}
-
-	cmds = append(cmds, s.ActivePanel().Update(msg))
-
-	return tea.Batch(cmds...)
+	return nil, false
 }
 
-// View renders the list.
-func (s *Section) View() string {
-	return s.RenderWithPanels("Refreshing...")
-}
-
-// Reset resets internal state to when a component is first initialized.
-func (s *Section) Reset() tea.Cmd {
-	s.IsFilter = false
-	cmd := s.ActivePanel().Close()
-	s.SetSizeWithPanels(s.Width, s.Height)
-	return cmd
+func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	// When exec panel is active, route ALL keys directly to it.
+	if ep, ok := s.ActivePanel().(*execPanel); ok {
+		log.Print("[containers] forward message to exec panel")
+		return ep.Update(msg), true
+	}
+	switch {
+	case key.Matches(msg, keys.Keys.ContainerDelete):
+		return s.confirmContainerDelete(), true
+	case key.Matches(msg, keys.Keys.ContainerStartStop):
+		return s.confirmContainerToggle(), true
+	case key.Matches(msg, keys.Keys.ContainerRestart):
+		return s.confirmContainerRestart(), true
+	}
+	return nil, false
 }
 
 func (s *Section) deleteContainerCmd() tea.Cmd {

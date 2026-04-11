@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -72,7 +71,7 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 		items[i] = volumeItem{volume: v}
 	}
 
-	return &Section{
+	s := &Section{
 		ctx:           ctx,
 		volumeService: svc,
 		Section: base.Section{
@@ -80,25 +79,18 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 			Spinner: base.NewSpinner(),
 		},
 	}
+
+	s.Name = "volumes"
+	s.LoadingText = "Loading..."
+	s.RefreshCmd = s.updateVolumesCmd
+	s.PruneCmd = s.confirmVolumePrune
+	s.HandleMsg = s.handleMsg
+	s.HandleKey = s.handleKey
+
+	return s
 }
 
-func (s *Section) Init() tea.Cmd {
-	return nil
-}
-
-// SetSize sets dimensions.
-func (s *Section) SetSize(width, height int) {
-	s.SetListSize(width, height)
-}
-
-// Update handles messages.
-func (s *Section) Update(msg tea.Msg) tea.Cmd {
-	var cmds []tea.Cmd
-
-	if spinnerCmd := s.UpdateSpinner(msg); spinnerCmd != nil {
-		cmds = append(cmds, spinnerCmd)
-	}
-
+func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case volumesLoadedMsg:
 		log.Printf("[volumes] volumesLoadedMsg: count=%d", len(msg.items))
@@ -109,11 +101,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: fmt.Sprintf("Error loading volumes: %s", msg.error.Error()),
 					IsError: true,
 				}
-			}
+			}, true
 		}
-		cmd := s.List.SetItems(msg.items)
-		cmds = append(cmds, cmd)
-		return tea.Batch(cmds...)
+		return s.List.SetItems(msg.items), true
 	case volumesPrunedMsg:
 		log.Printf("[volumes] volumesPrunedMsg: deleted=%d spaceReclaimed=%d",
 			msg.report.ItemsDeleted, msg.report.SpaceReclaimed)
@@ -123,7 +113,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: "Error pruning volumes: " + msg.err.Error(),
 					IsError: true,
 				}
-			}
+			}, true
 		}
 		summary := fmt.Sprintf(
 			"Pruned %d volumes, reclaimed %s",
@@ -132,7 +122,7 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 		)
 		return tea.Batch(s.updateVolumesCmd(), func() tea.Msg {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
-		})
+		}), true
 	case volumeRemovedMsg:
 		log.Printf("[volumes] volumeRemovedMsg: name=%q err=%v", msg.Name, msg.Error)
 		if msg.Error != nil {
@@ -141,65 +131,24 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: fmt.Sprintf("Error deleting volume: %s", msg.Error.Error()),
 					IsError: true,
 				}
-			}
+			}, true
 		}
-		s.removeItem(msg.Idx)
+		s.RemoveItem(msg.Idx)
 		return func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Volume %s deleted", msg.Name),
 				IsError: false,
 			}
-		}
-	case tea.KeyMsg:
-		log.Printf("[volumes] KeyMsg: key=%q", msg.String())
-		if handled, filterCmds := s.HandleFilterKey(msg); handled {
-			return tea.Batch(filterCmds...)
-		}
-
-		switch {
-		case key.Matches(msg, keys.Keys.Refresh):
-			s.Loading = true
-			return tea.Batch(s.Spinner.Tick, s.updateVolumesCmd())
-		case key.Matches(msg, keys.Keys.Prune):
-			return s.confirmVolumePrune()
-		case key.Matches(msg, keys.Keys.Delete):
-			return s.confirmVolumeDelete()
-		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
-			var listCmd tea.Cmd
-			s.List, listCmd = s.List.Update(msg)
-			return listCmd
-		case key.Matches(msg, keys.Keys.Filter):
-			return tea.Batch(s.ToggleFilter(msg)...)
-		}
+		}, true
 	}
-
-	return tea.Batch(cmds...)
+	return nil, false
 }
 
-// View renders the list.
-func (s *Section) View() string {
-	s.SetSize(s.Width, s.Height)
-
-	listView := s.RenderList("Loading...")
-
-	return lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listView,
-	)
-}
-
-// Reset resets internal state to when a component is first initialized.
-func (s *Section) Reset() tea.Cmd {
-	s.IsFilter = false
-	s.SetSize(s.Width, s.Height)
-	return nil
-}
-
-func (s *Section) removeItem(idx int) {
-	s.List.RemoveItem(idx)
-	if len(s.List.Items()) > 0 {
-		s.List.Select(min(idx, len(s.List.Items())-1))
+func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if key.Matches(msg, keys.Keys.Delete) {
+		return s.confirmVolumeDelete(), true
 	}
+	return nil, false
 }
 
 func (s *Section) updateVolumesCmd() tea.Cmd {

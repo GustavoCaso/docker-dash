@@ -72,7 +72,7 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 		items[i] = networkItem{network: n}
 	}
 
-	return &Section{
+	s := &Section{
 		ctx:            ctx,
 		networkService: svc,
 		Section: base.Section{
@@ -88,25 +88,18 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 			},
 		},
 	}
+
+	s.Name = "networks"
+	s.LoadingText = "Loading..."
+	s.RefreshCmd = s.updateNetworksCmd
+	s.PruneCmd = s.confirmNetworkPrune
+	s.HandleMsg = s.handleMsg
+	s.HandleKey = s.handleKey
+
+	return s
 }
 
-func (s *Section) Init() tea.Cmd {
-	return s.UpdateActivePanel()
-}
-
-// SetSize sets dimensions.
-func (s *Section) SetSize(width, height int) {
-	s.SetSizeWithPanels(width, height)
-}
-
-// Update handles messages.
-func (s *Section) Update(msg tea.Msg) tea.Cmd {
-	var cmds []tea.Cmd
-
-	if spinnerCmd := s.UpdateSpinner(msg); spinnerCmd != nil {
-		cmds = append(cmds, spinnerCmd)
-	}
-
+func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 	switch msg := msg.(type) {
 	case networksLoadedMsg:
 		log.Printf("[networks] networksLoadedMsg: count=%d", len(msg.items))
@@ -117,11 +110,9 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: fmt.Sprintf("Error loading networks: %s", msg.error.Error()),
 					IsError: true,
 				}
-			}
+			}, true
 		}
-		cmd := s.List.SetItems(msg.items)
-		cmds = append(cmds, cmd)
-		return tea.Batch(cmds...)
+		return s.List.SetItems(msg.items), true
 	case networksPrunedMsg:
 		log.Printf(
 			"[networks] networksPrunedMsg: deleted=%d spaceReclaimed=%d",
@@ -134,12 +125,12 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: "Error pruning networks: " + msg.err.Error(),
 					IsError: true,
 				}
-			}
+			}, true
 		}
 		summary := fmt.Sprintf("Pruned %d networks", msg.report.ItemsDeleted)
 		return tea.Batch(s.updateNetworksCmd(), func() tea.Msg {
 			return message.ShowBannerMsg{Message: summary, IsError: false}
-		})
+		}), true
 	case networkRemovedMsg:
 		log.Printf("[networks] networkRemovedMsg: id=%q err=%v", msg.ID, msg.Error)
 		if msg.Error != nil {
@@ -148,63 +139,24 @@ func (s *Section) Update(msg tea.Msg) tea.Cmd {
 					Message: fmt.Sprintf("Error deleting network: %s", msg.Error.Error()),
 					IsError: true,
 				}
-			}
+			}, true
 		}
 		return tea.Batch(s.RemoveItemAndUpdatePanel(msg.Idx), func() tea.Msg {
 			return message.ShowBannerMsg{
 				Message: fmt.Sprintf("Network %s deleted", msg.Name),
 				IsError: false,
 			}
-		})
-	case tea.KeyMsg:
-		log.Printf("[networks] KeyMsg: key=%q", msg.String())
-		if handled, filterCmds := s.HandleFilterKey(msg); handled {
-			return tea.Batch(filterCmds...)
-		}
-
-		if handled, cmd := s.HandlePanelKeys(msg, "networks"); handled {
-			return cmd
-		}
-
-		switch {
-		case key.Matches(msg, keys.Keys.Refresh):
-			s.Loading = true
-			return tea.Batch(s.Spinner.Tick, s.updateNetworksCmd())
-		case key.Matches(msg, keys.Keys.Prune):
-			return s.confirmNetworkPrune()
-		case key.Matches(msg, keys.Keys.NetworkDelete):
-			return s.confirmNetworkDelete()
-		case key.Matches(msg, keys.Keys.Up, keys.Keys.Down):
-			currentPanel := s.ActivePanel()
-			var listCmd tea.Cmd
-			s.List, listCmd = s.List.Update(msg)
-			return tea.Batch(listCmd, currentPanel.Close(), s.UpdateActivePanel())
-		case key.Matches(msg, keys.Keys.Filter):
-			return tea.Batch(s.ToggleFilter(msg)...)
-		}
+		}), true
 	}
-
-	cmds = append(cmds, s.ActivePanel().Update(msg))
-
-	return tea.Batch(cmds...)
+	return nil, false
 }
 
-// View renders the section.
-func (s *Section) View() string {
-	return s.RenderWithPanels("Loading...")
+func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	if key.Matches(msg, keys.Keys.NetworkDelete) {
+		return s.confirmNetworkDelete(), true
+	}
+	return nil, false
 }
-
-
-// Reset resets internal state to when a component is first initialized.
-func (s *Section) Reset() tea.Cmd {
-	s.IsFilter = false
-	cmd := s.ActivePanel().Close()
-	s.SetSizeWithPanels(s.Width, s.Height)
-	return cmd
-}
-
-
-
 
 func (s *Section) updateNetworksCmd() tea.Cmd {
 	ctx := s.ctx

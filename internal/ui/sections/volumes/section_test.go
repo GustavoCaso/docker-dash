@@ -124,7 +124,7 @@ func TestVolumeDeleteUpdatesSelection(t *testing.T) {
 
 	// Select the first item and delete it
 	section.List.Select(0)
-	section.removeItem(0)
+	section.RemoveItem(0)
 
 	if len(section.List.Items()) != initialCount-1 {
 		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.List.Items()))
@@ -147,11 +147,11 @@ func TestVolumeDeleteLastItemClampsSelection(t *testing.T) {
 
 	// Select and delete items until one remains
 	for len(section.List.Items()) > 1 {
-		section.removeItem(len(section.List.Items()) - 1)
+		section.RemoveItem(len(section.List.Items()) - 1)
 	}
 
 	// Delete the last item
-	section.removeItem(0)
+	section.RemoveItem(0)
 
 	if len(section.List.Items()) != 0 {
 		t.Errorf("expected 0 items, got %d", len(section.List.Items()))
