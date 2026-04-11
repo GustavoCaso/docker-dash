@@ -27,12 +27,11 @@ import (
 //
 // For sections that display a detail panel alongside the list, populate
 // Panels and ActivePanelInitFn in New() and use the panel-aware helpers
-// (setSizeWithPanels, handlePanelKeys, updateActivePanel, RemoveItemAndUpdatePanel,
-// renderWithPanels).
+// (RemoveItemAndUpdatePanel)
 //
-// To eliminate per-section boilerplate, set the strategy callbacks (Name,
-// LoadingText, RefreshCmd, PruneCmd, HandleMsg, HandleKey) in New().  The
-// shared Init, SetSize, View, Reset, and Update methods on Section will then
+// To eliminate per-section boilerplate, set the strategy callbacks
+// (LoadingText, RefreshCmd, PruneCmd, HandleMsg, HandleKey).
+// The shared Init, SetSize, View, Reset, and Update methods on Section will then
 // handle the full lifecycle; each concrete section only needs handleMsg and
 // handleKey for its domain-specific logic.
 type Section struct {
@@ -45,7 +44,6 @@ type Section struct {
 	width    int
 	height   int
 
-	// Panel support — populated by sections that have a detail panel.
 	panels         []panel.Panel
 	activePanelIdx int
 	panelWidth     int
