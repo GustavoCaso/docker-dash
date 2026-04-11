@@ -44,15 +44,6 @@ func (c composeItem) Description() string {
 		runningStr := theme.StatusRunningStyle.Render(fmt.Sprintf("● %d running", running))
 		parts = append(parts, runningStr)
 	}
-	if c.project.WorkingDir != "" {
-		dir := c.project.WorkingDir
-		// Truncate long paths for display.
-		const maxDirLen = 40
-		if len(dir) > maxDirLen {
-			dir = "…" + dir[len(dir)-maxDirLen+1:]
-		}
-		parts = append(parts, dir)
-	}
 	return strings.Join(parts, " • ")
 }
 func (c composeItem) FilterValue() string { return c.project.Name }

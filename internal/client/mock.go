@@ -29,13 +29,13 @@ func NewMockClient() *MockClient {
 	}
 }
 
-func (c *MockClient) Containers() ContainerService        { return c.containers }
-func (c *MockClient) Images() ImageService                { return c.images }
-func (c *MockClient) Volumes() VolumeService              { return c.volumes }
-func (c *MockClient) Networks() NetworkService            { return c.networks }
-func (c *MockClient) Compose() ComposeProjectService      { return c.compose }
-func (c *MockClient) Ping(ctx context.Context) error      { return nil }
-func (c *MockClient) Close() error                        { return nil }
+func (c *MockClient) Containers() ContainerService   { return c.containers }
+func (c *MockClient) Images() ImageService           { return c.images }
+func (c *MockClient) Volumes() VolumeService         { return c.volumes }
+func (c *MockClient) Networks() NetworkService       { return c.networks }
+func (c *MockClient) Compose() ComposeProjectService { return c.compose }
+func (c *MockClient) Ping(ctx context.Context) error { return nil }
+func (c *MockClient) Close() error                   { return nil }
 
 // mockContainerService provides mock container data.
 type mockContainerService struct {

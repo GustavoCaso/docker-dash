@@ -20,11 +20,11 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections/compose"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/containers"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/images"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/networks"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/volumes"
-	"github.com/GustavoCaso/docker-dash/internal/ui/sections/compose"
 )
 
 type bannerType int

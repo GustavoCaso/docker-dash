@@ -80,11 +80,11 @@ func isSSHHost(host string) bool {
 	return strings.HasPrefix(host, "ssh://")
 }
 
-func (c *dockerClient) Containers() ContainerService        { return c.containers }
-func (c *dockerClient) Images() ImageService                { return c.images }
-func (c *dockerClient) Volumes() VolumeService              { return c.volumes }
-func (c *dockerClient) Networks() NetworkService            { return c.networks }
-func (c *dockerClient) Compose() ComposeProjectService      { return c.compose }
+func (c *dockerClient) Containers() ContainerService   { return c.containers }
+func (c *dockerClient) Images() ImageService           { return c.images }
+func (c *dockerClient) Volumes() VolumeService         { return c.volumes }
+func (c *dockerClient) Networks() NetworkService       { return c.networks }
+func (c *dockerClient) Compose() ComposeProjectService { return c.compose }
 
 func (c *dockerClient) Ping(ctx context.Context) error {
 	log.Printf("[docker] Ping")

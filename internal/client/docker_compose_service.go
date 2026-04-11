@@ -5,7 +5,15 @@ import (
 	"log"
 
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+)
+
+const (
+	composeProjectLabel     = "com.docker.compose.project"
+	composeWorkingDirLabel  = "com.docker.compose.project.working_dir"
+	composeConfigFilesLabel = "com.docker.compose.project.config_files"
+	composeServiceLabel     = "com.docker.compose.service"
 )
 
 // composeProjectService discovers Compose projects from running container labels.
@@ -13,57 +21,76 @@ type composeProjectService struct {
 	cli *client.Client
 }
 
-// List scans all containers for Docker Compose labels and aggregates them
-// into ComposeProject entries.
+type composeProjectKey struct {
+	name        string
+	workingDir  string
+	configFiles string
+}
+
+// List loads only Compose-managed containers and aggregates them into
+// ComposeProject entries.
 func (s *composeProjectService) List(ctx context.Context) ([]ComposeProject, error) {
 	log.Printf("[compose] List")
-	containers, err := s.cli.ContainerList(ctx, container.ListOptions{All: true})
+	containers, err := s.cli.ContainerList(ctx, container.ListOptions{
+		All: true,
+		Filters: filters.NewArgs(
+			filters.Arg("label", composeProjectLabel),
+		),
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Use a map to accumulate services per project.
-	type projectKey struct{ name, workingDir, configFiles string }
-	projectMap := make(map[string]*ComposeProject)
-	projectOrder := []string{}
+	projectMap := make(map[composeProjectKey]*ComposeProject)
+	projectOrder := []composeProjectKey{}
 
 	for _, c := range containers {
-		projectName := c.Labels["com.docker.compose.project"]
-		if projectName == "" {
-			continue
+		key := composeProjectKey{
+			name:        c.Labels[composeProjectLabel],
+			workingDir:  c.Labels[composeWorkingDirLabel],
+			configFiles: c.Labels[composeConfigFilesLabel],
 		}
 
-		proj, exists := projectMap[projectName]
+		proj, exists := projectMap[key]
 		if !exists {
 			proj = &ComposeProject{
-				Name:        projectName,
-				WorkingDir:  c.Labels["com.docker.compose.project.working_dir"],
-				ConfigFiles: c.Labels["com.docker.compose.project.config_files"],
+				Name:        key.name,
+				WorkingDir:  key.workingDir,
+				ConfigFiles: key.configFiles,
 			}
-			projectMap[projectName] = proj
-			projectOrder = append(projectOrder, projectName)
+			projectMap[key] = proj
+			projectOrder = append(projectOrder, key)
 		}
 
-		serviceName := c.Labels["com.docker.compose.service"]
+		serviceName := c.Labels[composeServiceLabel]
 		if serviceName == "" {
-			serviceName = c.Names[0]
+			serviceName = firstContainerName(c.Names)
 		}
-
-		image := c.Image
-		state := c.State
 
 		proj.Services = append(proj.Services, ComposeServiceInfo{
 			Name:  serviceName,
-			State: state,
-			Image: image,
+			State: c.State,
+			Image: c.Image,
 		})
 	}
 
 	projects := make([]ComposeProject, 0, len(projectOrder))
-	for _, name := range projectOrder {
-		projects = append(projects, *projectMap[name])
+	for _, key := range projectOrder {
+		projects = append(projects, *projectMap[key])
 	}
 
 	log.Printf("[compose] List: found %d projects", len(projects))
 	return projects, nil
+}
+
+func firstContainerName(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+
+	if len(names[0]) > 0 && names[0][0] == '/' {
+		return names[0][1:]
+	}
+
+	return names[0]
 }
