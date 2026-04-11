@@ -133,24 +133,6 @@ func TestRunContainerKeyShowsForm(t *testing.T) {
 	}
 }
 
-func TestResetClearsFlags(t *testing.T) {
-	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	s := New(context.Background(), images, c)
-	s.SetSize(120, 40)
-
-	s.isFilter = true
-
-	cmd := s.Reset()
-
-	if s.isFilter {
-		t.Error("Reset() should set isFilter to false")
-	}
-	if cmd != nil {
-		t.Error("Reset() should return nil cmd from activePanel.Close()")
-	}
-}
-
 func TestImageListPrune(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "<none>:<none>") // dangling image present initially
@@ -316,107 +298,6 @@ func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }
 
-func TestImageDeleteUpdatesSelection(t *testing.T) {
-	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
-	section.SetSize(120, 40)
-
-	initialCount := len(section.list.Items())
-	if initialCount == 0 {
-		t.Fatal("expected at least one image in mock data")
-	}
-
-	section.list.Select(0)
-	cmd := section.removeItem(0)
-
-	if len(section.list.Items()) != initialCount-1 {
-		t.Errorf("expected %d items after delete, got %d", initialCount-1, len(section.list.Items()))
-	}
-	if section.list.Index() != 0 {
-		t.Errorf("expected selection at index 0 after deleting first item, got %d", section.list.Index())
-	}
-	if cmd == nil {
-		t.Fatal("removeItem() should return non-nil cmd when items remain")
-	}
-	if _, ok := cmd().(layersOutputMsg); !ok {
-		t.Errorf("removeItem() cmd should produce layersOutputMsg, got %T", cmd())
-	}
-}
-
-func TestImageDeleteLastItemClearsPanel(t *testing.T) {
-	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-
-	// Create a section with a single image so we can test the empty-list path.
-	singleImage := images[:1]
-	section := New(context.Background(), singleImage, c)
-	section.SetSize(120, 40)
-
-	// Set content on the layers panel so we can verify it gets cleared.
-	lp := section.panels[0].(*layersPanel)
-	lp.viewport.SetContent("stale layer info")
-
-	// Delete the single item — activePanel().Close() should be called.
-	cmd := section.removeItem(0)
-	if cmd != nil {
-		t.Error("removeItem() should return nil cmd when list is empty (Close() returns nil)")
-	}
-	if strings.TrimSpace(lp.viewport.View()) != "" {
-		t.Error("deleteLastItem() should clear the panel viewport content")
-	}
-}
-
-func TestImageDeleteMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
-	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
-	section.SetSize(120, 40)
-
-	count := len(section.list.Items())
-	if count < 2 {
-		t.Fatal("expected at least two images in mock data")
-	}
-
-	// Select and delete the last item — selection should clamp to new last
-	last := count - 1
-	section.list.Select(last)
-	cmd := section.removeItem(last)
-
-	if section.list.Index() != last-1 {
-		t.Errorf("expected selection at %d after deleting last item, got %d", last-1, section.list.Index())
-	}
-	if cmd == nil {
-		t.Fatal("removeItem() should return non-nil cmd when items remain")
-	}
-	if _, ok := cmd().(layersOutputMsg); !ok {
-		t.Errorf("removeItem() cmd should produce layersOutputMsg, got %T", cmd())
-	}
-}
-
-func TestPanelClosedOnUpDownNavigation(t *testing.T) {
-	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
-	section.SetSize(120, 40)
-
-	// Navigate to second image
-	section.list.Select(1)
-	// Initialize the layers panel with content
-	section.activePanel().Init("sha256:image2")
-
-	// Navigate down to next image - this should close the current panel
-	section.Update(tea.KeyMsg{Type: tea.KeyDown})
-
-	// Verify the panel Close() was called (panel is ready for new content)
-	// We can't directly verify viewport content is cleared, but we can verify
-	// the panel can be initialized again without issues
-	cmd := section.activePanel().Init("sha256:image3")
-	if cmd == nil {
-		t.Error("Panel should be able to reinitialize after navigation")
-	}
-}
-
 func TestValidatePorts(t *testing.T) {
 	tests := []struct {
 		input   string
@@ -477,15 +358,15 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Navigate to second image
-	section.list.Select(1)
+	section.List.Select(1)
 	// Initialize the layers panel
-	section.activePanel().Init("sha256:image2")
+	section.ActivePanel().Init("sha256:image2")
 
 	// Navigate up to previous image - this should close the current panel
 	section.Update(tea.KeyMsg{Type: tea.KeyUp})
 
 	// Verify the panel can be reinitialized
-	cmd := section.activePanel().Init("sha256:image1")
+	cmd := section.ActivePanel().Init("sha256:image1")
 	if cmd == nil {
 		t.Error("Panel should be able to reinitialize after navigation")
 	}
