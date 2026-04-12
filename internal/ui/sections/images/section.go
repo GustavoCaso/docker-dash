@@ -20,6 +20,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -89,7 +90,7 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 		imageService:     client.Images(),
 		containerService: client.Containers(),
 		Section: base.New(
-			"images",
+			sections.ImagesSection,
 			items,
 			[]panel.Panel{NewLayersPanel(ctx, client.Images())},
 		),
@@ -111,20 +112,23 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 	return il
 }
 
-func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
+func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	switch msg := msg.(type) {
 	case imagesLoadedMsg:
 		log.Printf("[images] imagesLoadedMsg: count=%d", len(msg.items))
-		s.Loading = false
 		if msg.error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error loading images: %s", msg.error.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error loading images: %s", msg.error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
-		return s.List.SetItems(msg.items), true
+		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
 	case imagesPrunedMsg:
 		log.Printf(
 			"[images] imagesPrunedMsg: deleted=%d spaceReclaimed=%d",
@@ -132,61 +136,86 @@ func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 			msg.report.SpaceReclaimed,
 		)
 		if msg.err != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: "Error pruning images: " + msg.err.Error(),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: "Error pruning images: " + msg.err.Error(),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		summary := fmt.Sprintf(
 			"Pruned %d images, reclaimed %s",
 			msg.report.ItemsDeleted,
 			helper.FormatSize(msg.report.SpaceReclaimed),
 		)
-		return tea.Batch(s.updateImagesCmd(), func() tea.Msg {
-			return message.ShowBannerMsg{Message: summary, IsError: false}
-		}), true
+		return base.UpdateResult{
+			Cmd: tea.Batch(s.updateImagesCmd(), func() tea.Msg {
+				return message.ShowBannerMsg{Message: summary, IsError: false}
+			}),
+			Handled: true,
+		}
 	case imageRemovedMsg:
 		log.Printf("[images] imageRemovedMsg: imageID=%q err=%v", msg.ID, msg.Error)
 		if msg.Error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error deleting image: %s", msg.Error.Error()),
-					IsError: true,
-				}
-			}, true
-		}
-		return tea.Batch(s.RemoveItemAndUpdatePanel(msg.Idx), func() tea.Msg {
-			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Image %s deleted", helper.ShortID(msg.ID)),
-				IsError: false,
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error deleting image: %s", msg.Error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
 			}
-		}), true
+		}
+		return base.UpdateResult{
+			Cmd: tea.Batch(s.RemoveItemAndUpdatePanel(msg.Idx), func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Image %s deleted", helper.ShortID(msg.ID)),
+					IsError: false,
+				}
+			}),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	case imagePullMsg:
 		log.Printf("[images] imagePullMsg: err=%v", msg.err)
 		if msg.err != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error pulling image: %s", msg.err.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error pulling image: %s", msg.err.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		pullMessage := fmt.Sprintf("Image %s Pulled", msg.image)
-		return tea.Batch(s.updateImagesCmd(), func() tea.Msg {
-			return message.ShowBannerMsg{Message: pullMessage, IsError: false}
-		}), true
+		return base.UpdateResult{
+			Cmd: tea.Batch(s.updateImagesCmd(), func() tea.Msg {
+				return message.ShowBannerMsg{Message: pullMessage, IsError: false}
+			}),
+			Handled: true,
+		}
 	case containerRunMsg:
 		log.Printf("[images] containerRunMsg: containerID=%q err=%v", msg.containerID, msg.error)
-		s.Loading = false
 		if msg.error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: msg.error.Error(),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: msg.error.Error(),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		banner := func() tea.Msg {
 			return message.ShowBannerMsg{
@@ -203,29 +232,36 @@ func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 				OnlyActive: false,
 			}
 		}
-		return tea.Batch(banner, refreshComponents), true
+		return base.UpdateResult{
+			Cmd:         tea.Batch(banner, refreshComponents),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
-func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 	switch {
 	case key.Matches(msg, keys.Keys.PullImage):
 		f := pullImageForm()
 		pullForm := form.New("Pull Image", f, func(finishForm *huh.Form) tea.Cmd {
 			image := finishForm.GetString("image")
 			platform := finishForm.GetString("platform")
-			return s.pullImageCmd(image, platform)
+			return s.WithSpinner(s.pullImageCmd(image, platform))
 		})
-		return func() tea.Msg {
-			return message.ShowFormMsg{Form: pullForm}
-		}, true
+		return base.UpdateResult{
+			Cmd: func() tea.Msg {
+				return message.ShowFormMsg{Form: pullForm}
+			},
+			Handled: true,
+		}
 	case key.Matches(msg, keys.Keys.Delete):
-		return s.confirmImageDelete(), true
+		return base.UpdateResult{Cmd: s.confirmImageDelete(), Handled: true}
 	case key.Matches(msg, keys.Keys.CreateAndRunContainer):
-		return s.showRunContainerForm(), true
+		return base.UpdateResult{Cmd: s.showRunContainerForm(), Handled: true}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
 func (s *Section) deleteImageCmd() tea.Cmd {
@@ -314,12 +350,11 @@ func (s *Section) showRunContainerForm() tea.Cmd {
 
 func (s *Section) createContainerCmdAndRun(img client.Image, opts client.RunOptions) tea.Cmd {
 	svc := s.containerService
-	s.Loading = true
 	ctx := s.ctx
-	return func() tea.Msg {
+	return s.WithSpinner(func() tea.Msg {
 		containerID, err := svc.Run(ctx, img, opts)
 		return containerRunMsg{containerID: containerID, error: err}
-	}
+	})
 }
 
 // parseCSV splits a comma-separated string into a trimmed slice, ignoring empty entries.
@@ -435,7 +470,7 @@ func (s *Section) confirmImagePrune() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Prune Images",
 			Body:      "Remove all unused images (including non-dangling)?",
-			OnConfirm: pruneCmd,
+			OnConfirm: s.WithSpinner(pruneCmd),
 		}
 	}
 }
@@ -455,7 +490,7 @@ func (s *Section) confirmImageDelete() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Delete Image",
 			Body:      fmt.Sprintf("Delete image %s?", helper.ShortID(dockerImage.ID())),
-			OnConfirm: deleteCmd,
+			OnConfirm: s.WithSpinner(deleteCmd),
 		}
 	}
 }

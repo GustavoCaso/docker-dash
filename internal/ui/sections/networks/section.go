@@ -14,6 +14,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -75,7 +76,7 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 	s := &Section{
 		ctx:            ctx,
 		networkService: svc,
-		Section:        base.New("networks", items, []panel.Panel{newDetailsPanel()}),
+		Section:        base.New(sections.NetworksSection, items, []panel.Panel{newDetailsPanel()}),
 	}
 
 	s.LoadingText = "Loading..."
@@ -94,20 +95,23 @@ func New(ctx context.Context, networks []client.Network, svc client.NetworkServi
 	return s
 }
 
-func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
+func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	switch msg := msg.(type) {
 	case networksLoadedMsg:
 		log.Printf("[networks] networksLoadedMsg: count=%d", len(msg.items))
-		s.Loading = false
 		if msg.error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error loading networks: %s", msg.error.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error loading networks: %s", msg.error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
-		return s.List.SetItems(msg.items), true
+		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
 	case networksPrunedMsg:
 		log.Printf(
 			"[networks] networksPrunedMsg: deleted=%d spaceReclaimed=%d",
@@ -115,42 +119,57 @@ func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 			msg.report.SpaceReclaimed,
 		)
 		if msg.err != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: "Error pruning networks: " + msg.err.Error(),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: "Error pruning networks: " + msg.err.Error(),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		summary := fmt.Sprintf("Pruned %d networks", msg.report.ItemsDeleted)
-		return tea.Batch(s.updateNetworksCmd(), func() tea.Msg {
-			return message.ShowBannerMsg{Message: summary, IsError: false}
-		}), true
+		return base.UpdateResult{
+			Cmd: tea.Batch(s.updateNetworksCmd(), func() tea.Msg {
+				return message.ShowBannerMsg{Message: summary, IsError: false}
+			}),
+			Handled: true,
+		}
 	case networkRemovedMsg:
 		log.Printf("[networks] networkRemovedMsg: id=%q err=%v", msg.ID, msg.Error)
 		if msg.Error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error deleting network: %s", msg.Error.Error()),
-					IsError: true,
-				}
-			}, true
-		}
-		return tea.Batch(s.RemoveItemAndUpdatePanel(msg.Idx), func() tea.Msg {
-			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Network %s deleted", msg.Name),
-				IsError: false,
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error deleting network: %s", msg.Error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
 			}
-		}), true
+		}
+		return base.UpdateResult{
+			Cmd: tea.Batch(s.RemoveItemAndUpdatePanel(msg.Idx), func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Network %s deleted", msg.Name),
+					IsError: false,
+				}
+			}),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
-func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 	if key.Matches(msg, keys.Keys.NetworkDelete) {
-		return s.confirmNetworkDelete(), true
+		return base.UpdateResult{Cmd: s.confirmNetworkDelete(), Handled: true}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
 func (s *Section) updateNetworksCmd() tea.Cmd {
@@ -203,7 +222,7 @@ func (s *Section) confirmNetworkPrune() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Prune Networks",
 			Body:      "Remove all unused networks?",
-			OnConfirm: pruneCmd,
+			OnConfirm: s.WithSpinner(pruneCmd),
 		}
 	}
 }
@@ -223,7 +242,7 @@ func (s *Section) confirmNetworkDelete() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Delete Network",
 			Body:      fmt.Sprintf("Delete network %s?", item.network.Name),
-			OnConfirm: deleteCmd,
+			OnConfirm: s.WithSpinner(deleteCmd),
 		}
 	}
 }

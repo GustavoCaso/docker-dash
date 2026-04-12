@@ -6,6 +6,14 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 )
 
+type SectionName string
+
+var ImagesSection SectionName = "images"
+var ContainersSection SectionName = "containers"
+var VolumesSection SectionName = "volumes"
+var NetworksSection SectionName = "networks"
+var ComposeSection SectionName = "compose"
+
 type Section interface {
 	// Initialize Section
 	Init() tea.Cmd
@@ -17,6 +25,9 @@ type Section interface {
 	View() string
 	// ActivePanel returns the active panel
 	ActivePanel() panel.Panel
+	// ActivePanelName returns the active panel name or an empty string when the
+	// section has no panels.
+	ActivePanelName() string
 	// RemoveItem removes the item at idx from the list and clamps the selection.
 	// Use this for sections without a detail panel; for panel sections use
 	// RemoveItemAndUpdatePanel instead.

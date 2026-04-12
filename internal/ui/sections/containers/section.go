@@ -14,6 +14,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -74,11 +75,11 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
-		Section: base.New("containers", items, []panel.Panel{
+		Section: base.New(sections.ContainersSection, items, []panel.Panel{
 			NewDetailsPanel(ctx, svc),
 			NewLogsPanel(ctx, svc),
 			NewStatsPanel(ctx, svc),
-			panel.NewFilesPanel(ctx, svc),
+			panel.NewFilesPanel(ctx, string(sections.ContainersSection), svc),
 			NewExecPanel(ctx, svc),
 		}),
 	}
@@ -99,12 +100,23 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 	return cl
 }
 
-func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
+func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	switch msg := msg.(type) {
 	case containersLoadedMsg:
 		log.Printf("[containers] containersLoadedMsg: count=%d", len(msg.items))
-		s.Loading = false
-		return s.List.SetItems(msg.items), true
+		if msg.error != nil {
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error loading containers: %s", msg.error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
+		}
+		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
 	case containersPrunedMsg:
 		log.Printf(
 			"[containers] containersPrunedMsg: deleted=%d spaceReclaimed=%d",
@@ -112,21 +124,28 @@ func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 			msg.report.SpaceReclaimed,
 		)
 		if msg.err != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: "Error pruning containers: " + msg.err.Error(),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: "Error pruning containers: " + msg.err.Error(),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		summary := fmt.Sprintf(
 			"Pruned %d containers, reclaimed %s",
 			msg.report.ItemsDeleted,
 			helper.FormatSize(msg.report.SpaceReclaimed),
 		)
-		return tea.Batch(s.updateContainersCmd(), func() tea.Msg {
-			return message.ShowBannerMsg{Message: summary, IsError: false}
-		}), true
+		return base.UpdateResult{
+			Cmd: tea.Batch(s.updateContainersCmd(), func() tea.Msg {
+				return message.ShowBannerMsg{Message: summary, IsError: false}
+			}),
+			Handled: true,
+		}
 	case containerActionMsg:
 		log.Printf(
 			"[containers] containerActionMsg: action=%q containerID=%q err=%v",
@@ -135,51 +154,64 @@ func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
 			msg.Error,
 		)
 		if msg.Error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error %s container: %s", msg.Action, msg.Error.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error %s container: %s", msg.Action, msg.Error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		var cmds []tea.Cmd
+		stopSpinner := true
 		if msg.Action == "deleting" {
 			cmds = append(cmds, s.RemoveItemAndUpdatePanel(msg.Idx))
 		}
 		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" {
 			cmds = append(cmds, s.updateContainersCmd())
+			stopSpinner = false
 		}
-		return tea.Batch(append(cmds, func() tea.Msg {
-			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Container %s %s", helper.ShortID(msg.ID), msg.Action),
-				IsError: false,
-			}
-		})...), true
+		return base.UpdateResult{
+			Cmd: tea.Batch(append(cmds, func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Container %s %s", helper.ShortID(msg.ID), msg.Action),
+					IsError: false,
+				}
+			})...),
+			Handled:     true,
+			StopSpinner: stopSpinner,
+		}
 	case execCloseMsg:
 		log.Printf("[containers] execCloseMsg")
 		s.ActivePanel().Close()
-		return func() tea.Msg {
-			return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
-		}, true
+		return base.UpdateResult{
+			Cmd: func() tea.Msg {
+				return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
+			},
+			Handled: true,
+		}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
-func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 	// When exec panel is active, route ALL keys directly to it.
 	if ep, ok := s.ActivePanel().(*execPanel); ok {
 		log.Print("[containers] forward message to exec panel")
-		return ep.Update(msg), true
+		return base.UpdateResult{Cmd: ep.Update(msg), Handled: true}
 	}
 	switch {
 	case key.Matches(msg, keys.Keys.ContainerDelete):
-		return s.confirmContainerDelete(), true
+		return base.UpdateResult{Cmd: s.confirmContainerDelete(), Handled: true}
 	case key.Matches(msg, keys.Keys.ContainerStartStop):
-		return s.confirmContainerToggle(), true
+		return base.UpdateResult{Cmd: s.confirmContainerToggle(), Handled: true}
 	case key.Matches(msg, keys.Keys.ContainerRestart):
-		return s.confirmContainerRestart(), true
+		return base.UpdateResult{Cmd: s.confirmContainerRestart(), Handled: true}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
 func (s *Section) deleteContainerCmd() tea.Cmd {
@@ -279,7 +311,7 @@ func (s *Section) confirmContainerPrune() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Prune Containers",
 			Body:      "Remove all stopped containers?",
-			OnConfirm: pruneCmd,
+			OnConfirm: s.WithSpinner(pruneCmd),
 		}
 	}
 }
@@ -299,7 +331,7 @@ func (s *Section) confirmContainerDelete() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Delete Container",
 			Body:      fmt.Sprintf("Delete container %s?", helper.ShortID(ci.ID())),
-			OnConfirm: deleteCmd,
+			OnConfirm: s.WithSpinner(deleteCmd),
 		}
 	}
 }
@@ -323,7 +355,7 @@ func (s *Section) confirmContainerToggle() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     fmt.Sprintf("%s Container", action),
 			Body:      fmt.Sprintf("%s container %s?", action, helper.ShortID(ci.ID())),
-			OnConfirm: toggleCmd,
+			OnConfirm: s.WithSpinner(toggleCmd),
 		}
 	}
 }
@@ -343,7 +375,7 @@ func (s *Section) confirmContainerRestart() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Restart Container",
 			Body:      fmt.Sprintf("Restart container %s?", helper.ShortID(ci.ID())),
-			OnConfirm: restartCmd,
+			OnConfirm: s.WithSpinner(restartCmd),
 		}
 	}
 }

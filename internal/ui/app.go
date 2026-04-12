@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
@@ -38,6 +39,7 @@ const (
 const (
 	bannerTimeoutSecs  = 3 // seconds before banner auto-clears
 	bannerOverlayLines = 2 // lines from bottom for banner overlay position
+	spinnerOverlayLine = 2 // lines from bottom for spinner overlay position
 )
 
 // clearBannerMsg is sent to clear the banner after a timeout.
@@ -78,6 +80,9 @@ type model struct {
 	height           int
 	bannerMsg        string
 	bannerKind       bannerType
+	spinner          spinner.Model
+	spinnerRequests  map[string]spinnerRequest
+	spinnerSequence  uint64
 	initErr          string
 	confirmation     confirmation.Model
 	pendingCmd       tea.Cmd
@@ -85,6 +90,12 @@ type model struct {
 	showForm         bool
 	formModel        *form.Model
 	refreshInterval  time.Duration
+}
+
+type spinnerRequest struct {
+	Text  string
+	Scope message.SpinnerScope
+	Seq   uint64
 }
 
 func InitialModel(ctx context.Context, version string, cfg *config.Config, client client.Client) tea.Model {
@@ -112,6 +123,10 @@ func InitialModel(ctx context.Context, version string, cfg *config.Config, clien
 		}
 	}
 
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	return &model{
 		cfg:              cfg,
 		client:           client,
@@ -128,6 +143,8 @@ func InitialModel(ctx context.Context, version string, cfg *config.Config, clien
 		networkSection:   networks.New(ctx, networksList, client.Networks()),
 		composeSection:   compose.New(ctx, composeList, client.Compose()),
 		statusBar:        statusbar.New(),
+		spinner:          sp,
+		spinnerRequests:  make(map[string]spinnerRequest),
 		initErr:          initErr,
 		confirmation:     confirmation.New(),
 		refreshInterval:  refreshInterval,
@@ -195,7 +212,14 @@ func (m *model) handleConfirmationUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool)
 	return m, nil, true
 }
 
+//nolint:gocyclo // this is the main the complexity is acceptable
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	if spinnerCmd := m.updateSpinner(msg); spinnerCmd != nil {
+		cmds = append(cmds, spinnerCmd)
+	}
+
 	if m.showForm {
 		if _, ok := msg.(tea.WindowSizeMsg); !ok {
 			return m.handleFormUpdate(msg)
@@ -239,14 +263,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.confirmation.Init(msg.Title, msg.Body)
 		m.pendingCmd = msg.OnConfirm
 		m.showConfirmation = true
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case message.ShowFormMsg:
 		log.Print("[app] ShowFormMsg")
 		m.formModel = msg.Form
 		m.showForm = true
-		cmd := m.formModel.Init()
-		return m, cmd
+		cmds = append(cmds, m.formModel.Init())
+		return m, tea.Batch(cmds...)
 
 	case message.ShowBannerMsg:
 		log.Printf("[app] ShowBannerMsg: message=%q", msg.Message)
@@ -262,29 +286,47 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			clearTimeout = bannerTimeoutSecs * time.Second
 		}
 
-		return m, tea.Tick(clearTimeout, func(_ time.Time) tea.Msg {
+		cmds = append(cmds, tea.Tick(clearTimeout, func(_ time.Time) tea.Msg {
 			return clearBannerMsg{}
-		})
+		}))
+		return m, tea.Batch(cmds...)
+
+	case message.ShowSpinnerMsg:
+		log.Printf("[app] ShowSpinnerMsg: id=%q text=%q", msg.ID, msg.Text)
+		if cmd := m.showSpinner(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return m, tea.Batch(cmds...)
+
+	case message.CancelSpinnerMsg:
+		log.Printf("[app] CancelSpinnerMsg: id=%q", msg.ID)
+		m.cancelSpinner(msg.ID)
+		return m, tea.Batch(cmds...)
 
 	case message.BubbleUpMsg:
 		log.Printf("[app] BubbleUpMsg: key=%q", msg.KeyMsg.String())
 		if msg.OnlyActive {
-			return m.forwardMessageToActive(msg.KeyMsg)
+			model, cmd := m.forwardMessageToActive(msg.KeyMsg)
+			cmds = append(cmds, cmd)
+			return model, tea.Batch(cmds...)
 		}
-		return m.forwardMessageToAll(msg.KeyMsg)
+		model, cmd := m.forwardMessageToAll(msg.KeyMsg)
+		cmds = append(cmds, cmd)
+		return model, tea.Batch(cmds...)
 
 	case clearBannerMsg:
 		log.Printf("[app] clearBannerMsg")
 		m.bannerMsg = ""
 		m.bannerKind = bannerNone
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case autoRefreshMsg:
 		log.Printf("[app] autoRefreshMsg")
 		_, cmd := m.forwardMessageToAll(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-		return m, tea.Batch(cmd, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
+		cmds = append(cmds, cmd, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
 			return autoRefreshMsg{}
 		}))
+		return m, tea.Batch(cmds...)
 
 	case message.AddContextualKeyBindingsMsg:
 		log.Printf("[app] AddContextualKeyBindingsMsg")
@@ -292,14 +334,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeKeys.ToggleContextual(msg.Bindings)
 		}
 
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case message.ClearContextualKeyBindingsMsg:
 		log.Printf("[app] ClearContextualKeyBindingsMsg")
 		if m.activeKeys != nil {
 			m.activeKeys.DisableContextual()
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
 		log.Printf("[app] KeyMsg: key=%q", msg.String())
@@ -309,36 +351,45 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Left):
 			// section := m.activeSection()
 			m.header.MoveLeft()
-			return m, nil
+			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Right):
 			// section := m.activeSection()
 			m.header.MoveRight()
-			return m, nil
+			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Refresh):
-			return m.forwardMessageToActive(msg)
+			model, cmd := m.forwardMessageToActive(msg)
+			cmds = append(cmds, cmd)
+			return model, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.RefreshAll):
-			return m.forwardMessageToAll(tea.KeyMsg{
+			model, cmd := m.forwardMessageToAll(tea.KeyMsg{
 				Type:  tea.KeyRunes,
 				Runes: []rune{'r'},
 			})
+			cmds = append(cmds, cmd)
+			return model, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Help):
 			m.statusBar.ToggleFullView()
-			return m, func() tea.Msg {
+			cmds = append(cmds, func() tea.Msg {
 				return tea.WindowSizeMsg{
 					Width:  m.width,
 					Height: m.height,
 				}
-			}
+			})
+			return m, tea.Batch(cmds...)
 		}
 	}
 
 	// Forward key messages to focused component only
 	if _, ok := msg.(tea.KeyMsg); ok {
-		return m.forwardMessageToActive(msg)
+		model, cmd := m.forwardMessageToActive(msg)
+		cmds = append(cmds, cmd)
+		return model, tea.Batch(cmds...)
 	}
 
 	// Forward other messages to all components
-	return m.forwardMessageToAll(msg)
+	model, cmd := m.forwardMessageToAll(msg)
+	cmds = append(cmds, cmd)
+	return model, tea.Batch(cmds...)
 }
 
 func (m *model) View() string {
@@ -399,7 +450,105 @@ func (m *model) View() string {
 		content = helper.OverlayBottomRight(bannerOverlayLines, content, bannerText, m.width)
 	}
 
+	if spinnerText := m.activeSpinnerText(); spinnerText != "" {
+		offset := spinnerOverlayLine
+		if m.bannerMsg != "" {
+			offset++
+		}
+		content = helper.OverlayBottomRight(offset, content, m.spinner.View()+" "+spinnerText, m.width)
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())
+}
+
+func (m *model) updateSpinner(msg tea.Msg) tea.Cmd {
+	if len(m.spinnerRequests) == 0 {
+		return nil
+	}
+	if _, ok := msg.(spinner.TickMsg); !ok {
+		return nil
+	}
+
+	var cmd tea.Cmd
+	m.spinner, cmd = m.spinner.Update(msg)
+	return cmd
+}
+
+func (m *model) showSpinner(msg message.ShowSpinnerMsg) tea.Cmd {
+	before := len(m.spinnerRequests)
+	text := msg.Text
+	if text == "" {
+		text = "Loading..."
+	}
+	m.spinnerSequence++
+	m.spinnerRequests[msg.ID] = spinnerRequest{
+		Text:  text,
+		Scope: msg.Scope,
+		Seq:   m.spinnerSequence,
+	}
+	if before == 0 {
+		return m.spinner.Tick
+	}
+	return nil
+}
+
+func (m *model) cancelSpinner(id string) {
+	delete(m.spinnerRequests, id)
+}
+
+func (m *model) activeSpinnerText() string {
+	scope := m.activeSpinnerScope()
+	if text, ok := m.spinnerTextForScope(scope); ok {
+		return text
+	}
+	scope.Panel = ""
+	if text, ok := m.spinnerTextForScope(scope); ok {
+		return text
+	}
+	return ""
+}
+
+func (m *model) activeSpinnerScope() message.SpinnerScope {
+	return message.SpinnerScope{
+		Section: m.activeSectionName(),
+		Panel:   m.activeSection().ActivePanelName(),
+	}
+}
+
+func (m *model) spinnerTextForScope(scope message.SpinnerScope) (string, bool) {
+	var (
+		text    string
+		bestSeq uint64
+		found   bool
+	)
+	for _, request := range m.spinnerRequests {
+		if request.Scope != scope {
+			continue
+		}
+		if !found || request.Seq > bestSeq {
+			text = request.Text
+			bestSeq = request.Seq
+			found = true
+		}
+	}
+	return text, found
+}
+
+func (m *model) activeSectionName() string {
+	switch m.header.ActiveView() {
+	case header.ViewContainers:
+		return string(sections.ContainersSection)
+	case header.ViewImages:
+		return string(sections.ImagesSection)
+	case header.ViewVolumes:
+		return string(sections.VolumesSection)
+	case header.ViewNetworks:
+		return string(sections.NetworksSection)
+	case header.ViewCompose:
+		return string(sections.ComposeSection)
+	default:
+		return ""
+	}
 }
 
 func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {

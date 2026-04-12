@@ -13,6 +13,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
 
 func TestFullOutput(t *testing.T) {
@@ -262,6 +263,107 @@ func TestContextualKeyBindingsBeforeViewRender(t *testing.T) {
 
 	// Send ClearContextualKeyBindingsMsg before activeKeys is set — must not panic.
 	m.Update(message.ClearContextualKeyBindingsMsg{})
+}
+
+func TestSpinnerOverlayFollowsShowAndCancelMessages(t *testing.T) {
+	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	if !ok {
+		t.Fatal("InitialModel should return *model")
+	}
+
+	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	appModel.Update(message.ShowSpinnerMsg{
+		ID:   "images",
+		Text: "Refreshing...",
+		Scope: message.SpinnerScope{
+			Section: string(sections.ImagesSection),
+		},
+	})
+
+	if !strings.Contains(appModel.View(), "Refreshing...") {
+		t.Fatal("spinner overlay should render after ShowSpinnerMsg")
+	}
+
+	appModel.Update(message.CancelSpinnerMsg{ID: "images"})
+
+	if strings.Contains(appModel.View(), "Refreshing...") {
+		t.Fatal("spinner overlay should disappear after CancelSpinnerMsg")
+	}
+}
+
+func TestSpinnerOverlayHidesWhenActiveSectionHasNoSpinner(t *testing.T) {
+	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	if !ok {
+		t.Fatal("InitialModel should return *model")
+	}
+
+	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	appModel.Update(message.ShowSpinnerMsg{
+		ID:   "images",
+		Text: "Refreshing...",
+		Scope: message.SpinnerScope{
+			Section: string(sections.ImagesSection),
+		},
+	})
+	appModel.Update(message.ShowSpinnerMsg{
+		ID:   "containers",
+		Text: "Loading containers...",
+		Scope: message.SpinnerScope{
+			Section: string(sections.ContainersSection),
+		},
+	})
+	appModel.Update(message.CancelSpinnerMsg{ID: "images"})
+
+	if text := appModel.activeSpinnerText(); text != "" {
+		t.Fatalf("activeSpinnerText() = %q, want empty string", text)
+	}
+}
+
+func TestSpinnerOverlayIgnoresNestedActiveSpinner(t *testing.T) {
+	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	if !ok {
+		t.Fatal("InitialModel should return *model")
+	}
+
+	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	appModel.Update(tea.KeyMsg{Type: tea.KeyRight})
+	appModel.Update(message.ShowSpinnerMsg{
+		ID:   "containers.files.1",
+		Text: "Loading files...",
+		Scope: message.SpinnerScope{
+			Section: string(sections.ContainersSection),
+			Panel:   "Files",
+		},
+	})
+
+	if text := appModel.activeSpinnerText(); text != "" {
+		t.Fatalf("activeSpinnerText() = %q, want empty string", text)
+	}
+}
+
+func TestSpinnerOverlayShowsNestedSpinnerForActivePanel(t *testing.T) {
+	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	if !ok {
+		t.Fatal("InitialModel should return *model")
+	}
+
+	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	appModel.Update(tea.KeyMsg{Type: tea.KeyRight})
+	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	appModel.Update(message.ShowSpinnerMsg{
+		ID:   "containers.files.1",
+		Text: "Loading files...",
+		Scope: message.SpinnerScope{
+			Section: string(sections.ContainersSection),
+			Panel:   "Files",
+		},
+	})
+
+	if text := appModel.activeSpinnerText(); text != "Loading files..." {
+		t.Fatalf("activeSpinnerText() = %q, want %q", text, "Loading files...")
+	}
 }
 
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {

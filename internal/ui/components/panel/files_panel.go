@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -23,31 +22,29 @@ var statusBarSpace = 2
 
 // fileNodeLoadedMsg is sent when containers have been loaded asynchronously.
 type fileNodeLoadedMsg struct {
-	err      error
-	fileNode *client.FileNode
+	requestID int
+	err       error
+	fileNode  *client.FileNode
 }
 
 type filesPanel struct {
 	ctx           context.Context
 	service       fileService
 	loading       bool
-	spinner       spinner.Model
 	width, height int
+	section       string
 	root          *client.FileNode
 	visible       []*client.FileNode
 	cursor        int
+	requestID     int
 }
 
 type fileService interface {
 	FileTree(ctx context.Context, ID string) (*client.FileNode, error)
 }
 
-func NewFilesPanel(ctx context.Context, svc fileService) Panel {
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
-	return &filesPanel{ctx: ctx, service: svc, width: 0, height: 0, spinner: sp}
+func NewFilesPanel(ctx context.Context, section string, svc fileService) Panel {
+	return &filesPanel{ctx: ctx, service: svc, section: section, width: 0, height: 0}
 }
 
 func (f *filesPanel) Name() string {
@@ -57,7 +54,9 @@ func (f *filesPanel) Name() string {
 func (f *filesPanel) Init(containerID string) tea.Cmd {
 	log.Printf("[files-panel] Init: containerID=%q", containerID)
 	f.loading = true
-	return tea.Batch(f.spinner.Tick, f.fetchCmd(containerID), f.extendHelpCmd())
+	f.requestID++
+	requestID := f.requestID
+	return tea.Batch(f.showSpinnerCmd(requestID), f.fetchCmd(containerID, requestID), f.extendHelpCmd())
 }
 
 func computeVisible(root *client.FileNode) []*client.FileNode {
@@ -78,29 +77,24 @@ func computeVisible(root *client.FileNode) []*client.FileNode {
 }
 
 func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
-	var cmds []tea.Cmd
-
-	if f.loading {
-		var spinnerCmd tea.Cmd
-		f.spinner, spinnerCmd = f.spinner.Update(msg)
-		cmds = append(cmds, spinnerCmd)
-	}
-
 	switch msg := msg.(type) {
 	case fileNodeLoadedMsg:
-		log.Printf("[files-panel] fileNodeLoadedMsg: err=%v", msg.err)
+		log.Printf("[files-panel] fileNodeLoadedMsg: requestID=%d err=%v", msg.requestID, msg.err)
+		if msg.requestID != f.requestID {
+			return nil
+		}
 		f.loading = false
 		if msg.err != nil {
-			return func() tea.Msg {
+			return tea.Batch(f.cancelSpinnerCmd(msg.requestID), func() tea.Msg {
 				return message.ShowBannerMsg{
 					Message: msg.err.Error(),
 					IsError: true,
 				}
-			}
+			})
 		}
 		f.root = msg.fileNode
 		f.visible = computeVisible(f.root)
-		return nil
+		return f.cancelSpinnerCmd(msg.requestID)
 
 	case tea.KeyMsg:
 		log.Printf("[files-panel] KeyMsg: key=%q", msg.String())
@@ -127,14 +121,12 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
-	return tea.Batch(cmds...)
+	return nil
 }
 
 func (f *filesPanel) View() string {
 	if f.loading {
-		spinnerText := f.spinner.View() + " Loading..."
-		content := helper.OverlayBottomRight(1, "", spinnerText, f.width)
-		return content
+		return ""
 	}
 
 	if len(f.visible) == 0 {
@@ -213,10 +205,16 @@ func (f *filesPanel) View() string {
 
 func (f *filesPanel) Close() tea.Cmd {
 	log.Printf("[files-panel] Close")
+	requestID := f.requestID
+	f.requestID++
 	f.loading = false
 	f.root = nil
 	f.visible = []*client.FileNode{}
-	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
+	f.cursor = 0
+	return tea.Batch(
+		f.cancelSpinnerCmd(requestID),
+		func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} },
+	)
 }
 
 func (f *filesPanel) SetSize(width, height int) {
@@ -224,16 +222,39 @@ func (f *filesPanel) SetSize(width, height int) {
 	f.height = height
 }
 
-func (f *filesPanel) fetchCmd(containerID string) tea.Cmd {
+func (f *filesPanel) fetchCmd(containerID string, requestID int) tea.Cmd {
 	ctx := f.ctx
 	svc := f.service
 	return func() tea.Msg {
 		fileNode, err := svc.FileTree(ctx, containerID)
 		if err != nil {
-			return fileNodeLoadedMsg{err: fmt.Errorf("error getting the file tree: %w", err)}
+			return fileNodeLoadedMsg{requestID: requestID, err: fmt.Errorf("error getting the file tree: %w", err)}
 		}
-		return fileNodeLoadedMsg{fileNode: fileNode}
+		return fileNodeLoadedMsg{requestID: requestID, fileNode: fileNode}
 	}
+}
+
+func (f *filesPanel) showSpinnerCmd(requestID int) tea.Cmd {
+	return func() tea.Msg {
+		return message.ShowSpinnerMsg{
+			ID:   f.spinnerID(requestID),
+			Text: "Loading files...",
+			Scope: message.SpinnerScope{
+				Section: f.section,
+				Panel:   f.Name(),
+			},
+		}
+	}
+}
+
+func (f *filesPanel) cancelSpinnerCmd(requestID int) tea.Cmd {
+	return func() tea.Msg {
+		return message.CancelSpinnerMsg{ID: f.spinnerID(requestID)}
+	}
+}
+
+func (f *filesPanel) spinnerID(requestID int) string {
+	return fmt.Sprintf("%s.files.%d", f.section, requestID)
 }
 
 func (f *filesPanel) extendHelpCmd() tea.Cmd {
