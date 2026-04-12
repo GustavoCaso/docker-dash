@@ -15,6 +15,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -33,7 +34,7 @@ import (
 // handle the full lifecycle; each concrete section only needs handleMsg and
 // handleKey for its domain-specific logic.
 type Section struct {
-	name string
+	name sections.SectionName
 
 	List     list.Model
 	isFilter bool
@@ -71,7 +72,7 @@ type UpdateResult struct {
 }
 
 func New(
-	name string,
+	name sections.SectionName,
 	items []list.Item,
 	pannels []panel.Panel,
 ) *Section {
@@ -198,6 +199,15 @@ func (b *Section) ActivePanel() panel.Panel {
 	return b.panels[b.activePanelIdx]
 }
 
+// ActivePanelName returns the active panel name or an empty string when the
+// section has no panels.
+func (b *Section) ActivePanelName() string {
+	if len(b.panels) == 0 {
+		return ""
+	}
+	return b.ActivePanel().Name()
+}
+
 // RemoveItemAndUpdatePanel removes the item at idx from the list, clamps the
 // selection, and re-initialises the active panel for the new selection.
 // When the list becomes empty it closes the active panel instead.
@@ -268,15 +278,18 @@ func (b *Section) extendFilterHelpCommand() tea.Cmd {
 func (b *Section) showSpinnerCmd() tea.Cmd {
 	return func() tea.Msg {
 		return message.ShowSpinnerMsg{
-			ID:   b.name,
+			ID:   string(b.name),
 			Text: b.LoadingText,
+			Scope: message.SpinnerScope{
+				Section: string(b.name),
+			},
 		}
 	}
 }
 
 func (b *Section) cancelSpinnerCmd() tea.Cmd {
 	return func() tea.Msg {
-		return message.CancelSpinnerMsg{ID: b.name}
+		return message.CancelSpinnerMsg{ID: string(b.name)}
 	}
 }
 

@@ -32,6 +32,7 @@ type filesPanel struct {
 	service       fileService
 	loading       bool
 	width, height int
+	section       string
 	root          *client.FileNode
 	visible       []*client.FileNode
 	cursor        int
@@ -42,8 +43,8 @@ type fileService interface {
 	FileTree(ctx context.Context, ID string) (*client.FileNode, error)
 }
 
-func NewFilesPanel(ctx context.Context, svc fileService) Panel {
-	return &filesPanel{ctx: ctx, service: svc, width: 0, height: 0}
+func NewFilesPanel(ctx context.Context, section string, svc fileService) Panel {
+	return &filesPanel{ctx: ctx, service: svc, section: section, width: 0, height: 0}
 }
 
 func (f *filesPanel) Name() string {
@@ -238,6 +239,10 @@ func (f *filesPanel) showSpinnerCmd(requestID int) tea.Cmd {
 		return message.ShowSpinnerMsg{
 			ID:   f.spinnerID(requestID),
 			Text: "Loading files...",
+			Scope: message.SpinnerScope{
+				Section: f.section,
+				Panel:   f.Name(),
+			},
 		}
 	}
 }
@@ -249,7 +254,7 @@ func (f *filesPanel) cancelSpinnerCmd(requestID int) tea.Cmd {
 }
 
 func (f *filesPanel) spinnerID(requestID int) string {
-	return fmt.Sprintf("containers.files.%d", requestID)
+	return fmt.Sprintf("%s.files.%d", f.section, requestID)
 }
 
 func (f *filesPanel) extendHelpCmd() tea.Cmd {

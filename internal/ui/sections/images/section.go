@@ -20,6 +20,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -89,7 +90,7 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 		imageService:     client.Images(),
 		containerService: client.Containers(),
 		Section: base.New(
-			"images",
+			sections.ImagesSection,
 			items,
 			[]panel.Panel{NewLayersPanel(ctx, client.Images())},
 		),

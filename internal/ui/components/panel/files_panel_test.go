@@ -13,7 +13,7 @@ import (
 )
 
 func newTestFileTreePanel() *filesPanel {
-	return NewFilesPanel(context.Background(), client.NewMockClient().Containers()).(*filesPanel)
+	return NewFilesPanel(context.Background(), "containers", client.NewMockClient().Containers()).(*filesPanel)
 }
 
 func TestFileTreePanelInitFetchesTree(t *testing.T) {

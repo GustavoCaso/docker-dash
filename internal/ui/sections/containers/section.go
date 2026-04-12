@@ -14,6 +14,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -74,11 +75,11 @@ func New(ctx context.Context, containers []client.Container, svc client.Containe
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
-		Section: base.New("containers", items, []panel.Panel{
+		Section: base.New(sections.ContainersSection, items, []panel.Panel{
 			NewDetailsPanel(ctx, svc),
 			NewLogsPanel(ctx, svc),
 			NewStatsPanel(ctx, svc),
-			panel.NewFilesPanel(ctx, svc),
+			panel.NewFilesPanel(ctx, string(sections.ContainersSection), svc),
 			NewExecPanel(ctx, svc),
 		}),
 	}

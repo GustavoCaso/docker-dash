@@ -81,7 +81,8 @@ type model struct {
 	bannerMsg        string
 	bannerKind       bannerType
 	spinner          spinner.Model
-	spinnerRequests  map[string]string
+	spinnerRequests  map[string]spinnerRequest
+	spinnerSequence  uint64
 	initErr          string
 	confirmation     confirmation.Model
 	pendingCmd       tea.Cmd
@@ -89,6 +90,12 @@ type model struct {
 	showForm         bool
 	formModel        *form.Model
 	refreshInterval  time.Duration
+}
+
+type spinnerRequest struct {
+	Text  string
+	Scope message.SpinnerScope
+	Seq   uint64
 }
 
 func InitialModel(ctx context.Context, version string, cfg *config.Config, client client.Client) tea.Model {
@@ -137,7 +144,7 @@ func InitialModel(ctx context.Context, version string, cfg *config.Config, clien
 		composeSection:   compose.New(ctx, composeList, client.Compose()),
 		statusBar:        statusbar.New(),
 		spinner:          sp,
-		spinnerRequests:  make(map[string]string),
+		spinnerRequests:  make(map[string]spinnerRequest),
 		initErr:          initErr,
 		confirmation:     confirmation.New(),
 		refreshInterval:  refreshInterval,
@@ -473,7 +480,12 @@ func (m *model) showSpinner(msg message.ShowSpinnerMsg) tea.Cmd {
 	if text == "" {
 		text = "Loading..."
 	}
-	m.spinnerRequests[msg.ID] = text
+	m.spinnerSequence++
+	m.spinnerRequests[msg.ID] = spinnerRequest{
+		Text:  text,
+		Scope: msg.Scope,
+		Seq:   m.spinnerSequence,
+	}
 	if before == 0 {
 		return m.spinner.Tick
 	}
@@ -485,21 +497,55 @@ func (m *model) cancelSpinner(id string) {
 }
 
 func (m *model) activeSpinnerText() string {
-	return m.spinnerRequests[m.activeSpinnerID()]
+	scope := m.activeSpinnerScope()
+	if text, ok := m.spinnerTextForScope(scope); ok {
+		return text
+	}
+	scope.Panel = ""
+	if text, ok := m.spinnerTextForScope(scope); ok {
+		return text
+	}
+	return ""
 }
 
-func (m *model) activeSpinnerID() string {
+func (m *model) activeSpinnerScope() message.SpinnerScope {
+	return message.SpinnerScope{
+		Section: m.activeSectionName(),
+		Panel:   m.activeSection().ActivePanelName(),
+	}
+}
+
+func (m *model) spinnerTextForScope(scope message.SpinnerScope) (string, bool) {
+	var (
+		text    string
+		bestSeq uint64
+		found   bool
+	)
+	for _, request := range m.spinnerRequests {
+		if request.Scope != scope {
+			continue
+		}
+		if !found || request.Seq > bestSeq {
+			text = request.Text
+			bestSeq = request.Seq
+			found = true
+		}
+	}
+	return text, found
+}
+
+func (m *model) activeSectionName() string {
 	switch m.header.ActiveView() {
 	case header.ViewContainers:
-		return "containers"
+		return string(sections.ContainersSection)
 	case header.ViewImages:
-		return "images"
+		return string(sections.ImagesSection)
 	case header.ViewVolumes:
-		return "volumes"
+		return string(sections.VolumesSection)
 	case header.ViewNetworks:
-		return "networks"
+		return string(sections.NetworksSection)
 	case header.ViewCompose:
-		return "compose"
+		return string(sections.ComposeSection)
 	default:
 		return ""
 	}

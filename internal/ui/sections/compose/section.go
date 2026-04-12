@@ -14,6 +14,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -72,7 +73,7 @@ func New(ctx context.Context, projects []client.ComposeProject, svc client.Compo
 	s := &Section{
 		ctx:            ctx,
 		composeService: svc,
-		Section:        base.New("compose", items, []panel.Panel{newDetailsPanel()}),
+		Section:        base.New(sections.ComposeSection, items, []panel.Panel{newDetailsPanel()}),
 	}
 
 	s.LoadingText = "Loading..."

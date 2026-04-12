@@ -24,11 +24,18 @@ func NewShowBannerMsg(message string, isError bool, clearTimeOut time.Duration) 
 	}
 }
 
+// SpinnerScope describes where a spinner belongs in the UI.
+type SpinnerScope struct {
+	Section string
+	Panel   string
+}
+
 // ShowSpinnerMsg asks the app to start showing the global spinner for the
-// given section or operation ID.
+// given request ID and UI scope.
 type ShowSpinnerMsg struct {
-	ID   string
-	Text string
+	ID    string
+	Text  string
+	Scope SpinnerScope
 }
 
 // CancelSpinnerMsg asks the app to stop showing the global spinner for the

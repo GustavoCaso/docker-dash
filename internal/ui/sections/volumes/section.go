@@ -15,6 +15,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections/base"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -75,7 +76,7 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 	s := &Section{
 		ctx:           ctx,
 		volumeService: svc,
-		Section:       base.New("volumes", items, []panel.Panel{}),
+		Section:       base.New(sections.VolumesSection, items, []panel.Panel{}),
 	}
 
 	s.LoadingText = "Loading..."
