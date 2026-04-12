@@ -16,13 +16,25 @@ builds:
     goos:
       - linux
       - windows
-      - darwin
     goarch:
       - amd64
       - arm64
     ignore:
       - goos: windows
         goarch: arm64
+  - id: docker-dash-darwin
+    main: ./cmd/docker-dash
+    binary: docker-dash
+    env:
+      - CGO_ENABLED=1
+    ldflags:
+      - "-s -w"
+      - -X main.Version={{.Tag}}
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
 
 archives:
   - formats:
