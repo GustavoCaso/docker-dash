@@ -87,65 +87,83 @@ func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService)
 	return s
 }
 
-func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
+func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	switch msg := msg.(type) {
 	case volumesLoadedMsg:
 		log.Printf("[volumes] volumesLoadedMsg: count=%d", len(msg.items))
-		s.Loading = false
 		if msg.error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error loading volumes: %s", msg.error.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error loading volumes: %s", msg.error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
-		return s.List.SetItems(msg.items), true
+		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
 	case volumesPrunedMsg:
 		log.Printf("[volumes] volumesPrunedMsg: deleted=%d spaceReclaimed=%d",
 			msg.report.ItemsDeleted, msg.report.SpaceReclaimed)
 		if msg.err != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: "Error pruning volumes: " + msg.err.Error(),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: "Error pruning volumes: " + msg.err.Error(),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		summary := fmt.Sprintf(
 			"Pruned %d volumes, reclaimed %s",
 			msg.report.ItemsDeleted,
 			helper.FormatSize(msg.report.SpaceReclaimed),
 		)
-		return tea.Batch(s.updateVolumesCmd(), func() tea.Msg {
-			return message.ShowBannerMsg{Message: summary, IsError: false}
-		}), true
+		return base.UpdateResult{
+			Cmd: tea.Batch(s.updateVolumesCmd(), func() tea.Msg {
+				return message.ShowBannerMsg{Message: summary, IsError: false}
+			}),
+			Handled: true,
+		}
 	case volumeRemovedMsg:
 		log.Printf("[volumes] volumeRemovedMsg: name=%q err=%v", msg.Name, msg.Error)
 		if msg.Error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error deleting volume: %s", msg.Error.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error deleting volume: %s", msg.Error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 		s.RemoveItem(msg.Idx)
-		return func() tea.Msg {
-			return message.ShowBannerMsg{
-				Message: fmt.Sprintf("Volume %s deleted", msg.Name),
-				IsError: false,
-			}
-		}, true
+		return base.UpdateResult{
+			Cmd: func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Volume %s deleted", msg.Name),
+					IsError: false,
+				}
+			},
+			Handled:     true,
+			StopSpinner: true,
+		}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
-func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 	if key.Matches(msg, keys.Keys.Delete) {
-		return s.confirmVolumeDelete(), true
+		return base.UpdateResult{Cmd: s.confirmVolumeDelete(), Handled: true}
 	}
-	return nil, false
+	return base.UpdateResult{}
 }
 
 func (s *Section) updateVolumesCmd() tea.Cmd {
@@ -199,7 +217,7 @@ func (s *Section) confirmVolumePrune() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Prune Volumes",
 			Body:      "Remove all unused volumes (including named)?",
-			OnConfirm: pruneCmd,
+			OnConfirm: s.WithSpinner(pruneCmd),
 		}
 	}
 }
@@ -219,7 +237,7 @@ func (s *Section) confirmVolumeDelete() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Delete Volume",
 			Body:      fmt.Sprintf("Delete volume %s?", vi.volume.Name),
-			OnConfirm: deleteCmd,
+			OnConfirm: s.WithSpinner(deleteCmd),
 		}
 	}
 }

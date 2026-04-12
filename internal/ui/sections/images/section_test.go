@@ -255,16 +255,23 @@ func TestPullImageMsgError_ShowsErrorBanner(t *testing.T) {
 		t.Fatal("imagePullMsg error should return a non-nil cmd")
 	}
 
-	msg := cmd()
-	banner, ok := msg.(message.ShowBannerMsg)
-	if !ok {
-		t.Fatalf("expected ShowBannerMsg, got %T", msg)
+	found := false
+	msgs := runBatch(cmd)
+	for _, m := range msgs {
+		banner, ok := m.(message.ShowBannerMsg)
+		if !ok {
+			continue
+		}
+		if !banner.IsError {
+			t.Error("error banner should have IsError=true")
+		}
+		if !strings.Contains(banner.Message, "image not found") {
+			t.Errorf("error banner should contain error text, got %q", banner.Message)
+		}
+		found = true
 	}
-	if !banner.IsError {
-		t.Error("error banner should have IsError=true")
-	}
-	if !strings.Contains(banner.Message, "image not found") {
-		t.Errorf("error banner should contain error text, got %q", banner.Message)
+	if !found {
+		t.Fatal("expected ShowBannerMsg in batch result")
 	}
 }
 

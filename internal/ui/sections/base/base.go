@@ -1,6 +1,6 @@
 // Package base provides a reusable Section struct that consolidates the
-// bubbles/list setup, spinner management, and filter-mode handling that is
-// otherwise duplicated across every section package.
+// bubbles/list setup and filter-mode handling that is otherwise duplicated
+// across every section package.
 package base
 
 import (
@@ -9,19 +9,17 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
-	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
 // Section holds the state that is common to every section: the bubbles list,
-// a loading spinner, filter-mode tracking, and the current terminal size.
+// filter-mode tracking, and the current terminal size.
 // Embed this struct in each concrete section type and delegate the shared
 // behaviour to its methods.
 //
@@ -38,8 +36,6 @@ type Section struct {
 	name string
 
 	List     list.Model
-	spinner  spinner.Model
-	Loading  bool
 	isFilter bool
 	width    int
 	height   int
@@ -57,13 +53,21 @@ type Section struct {
 	RefreshCmd  func() tea.Cmd
 	PruneCmd    func() tea.Cmd
 	// HandleMsg handles section-specific messages inside Update.
-	// Returns (cmd, true) when the message was consumed, (nil, false) otherwise.
-	HandleMsg func(msg tea.Msg) (tea.Cmd, bool)
+	// Return Handled=true when the message was consumed.
+	HandleMsg func(msg tea.Msg) UpdateResult
 	// HandleKey handles section-specific key bindings inside Update.
 	// It is called before the shared filter/refresh/prune/navigation keys, so it
 	// can intercept any key (e.g. exec-panel routing in the containers section).
-	// Returns (cmd, true) when the key was consumed, (nil, false) otherwise.
-	HandleKey func(msg tea.KeyMsg) (tea.Cmd, bool)
+	// Return Handled=true when the key was consumed.
+	HandleKey func(msg tea.KeyMsg) UpdateResult
+}
+
+// UpdateResult describes the outcome of a section-specific handler.
+type UpdateResult struct {
+	Cmd          tea.Cmd
+	Handled      bool
+	StartSpinner bool
+	StopSpinner  bool
 }
 
 func New(
@@ -76,14 +80,9 @@ func New(
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(true)
 
-	sp := spinner.New()
-	sp.Spinner = spinner.Dot
-	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-
 	return &Section{
 		name:           name,
 		List:           l,
-		spinner:        sp,
 		panels:         pannels,
 		activePanelIdx: 0,
 	}
@@ -110,10 +109,10 @@ func (b *Section) SetSize(width, height int) {
 // View renders the section.
 func (b *Section) View() string {
 	if len(b.panels) > 0 {
-		return b.renderWithPanels(b.LoadingText)
+		return b.renderWithPanels()
 	}
 	b.setListSize(b.width, b.height)
-	return lipgloss.JoinHorizontal(lipgloss.Top, b.renderList(b.LoadingText))
+	return lipgloss.JoinHorizontal(lipgloss.Top, b.renderList())
 }
 
 // Reset resets internal state to the initial condition.
@@ -128,19 +127,15 @@ func (b *Section) Reset() tea.Cmd {
 	return nil
 }
 
-// Update handles messages.  It drives the shared scaffolding (spinner, panel
-// navigation, filter mode, refresh, prune, list navigation) and delegates
-// domain-specific work to the HandleMsg and HandleKey callbacks.
+// Update handles messages. It drives the shared scaffolding (panel navigation,
+// filter mode, refresh, prune, list navigation) and delegates domain-specific
+// work to the HandleMsg and HandleKey callbacks.
 func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
 
-	if spinnerCmd := b.updateSpinner(msg); spinnerCmd != nil {
-		cmds = append(cmds, spinnerCmd)
-	}
-
 	if b.HandleMsg != nil {
-		if cmd, handled := b.HandleMsg(msg); handled {
-			cmds = append(cmds, cmd)
+		if result := b.HandleMsg(msg); result.Handled {
+			cmds = append(cmds, b.applyUpdateResult(result))
 			return tea.Batch(cmds...)
 		}
 	}
@@ -161,8 +156,8 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 
 		if b.HandleKey != nil {
-			if cmd, handled := b.HandleKey(keyMsg); handled {
-				cmds = append(cmds, cmd)
+			if result := b.HandleKey(keyMsg); result.Handled {
+				cmds = append(cmds, b.applyUpdateResult(result))
 				return tea.Batch(cmds...)
 			}
 		}
@@ -170,8 +165,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 		switch {
 		case key.Matches(keyMsg, keys.Keys.Refresh):
 			if b.RefreshCmd != nil {
-				b.Loading = true
-				return tea.Batch(b.spinner.Tick, b.RefreshCmd())
+				return b.WithSpinner(b.RefreshCmd())
 			}
 		case key.Matches(keyMsg, keys.Keys.Prune):
 			if b.PruneCmd != nil {
@@ -226,17 +220,6 @@ func (b *Section) RemoveItem(idx int) {
 	}
 }
 
-// updateSpinner advances the spinner animation when the section is loading.
-// It should be called at the top of each section's Update method.
-func (b *Section) updateSpinner(msg tea.Msg) tea.Cmd {
-	if !b.Loading {
-		return nil
-	}
-	var cmd tea.Cmd
-	b.spinner, cmd = b.spinner.Update(msg)
-	return cmd
-}
-
 // handleFilterKey processes keyboard events while filter mode is active.
 // It forwards every key to the list and, when Esc is pressed, deactivates
 // filter mode and clears the contextual key bindings.
@@ -282,6 +265,43 @@ func (b *Section) extendFilterHelpCommand() tea.Cmd {
 	}
 }
 
+func (b *Section) showSpinnerCmd() tea.Cmd {
+	return func() tea.Msg {
+		return message.ShowSpinnerMsg{
+			ID:   b.name,
+			Text: b.LoadingText,
+		}
+	}
+}
+
+func (b *Section) cancelSpinnerCmd() tea.Cmd {
+	return func() tea.Msg {
+		return message.CancelSpinnerMsg{ID: b.name}
+	}
+}
+
+// WithSpinner starts the section spinner before running cmd.
+func (b *Section) WithSpinner(cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	return tea.Batch(b.showSpinnerCmd(), cmd)
+}
+
+const maxUpdateCommands = 3
+
+func (b *Section) applyUpdateResult(result UpdateResult) tea.Cmd {
+	cmds := make([]tea.Cmd, 0, maxUpdateCommands)
+	if result.StartSpinner {
+		cmds = append(cmds, b.showSpinnerCmd())
+	}
+	cmds = append(cmds, result.Cmd)
+	if result.StopSpinner {
+		cmds = append(cmds, b.cancelSpinnerCmd())
+	}
+	return tea.Batch(cmds...)
+}
+
 // setListSize stores the terminal dimensions and resizes the list, accounting
 // for the list style's frame (padding + borders).
 func (b *Section) setListSize(width, height int) {
@@ -291,18 +311,11 @@ func (b *Section) setListSize(width, height int) {
 	b.List.SetSize(width-listX, height-listY)
 }
 
-// renderList renders the list content and, when loading, overlays the spinner
-// in the bottom-right corner.  LoadingText is the label shown next to the
-// spinner (e.g. "loading..." or "Refreshing...").
-func (b *Section) renderList(loadingText string) string {
-	content := b.List.View()
-	if b.Loading {
-		spinnerText := b.spinner.View() + " " + loadingText
-		content = helper.OverlayBottomRight(1, content, spinnerText, b.List.Width())
-	}
+// renderList renders the list content.
+func (b *Section) renderList() string {
 	return theme.ListStyle.
 		Width(b.List.Width()).
-		Render(content)
+		Render(b.List.View())
 }
 
 // DetailsMenu renders the tab bar that appears above the active detail panel.
@@ -386,13 +399,12 @@ func (b *Section) updateActivePanel() tea.Cmd {
 	return b.ActivePanel().Init(id)
 }
 
-// renderWithPanels renders the full split-pane view: list on the left,
-// tab menu + active panel on the right.  LoadingText is shown in the spinner
-// overlay while loading.
-func (b *Section) renderWithPanels(loadingText string) string {
+// renderWithPanels renders the full split-pane view: list on the left and the
+// tab menu plus active panel on the right.
+func (b *Section) renderWithPanels() string {
 	b.setSizeWithPanels(b.width, b.height)
 
-	listView := b.renderList(loadingText)
+	listView := b.renderList()
 
 	detailContent := b.ActivePanel().View()
 

@@ -90,57 +90,71 @@ func New(ctx context.Context, projects []client.ComposeProject, svc client.Compo
 	return s
 }
 
-func (s *Section) handleMsg(msg tea.Msg) (tea.Cmd, bool) {
+func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	switch msg := msg.(type) {
 	case composeLoadedMsg:
 		log.Printf("[compose] composeLoadedMsg: count=%d", len(msg.items))
-		s.Loading = false
 		if msg.error != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error loading compose projects: %s", msg.error.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error loading compose projects: %s", msg.error.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
-		return tea.Batch(s.List.SetItems(msg.items), s.Section.Init()), true
+		return base.UpdateResult{
+			Cmd:         tea.Batch(s.List.SetItems(msg.items), s.Section.Init()),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	case composeActionMsg:
 		if msg.err != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Error %s compose project: %s", msg.action, msg.err.Error()),
-					IsError: true,
-				}
-			}, true
+			return base.UpdateResult{
+				Cmd: func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Error %s compose project: %s", msg.action, msg.err.Error()),
+						IsError: true,
+					}
+				},
+				Handled:     true,
+				StopSpinner: true,
+			}
 		}
 
-		return tea.Batch(
-			s.updateComposeCmd(),
-			func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Compose project %s %s", msg.project.Name, msg.action),
-					IsError: false,
-				}
-			},
-		), true
+		return base.UpdateResult{
+			Cmd: tea.Batch(
+				s.updateComposeCmd(),
+				func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Compose project %s %s", msg.project.Name, msg.action),
+						IsError: false,
+					}
+				},
+			),
+			Handled: true,
+		}
 	}
 
-	return nil, false
+	return base.UpdateResult{}
 }
 
-func (s *Section) handleKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 	switch {
 	case key.Matches(msg, keys.Keys.ComposeUp):
-		return s.confirmProjectUp(), true
+		return base.UpdateResult{Cmd: s.confirmProjectUp(), Handled: true}
 	case key.Matches(msg, keys.Keys.ComposeDown):
-		return s.confirmProjectDown(), true
+		return base.UpdateResult{Cmd: s.confirmProjectDown(), Handled: true}
 	case key.Matches(msg, keys.Keys.ComposeStartStop):
-		return s.confirmProjectToggle(), true
+		return base.UpdateResult{Cmd: s.confirmProjectToggle(), Handled: true}
 	case key.Matches(msg, keys.Keys.ComposeRestart):
-		return s.confirmProjectRestart(), true
+		return base.UpdateResult{Cmd: s.confirmProjectRestart(), Handled: true}
 	}
 
-	return nil, false
+	return base.UpdateResult{}
 }
 
 func (s *Section) updateComposeCmd() tea.Cmd {
@@ -245,7 +259,7 @@ func (s *Section) confirmProjectUp() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Compose Up",
 			Body:      fmt.Sprintf("Run compose up for project %s?", project.Name),
-			OnConfirm: upCmd,
+			OnConfirm: s.WithSpinner(upCmd),
 		}
 	}
 }
@@ -261,7 +275,7 @@ func (s *Section) confirmProjectDown() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Compose Down",
 			Body:      fmt.Sprintf("Run compose down for project %s?", project.Name),
-			OnConfirm: downCmd,
+			OnConfirm: s.WithSpinner(downCmd),
 		}
 	}
 }
@@ -282,7 +296,7 @@ func (s *Section) confirmProjectToggle() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     fmt.Sprintf("%s Compose Project", action),
 			Body:      fmt.Sprintf("%s compose project %s?", action, project.Name),
-			OnConfirm: toggleCmd,
+			OnConfirm: s.WithSpinner(toggleCmd),
 		}
 	}
 }
@@ -298,7 +312,7 @@ func (s *Section) confirmProjectRestart() tea.Cmd {
 		return message.ShowConfirmationMsg{
 			Title:     "Restart Compose Project",
 			Body:      fmt.Sprintf("Restart compose project %s?", project.Name),
-			OnConfirm: restartCmd,
+			OnConfirm: s.WithSpinner(restartCmd),
 		}
 	}
 }

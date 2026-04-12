@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -42,7 +41,7 @@ func TestFileTreePanelInitFetchesTree(t *testing.T) {
 			containersTreeLoaded = true
 		case message.AddContextualKeyBindingsMsg:
 			extendCmd = true
-		case spinner.TickMsg:
+		case message.ShowSpinnerMsg:
 			tickMsg = true
 		}
 	}
@@ -56,7 +55,7 @@ func TestFileTreePanelInitFetchesTree(t *testing.T) {
 	}
 
 	if !tickMsg {
-		t.Fatal("Init() not returned pinner.TickMsg msg")
+		t.Fatal("Init() not returned ShowSpinnerMsg")
 	}
 }
 
@@ -96,13 +95,20 @@ func TestFileTreePanelUpdateWithError(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Update with error should return banner cmd")
 	}
-	result := cmd()
-	bannerMsg, ok := result.(message.ShowBannerMsg)
-	if !ok {
-		t.Fatalf("expected ShowBannerMsg, got %T", result)
+	msgs := runBatch(cmd)
+	foundBanner := false
+	for _, result := range msgs {
+		bannerMsg, ok := result.(message.ShowBannerMsg)
+		if !ok {
+			continue
+		}
+		if !bannerMsg.IsError {
+			t.Error("ShowBannerMsg.IsError should be true")
+		}
+		foundBanner = true
 	}
-	if !bannerMsg.IsError {
-		t.Error("ShowBannerMsg.IsError should be true")
+	if !foundBanner {
+		t.Fatal("expected ShowBannerMsg in batch result")
 	}
 }
 
@@ -147,9 +153,47 @@ func TestFileTreePanelViewReturnsLoadingState(t *testing.T) {
 	p.SetSize(80, 40)
 	p.loading = true
 
-	if !strings.Contains(p.View(), "Loading") {
-		t.Errorf("View() = %q, want to contain 'Loading'", p.View())
+	if p.View() != "" {
+		t.Errorf("View() = %q, want empty view while app spinner is active", p.View())
 	}
+}
+
+func TestFileTreePanelCloseCancelsSpinner(t *testing.T) {
+	p := newTestFileTreePanel()
+	p.loading = true
+	p.requestID = 2
+
+	cmd := p.Close()
+	msgs := runBatch(cmd)
+	foundCancel := false
+	for _, result := range msgs {
+		cancelMsg, ok := result.(message.CancelSpinnerMsg)
+		if !ok {
+			continue
+		}
+		if cancelMsg.ID != "containers.files.2" {
+			t.Fatalf("CancelSpinnerMsg.ID = %q, want %q", cancelMsg.ID, "containers.files.2")
+		}
+		foundCancel = true
+	}
+	if !foundCancel {
+		t.Fatal("expected CancelSpinnerMsg in batch result")
+	}
+}
+
+func runBatch(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var msgs []tea.Msg
+		for _, c := range batch {
+			msgs = append(msgs, runBatch(c)...)
+		}
+		return msgs
+	}
+	return []tea.Msg{msg}
 }
 
 func TestFileTreePanelSetSizeStoresWidth(t *testing.T) {

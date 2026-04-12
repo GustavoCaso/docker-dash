@@ -24,6 +24,19 @@ func NewShowBannerMsg(message string, isError bool, clearTimeOut time.Duration) 
 	}
 }
 
+// ShowSpinnerMsg asks the app to start showing the global spinner for the
+// given section or operation ID.
+type ShowSpinnerMsg struct {
+	ID   string
+	Text string
+}
+
+// CancelSpinnerMsg asks the app to stop showing the global spinner for the
+// given section or operation ID.
+type CancelSpinnerMsg struct {
+	ID string
+}
+
 // BubbleUpMsg is sent by components to communicate to other components
 // An example is the image components create a new container and want sthe container component to
 // refresh

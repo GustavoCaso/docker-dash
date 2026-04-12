@@ -128,11 +128,11 @@ func TestComposeLoadedMsgRefreshesActivePanel(t *testing.T) {
 	}
 
 	items := []list.Item{composeItem{project: updated}}
-	cmd, handled := model.section.handleMsg(composeLoadedMsg{items: items})
-	if !handled {
+	result := model.section.handleMsg(composeLoadedMsg{items: items})
+	if !result.Handled {
 		t.Fatal("expected composeLoadedMsg to be handled")
 	}
-	_ = cmd
+	_ = result.Cmd
 
 	details := model.section.ActivePanel().View()
 	if !strings.Contains(details, updated.WorkingDir) {
