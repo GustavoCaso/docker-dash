@@ -1,49 +1,101 @@
 # docker-dash
 
-A terminal UI for managing Docker containers, images, volumes, and networks — without leaving your terminal.
+[![Go version](https://img.shields.io/badge/go-1.26+-00ADD8?logo=go)](https://go.dev/)
+[![Tests](https://github.com/GustavoCaso/docker-dash/actions/workflows/go-tests.yml/badge.svg)](https://github.com/GustavoCaso/docker-dash/actions/workflows/go-tests.yml)
+[![Lint](https://github.com/GustavoCaso/docker-dash/actions/workflows/go-lint.yml/badge.svg)](https://github.com/GustavoCaso/docker-dash/actions/workflows/go-lint.yml)
+[![License](https://img.shields.io/github/license/GustavoCaso/docker-dash)](./LICENSE)
 
-<img src="./assets/overview.gif" />
+A keyboard-first Docker dashboard for the terminal.
 
-## Why
+Manage containers, images, volumes, networks, and compose projects without leaving your shell.
 
-Switching between the terminal and a Docker GUI breaks flow. `docker-dash` gives you a keyboard-driven interface to inspect and manage your Docker environment, keeping you in the terminal where you already work.
+![docker-dash overview](./assets/overview.gif)
 
-## Features
+## Why docker-dash?
 
-- Browse and manage containers, images, volumes, and networks
-- View container logs and details interactively
-- Start, stop, restart, and remove containers
-- Exec into running containers
-- Filter and inspect image layers
+Switching between Docker commands and a GUI breaks focus. `docker-dash` keeps the feedback loop tight with a fast terminal interface for inspecting, filtering, and managing your Docker environment.
 
-## Install
+- Stay in the terminal instead of bouncing between tools
+- Troubleshoot faster with logs, details, and exec access close at hand
+- Work with local or remote Docker hosts, including SSH-based setups
+- Manage compose projects alongside containers, images, volumes, and networks
+- Develop without a Docker daemon thanks to the built-in mock client fallback
+
+## What you can do
+
+- Browse and manage containers, images, volumes, networks, and compose projects
+- Inspect container logs, stats, details, and files interactively
+- Start, stop, restart, and remove containers and compose projects
+- Exec into running containers without leaving the TUI
+- Filter resources quickly and inspect image layers
+- Clean up unused resources with prune actions
+
+## Quick start
+
+### Install
 
 Homebrew:
+
 ```bash
 brew tap GustavoCaso/tap
 brew install docker-dash
 ```
 
 Go:
+
 ```bash
 go install github.com/GustavoCaso/docker-dash/cmd/docker-dash@latest
 ```
 
-Or build from source:
+Build from source:
 
 ```bash
 make build
 ```
 
-## Usage
+### Run
 
 ```bash
 docker-dash
 ```
 
-### Configuration File
+### A few things to try
 
-By default, docker-dash looks for a config file at `~/.config/docker-dash/config.toml`.
+1. Move between sections with `← / →`
+2. Filter the current list with `/`
+3. Refresh with `r` and open help with `?`
+4. Manage resources with contextual actions such as `s`, `D`, `P`, `+`, and `c`
+
+## Great fit for
+
+- Developers who live in the terminal
+- Docker users who want a faster feedback loop than memorizing many commands
+- Remote and homelab workflows where SSH Docker hosts are common
+- Anyone who wants quick visibility into running services, logs, and container state
+
+## Common workflows
+
+### Troubleshoot a container
+
+Use the containers view to inspect logs and details, restart with `ctrl+R`, or start and stop with `s`.
+
+### Clean up Docker resources
+
+Prune unused containers, images, networks, and volumes directly from the relevant section with `P`.
+
+### Connect to a remote Docker host
+
+Pass a Docker host on the command line:
+
+```bash
+docker-dash --docker.host ssh://user@example-host
+```
+
+Or set it in your config file for everyday use.
+
+## Configuration
+
+By default, `docker-dash` looks for a config file at `~/.config/docker-dash/config.toml`.
 
 ```toml
 [docker]
@@ -60,7 +112,7 @@ interval = "10s"
 enable = false
 ```
 
-### CLI Flags
+### CLI flags
 
 | Flag | Description |
 |---|---|
@@ -69,63 +121,88 @@ enable = false
 | `--refresh.interval` | Auto-refresh interval (overrides config file) |
 | `--debug` | Enable debug logging (overrides config file) |
 
-CLI flags take precedence over values in the config file.
+CLI flags take precedence over config values.
 
 ### Debug mode
-When `debug` is enabled we create a debug log file in the temporary folder of the system. 
 
-### Keybindings
+When debug mode is enabled, `docker-dash` writes a debug log file to the system temporary directory.
 
-**Navigation**
+## Keybindings
 
-| Key        | Action             |
-|------------|--------------------|
-| `← / →`    | Switch section     |
-| `↑ / ↓`    | Move up/down       |
-|`shift+← / shift+→`    | Switch panels     |
-| `j / k`    | Scroll down/up     |
-| `/`        | Filter             |
-| `?`        | Toggle help        |
-| `q`        | Quit               |
+Press `?` in the app to see the full keymap. The most commonly used bindings are:
 
-**Containers**
+| Key | Action |
+|---|---|
+| `← / →` | Switch section |
+| `↑ / ↓` | Move selection |
+| `shift+← / shift+→` | Switch panels |
+| `j / k` | Scroll down/up |
+| `/` | Filter |
+| `r / ctrl+r` | Refresh current view / refresh all |
+| `?` | Toggle help |
+| `q` | Quit |
 
-| Key        | Action                         |
-|------------|--------------------------------|
-| `D`        | Delete container               |
-| `P`        | Prune unused container         |
-| `s`        | Start/stop                     |
-| `ctrl+R`   | Restart                        |
+Contextual actions depend on the active section. For example:
 
-**Images**
+- `s` starts or stops containers and compose projects
+- `D` deletes containers and networks, or brings compose projects down
+- `P` prunes unused resources
+- `+` pulls an image
+- `c` creates and runs a container from an image
+- `u` brings a compose project up
 
-| Key        | Action                  |
-|------------|-------------------------|
-| `d`        | Delete image            |
-| `P`        | Prune all unused images |
-| `c`        | Create and run container|
-| `+`        | Pull image              |
+<details>
+<summary>Full keybindings by section</summary>
 
-**Volumes**
+### Images
 
-| Key        | Action       |
-|------------|--------------|
-| `d`        | Delete volume|
-| `P`        | Prune all unused volumes          |
+| Key | Action |
+|---|---|
+| `d` | Delete image |
+| `P` | Prune all unused images |
+| `c` | Create and run container |
+| `+` | Pull image |
 
-**Networks**
+### Containers
 
-| Key        | Action         |
-|------------|----------------|
-| `P`        | Prune unused networks          |
-| `D`        | Delete network |
+| Key | Action |
+|---|---|
+| `D` | Delete container |
+| `P` | Prune unused container |
+| `s` | Start/stop |
+| `ctrl+R` | Restart |
 
-**Global**
+### Volumes
 
-| Key        | Action       |
-|------------|--------------|
-| `r`        | Refresh      |
-| `ctrl+r`   | Refresh all  |
+| Key | Action |
+|---|---|
+| `d` | Delete volume |
+| `P` | Prune all unused volumes |
+
+### Networks
+
+| Key | Action |
+|---|---|
+| `P` | Prune unused networks |
+| `D` | Delete network |
+
+### Compose
+
+| Key | Action |
+|---|---|
+| `u` | Compose up |
+| `D` | Compose down |
+| `s` | Start/stop project |
+| `ctrl+R` | Restart project |
+
+### Global
+
+| Key | Action |
+|---|---|
+| `r` | Refresh |
+| `ctrl+r` | Refresh all |
+
+</details>
 
 ## Development
 
@@ -139,5 +216,5 @@ Tests use a mock Docker client, so no Docker daemon is required.
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.26+
 - Docker (optional — falls back to mock data without it)
