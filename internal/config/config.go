@@ -12,9 +12,10 @@ import (
 
 // Config holds all docker-dash configuration.
 type Config struct {
-	Docker  DockerConfig  `toml:"docker"`
-	Refresh RefreshConfig `toml:"refresh"`
-	Debug   DebugConfig   `toml:"debug"`
+	Docker      DockerConfig      `toml:"docker"`
+	Refresh     RefreshConfig     `toml:"refresh"`
+	Debug       DebugConfig       `toml:"debug"`
+	UpdateCheck UpdateCheckConfig `toml:"update_check"`
 }
 
 // DockerConfig holds Docker client connection settings.
@@ -33,6 +34,14 @@ type RefreshConfig struct {
 type DebugConfig struct {
 	// Enabled writes debug logs to ./docker-dash-debug.log when true.
 	Enabled bool `toml:"enabled"`
+}
+
+// UpdateCheckConfig holds settings for the automatic update checker.
+type UpdateCheckConfig struct {
+	// Enabled controls whether docker-dash periodically checks for newer versions of local Docker images in the registry.
+	Enabled bool `toml:"enabled"`
+	// Interval is the minimum time between update checks (e.g. "1h", "30m").
+	Interval string `toml:"interval"`
 }
 
 // DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml.

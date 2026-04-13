@@ -84,6 +84,7 @@ type ImageService interface {
 	FetchLayers(ctx context.Context, id string) []Layer
 	Remove(ctx context.Context, id string, force bool) error
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)
+	CheckUpdate(ctx context.Context, image Image) (bool, error)
 }
 
 // VolumeService manages Docker volumes.

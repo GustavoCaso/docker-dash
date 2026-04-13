@@ -63,6 +63,9 @@ const (
 	IconWarning = "\uf071" // Warning triangle
 	IconInfo    = "\uf05a" // Info circle
 	IconSuccess = "\uf00c" // Checkmark
+
+	// Update available icon.
+	UpdateAvailableIcon = "⬆"
 )
 
 // Layout constants.
@@ -178,6 +181,9 @@ var (
 var (
 	HelpStyle = lipgloss.NewStyle().Padding(0, 1)
 )
+
+// UpdateAvailableStyle is the style used to render the update-available icon.
+var UpdateAvailableStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700"))
 
 // GetContainerStatusIcon returns the appropriate icon for a given container/resource state.
 func GetContainerStatusIcon(state string) string {

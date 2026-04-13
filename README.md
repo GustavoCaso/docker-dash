@@ -29,6 +29,7 @@ Switching between Docker commands and a GUI breaks focus. `docker-dash` keeps th
 - Exec into running containers without leaving the TUI
 - Filter resources quickly and inspect image layers
 - Clean up unused resources with prune actions
+- Check for image updates from the registry on a configurable interval and pull updates in one keystroke
 
 ## Quick start
 
@@ -110,6 +111,14 @@ interval = "10s"
 
 [debug]
 enable = false
+
+[update_check]
+# Check Docker Hub for newer image versions on a configurable interval.
+# When an update is available, a ⬆ icon appears next to the image in the list.
+# Press "u" in the Images section to pull the update directly.
+enabled = false
+# Polling interval. Examples: "30m", "1h", "6h"
+interval = "1h"
 ```
 
 ### CLI flags
@@ -149,7 +158,7 @@ Contextual actions depend on the active section. For example:
 - `P` prunes unused resources
 - `+` pulls an image
 - `c` creates and runs a container from an image
-- `u` brings a compose project up
+- `u` pulls an image update (Images section) or brings a compose project up (Compose section)
 
 <details>
 <summary>Full keybindings by section</summary>
@@ -162,6 +171,7 @@ Contextual actions depend on the active section. For example:
 | `P` | Prune all unused images |
 | `c` | Create and run container |
 | `+` | Pull image |
+| `u` | Pull image update (requires `update_check.enabled = true`; ⬆ icon indicates update available) |
 
 ### Containers
 

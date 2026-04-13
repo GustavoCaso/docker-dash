@@ -138,7 +138,7 @@ func InitialModel(ctx context.Context, version string, cfg *config.Config, clien
 		composeKeys:      keys.Keys.ComposeKeyMap(),
 		header:           header.New(version),
 		containerSection: containers.New(ctx, containersList, client.Containers()),
-		imageSection:     images.New(ctx, imagesList, client),
+		imageSection:     images.New(ctx, imagesList, client, cfg.UpdateCheck),
 		volumeSection:    volumes.New(ctx, volumesList, client.Volumes()),
 		networkSection:   networks.New(ctx, networksList, client.Networks()),
 		composeSection:   compose.New(ctx, composeList, client.Compose()),

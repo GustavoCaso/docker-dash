@@ -506,6 +506,14 @@ func (s *mockImageService) Pull(_ context.Context, imageRef, platform string) er
 	return nil
 }
 
+// CheckUpdate returns true (update available) for nginx:latest, false for all others.
+func (s *mockImageService) CheckUpdate(_ context.Context, img Image) (bool, error) {
+	if img.Repo == "nginx" && img.Tag == "latest" {
+		return true, nil
+	}
+	return false, nil
+}
+
 // mockVolumeService provides mock volume data.
 type mockVolumeService struct {
 	volumes []Volume

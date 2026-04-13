@@ -116,6 +116,34 @@ func TestLoad_InvalidTOML(t *testing.T) {
 	}
 }
 
+func TestUpdateCheckConfig(t *testing.T) {
+	content := `
+[update_check]
+enabled = true
+interval = "30m"
+`
+	tmpFile, err := os.CreateTemp(t.TempDir(), "config-*.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.WriteString(content); err != nil {
+		t.Fatal(err)
+	}
+	tmpFile.Close()
+
+	cfg, err := config.Load(tmpFile.Name())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.UpdateCheck.Enabled {
+		t.Errorf("expected UpdateCheck.Enabled=true, got false")
+	}
+	if cfg.UpdateCheck.Interval != "30m" {
+		t.Errorf("expected UpdateCheck.Interval=%q, got %q", "30m", cfg.UpdateCheck.Interval)
+	}
+}
+
 func TestDebugConfig(t *testing.T) {
 	content := `
 [debug]
