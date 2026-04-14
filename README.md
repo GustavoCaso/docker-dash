@@ -110,10 +110,10 @@ host = "ssh://pi5@pi5"
 interval = "10s"
 
 [debug]
-enable = false
+enabled = false
 
 [update_check]
-# Check Docker Hub for newer image versions on a configurable interval.
+# Check the remote registry for newer image versions on a configurable interval.
 # When an update is available, a ⬆ icon appears next to the image in the list.
 # Press "u" in the Images section to pull the update directly.
 enabled = false

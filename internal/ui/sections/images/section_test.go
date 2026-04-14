@@ -65,6 +65,72 @@ func TestImageListRendersItems(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestInitShowsBannerForInvalidUpdateCheckInterval(t *testing.T) {
+	t.Parallel()
+
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{
+		Enabled:  true,
+		Interval: "not-a-duration",
+	})
+	section.SetSize(120, 40)
+
+	msgs := runBatch(section.Init())
+
+	for _, msg := range msgs {
+		banner, ok := msg.(message.ShowBannerMsg)
+		if !ok {
+			continue
+		}
+
+		if !banner.IsError {
+			t.Fatal("expected invalid interval banner to be marked as an error")
+		}
+
+		if !strings.Contains(banner.Message, `Invalid update check interval "not-a-duration"`) {
+			t.Fatalf("unexpected banner message: %q", banner.Message)
+		}
+
+		return
+	}
+
+	t.Fatal("expected ShowBannerMsg for invalid update check interval")
+}
+
+func TestInitShowsBannerForNonPositiveUpdateCheckInterval(t *testing.T) {
+	t.Parallel()
+
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{
+		Enabled:  true,
+		Interval: "0s",
+	})
+	section.SetSize(120, 40)
+
+	msgs := runBatch(section.Init())
+
+	for _, msg := range msgs {
+		banner, ok := msg.(message.ShowBannerMsg)
+		if !ok {
+			continue
+		}
+
+		if !banner.IsError {
+			t.Fatal("expected non-positive interval banner to be marked as an error")
+		}
+
+		if !strings.Contains(banner.Message, `Non-positive update check interval "0s"`) {
+			t.Fatalf("unexpected banner message: %q", banner.Message)
+		}
+
+		return
+	}
+
+	t.Fatal("expected ShowBannerMsg for non-positive update check interval")
+}
+
 func TestImageListLayersVisible(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "No layer information available")

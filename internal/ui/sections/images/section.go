@@ -82,6 +82,7 @@ func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 type Section struct {
 	*base.Section
 	ctx              context.Context
+	cfg              config.UpdateCheckConfig
 	imageService     client.ImageService
 	containerService client.ContainerService
 	updateChecker    *updateChecker
@@ -98,6 +99,7 @@ func New(ctx context.Context, images []client.Image, client client.Client, cfg c
 
 	il := &Section{
 		ctx:              ctx,
+		cfg:              cfg,
 		imageService:     client.Images(),
 		containerService: client.Containers(),
 		currentImages:    images,
@@ -107,14 +109,6 @@ func New(ctx context.Context, images []client.Image, client client.Client, cfg c
 			items,
 			[]panel.Panel{NewLayersPanel(ctx, client.Images())},
 		),
-	}
-
-	if cfg.Enabled {
-		d, err := time.ParseDuration(cfg.Interval)
-		if err != nil {
-			d = time.Hour
-		}
-		il.updateChecker = &updateChecker{interval: d, svc: client.Images()}
 	}
 
 	il.LoadingText = "Refreshing..."
@@ -136,6 +130,30 @@ func New(ctx context.Context, images []client.Image, client client.Client, cfg c
 // Init overrides the base Init to also fire the update checker tick if enabled.
 func (s *Section) Init() tea.Cmd {
 	baseCmd := s.Section.Init()
+
+	if s.cfg.Enabled {
+		d, err := time.ParseDuration(s.cfg.Interval)
+		errorMessage := ""
+		if err != nil {
+			errorMessage = fmt.Sprintf(
+				"Invalid update check interval %q, skipping update check: %v",
+				s.cfg.Interval,
+				err.Error(),
+			)
+		}
+
+		if err == nil && d <= 0 {
+			errorMessage = fmt.Sprintf("Non-positive update check interval %q, skipping update check", s.cfg.Interval)
+		}
+
+		if errorMessage != "" {
+			return tea.Batch(baseCmd, func() tea.Msg {
+				return message.ShowBannerMsg{Message: errorMessage, IsError: true}
+			})
+		}
+		s.updateChecker = &updateChecker{interval: d, svc: s.imageService}
+	}
+
 	if s.updateChecker != nil {
 		return tea.Batch(baseCmd, s.updateChecker.tickCmd())
 	}
