@@ -30,7 +30,6 @@ import (
 // imagesLoadedMsg is sent when images have been loaded asynchronously.
 type imagesLoadedMsg struct {
 	error  error
-	items  []list.Item
 	images []client.Image
 }
 
@@ -188,7 +187,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			Handled: true,
 		}
 	case imagesLoadedMsg:
-		log.Printf("[images] imagesLoadedMsg: count=%d", len(msg.items))
+		log.Printf("[images] imagesLoadedMsg: count=%d", len(msg.images))
 		if msg.error != nil {
 			return base.UpdateResult{
 				Cmd: func() tea.Msg {
@@ -202,7 +201,16 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			}
 		}
 		s.currentImages = msg.images
-		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
+		items := make([]list.Item, len(msg.images))
+		for idx, img := range msg.images {
+			update, ok := s.imageUpdates[img.ID]
+			if !ok {
+				update = false
+			}
+
+			items[idx] = imageItem{image: img, hasUpdate: update}
+		}
+		return base.UpdateResult{Cmd: s.List.SetItems(items), Handled: true, StopSpinner: true}
 	case imagesPrunedMsg:
 		log.Printf(
 			"[images] imagesPrunedMsg: deleted=%d spaceReclaimed=%d",
@@ -369,14 +377,8 @@ func (s *Section) updateImagesCmd() tea.Cmd {
 		if err != nil {
 			return imagesLoadedMsg{error: err}
 		}
-		// Read imageUpdates inside the closure so we always use the most
-		// recent update state, not a snapshot captured at cmd-construction time.
-		imageUpdates := s.imageUpdates
-		items := make([]list.Item, len(images))
-		for idx, img := range images {
-			items[idx] = imageItem{image: img, hasUpdate: imageUpdates[img.ID]}
-		}
-		return imagesLoadedMsg{items: items, images: images}
+
+		return imagesLoadedMsg{images: images}
 	}
 }
 
