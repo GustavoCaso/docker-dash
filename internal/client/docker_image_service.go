@@ -86,14 +86,43 @@ func (s *imageService) get(ctx context.Context, id string) (Image, error) {
 	}
 
 	return Image{
-		ID:       img.ID,
-		Repo:     repo,
-		Tag:      tag,
-		Size:     img.Size,
-		Created:  created,
-		Dangling: len(img.RepoTags) == 0 || repo == none && tag == none,
-		Config:   img.Config,
+		ID:          img.ID,
+		Repo:        repo,
+		Tag:         tag,
+		Size:        img.Size,
+		Created:     created,
+		Dangling:    len(img.RepoTags) == 0 || repo == none && tag == none,
+		Config:      img.Config,
+		RepoDigests: img.RepoDigests,
 	}, nil
+}
+
+// CheckUpdate queries the remote registry to determine if a newer image is available.
+// It returns true if the remote digest does not match any local RepoDigest entry.
+func (s *imageService) CheckUpdate(ctx context.Context, img Image) (bool, error) {
+	if img.Dangling || img.Repo == none || len(img.RepoDigests) == 0 {
+		return false, nil
+	}
+
+	distribution, err := s.cli.DistributionInspect(ctx, img.Repo+":"+img.Tag, "")
+	if err != nil {
+		return false, err
+	}
+
+	remoteDigest := distribution.Descriptor.Digest.String()
+	for _, repoDigest := range img.RepoDigests {
+		// repoDigest format: "repo@sha256:..."
+		atIdx := strings.Index(repoDigest, "@")
+		if atIdx < 0 {
+			continue
+		}
+		localDigest := repoDigest[atIdx+1:]
+		if localDigest == remoteDigest {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func (s *imageService) Remove(ctx context.Context, id string, force bool) error {

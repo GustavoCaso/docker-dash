@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -49,6 +50,11 @@ func main() {
 	if *refreshConfig != "" {
 		cfg.Refresh.Interval = *refreshConfig
 		fmt.Fprintf(os.Stderr, "Override refresh intervalconfiguration with %s\n", *refreshConfig)
+	}
+
+	if validationErr := validateIntervals(cfg, os.Stderr); validationErr != nil {
+		fmt.Fprintln(os.Stderr, validationErr)
+		os.Exit(1)
 	}
 
 	if *debug {
@@ -105,6 +111,35 @@ func main() {
 	}
 
 	os.Exit(0)
+}
+
+func validateIntervals(cfg *config.Config, stderr io.Writer) error {
+	if cfg.Refresh.Interval != "" {
+		_, err := time.ParseDuration(cfg.Refresh.Interval)
+		if err != nil {
+			return fmt.Errorf("invalid refresh interval %q: %w", cfg.Refresh.Interval, err)
+		}
+	}
+
+	if !cfg.UpdateCheck.Enabled {
+		return nil
+	}
+
+	d, err := time.ParseDuration(cfg.UpdateCheck.Interval)
+	if err != nil {
+		return fmt.Errorf("invalid update check interval %q: %w", cfg.UpdateCheck.Interval, err)
+	}
+
+	if d <= 0 {
+		fmt.Fprintf(
+			stderr,
+			"Update check enabled, but non-positive interval configured %q. Skiping update check",
+			cfg.UpdateCheck.Interval,
+		)
+		cfg.UpdateCheck.Enabled = false
+	}
+
+	return nil
 }
 
 // setupDockerClient tries to connect to the Docker daemon and returns a client,

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -15,6 +16,7 @@ import (
 	"github.com/charmbracelet/huh"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -27,8 +29,8 @@ import (
 
 // imagesLoadedMsg is sent when images have been loaded asynchronously.
 type imagesLoadedMsg struct {
-	error error
-	items []list.Item
+	error  error
+	images []client.Image
 }
 
 // containerRunMsg is sent when a container is created.
@@ -57,7 +59,8 @@ type imagePullMsg struct {
 
 // imageItem implements list.Item interface.
 type imageItem struct {
-	image client.Image
+	image     client.Image
+	hasUpdate bool
 }
 
 func (i imageItem) ID() string    { return i.image.ID }
@@ -66,7 +69,11 @@ func (i imageItem) Description() string {
 	stateIcon := theme.GetImageStatusIcon(i.image.Containers)
 	stateStyle := theme.GetImageStatusStyle(i.image.Containers)
 	state := stateStyle.Render(stateIcon)
-	return state + " " + helper.FormatSize(i.image.Size)
+	desc := state + " " + helper.FormatSize(i.image.Size)
+	if i.hasUpdate {
+		desc += " " + theme.UpdateAvailableStyle.Render(theme.UpdateAvailableIcon)
+	}
+	return desc
 }
 func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
 
@@ -74,12 +81,16 @@ func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Ta
 type Section struct {
 	*base.Section
 	ctx              context.Context
+	cfg              config.UpdateCheckConfig
 	imageService     client.ImageService
 	containerService client.ContainerService
+	updateChecker    *updateChecker
+	imageUpdates     map[string]bool
+	currentImages    []client.Image
 }
 
 // New creates a new image section.
-func New(ctx context.Context, images []client.Image, client client.Client) *Section {
+func New(ctx context.Context, images []client.Image, client client.Client, cfg config.UpdateCheckConfig) *Section {
 	items := make([]list.Item, len(images))
 	for i, img := range images {
 		items[i] = imageItem{image: img}
@@ -87,8 +98,11 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 
 	il := &Section{
 		ctx:              ctx,
+		cfg:              cfg,
 		imageService:     client.Images(),
 		containerService: client.Containers(),
+		currentImages:    images,
+		imageUpdates:     make(map[string]bool),
 		Section: base.New(
 			sections.ImagesSection,
 			items,
@@ -112,10 +126,68 @@ func New(ctx context.Context, images []client.Image, client client.Client) *Sect
 	return il
 }
 
+// Init overrides the base Init to also fire the update checker tick if enabled.
+func (s *Section) Init() tea.Cmd {
+	baseCmd := s.Section.Init()
+
+	if s.cfg.Enabled {
+		d, err := time.ParseDuration(s.cfg.Interval)
+		errorMessage := ""
+		if err != nil {
+			errorMessage = fmt.Sprintf(
+				"Invalid update check interval %q, skipping update check: %v",
+				s.cfg.Interval,
+				err.Error(),
+			)
+		}
+
+		if err == nil && d <= 0 {
+			errorMessage = fmt.Sprintf("Non-positive update check interval %q, skipping update check", s.cfg.Interval)
+		}
+
+		if errorMessage != "" {
+			return tea.Batch(baseCmd, func() tea.Msg {
+				return message.ShowBannerMsg{Message: errorMessage, IsError: true}
+			})
+		}
+		s.updateChecker = &updateChecker{interval: d, svc: s.imageService}
+	}
+
+	if s.updateChecker != nil {
+		return tea.Batch(baseCmd, s.updateChecker.tickCmd())
+	}
+	return baseCmd
+}
+
 func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	switch msg := msg.(type) {
+	case updateCheckTickMsg:
+		// tickCmd is only scheduled when updateChecker != nil, so this is always non-nil here.
+		return base.UpdateResult{
+			Cmd:     s.updateChecker.checkCmd(s.ctx, s.currentImages),
+			Handled: true,
+		}
+	case imageUpdatesMsg:
+		s.imageUpdates = msg.updates
+		items := s.List.Items()
+		for i, item := range items {
+			ii, ok := item.(imageItem)
+			if !ok {
+				continue
+			}
+			ii.hasUpdate = s.imageUpdates[ii.image.ID]
+			items[i] = ii
+		}
+		var cmd tea.Cmd
+		if s.updateChecker != nil {
+			cmd = s.updateChecker.tickCmd()
+		}
+		return base.UpdateResult{
+			Cmd:     tea.Batch(s.List.SetItems(items), cmd),
+			Handled: true,
+		}
 	case imagesLoadedMsg:
-		log.Printf("[images] imagesLoadedMsg: count=%d", len(msg.items))
+		log.Printf("[images] imagesLoadedMsg: count=%d", len(msg.images))
 		if msg.error != nil {
 			return base.UpdateResult{
 				Cmd: func() tea.Msg {
@@ -128,7 +200,17 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 				StopSpinner: true,
 			}
 		}
-		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
+		s.currentImages = msg.images
+		items := make([]list.Item, len(msg.images))
+		for idx, img := range msg.images {
+			update, ok := s.imageUpdates[img.ID]
+			if !ok {
+				update = false
+			}
+
+			items[idx] = imageItem{image: img, hasUpdate: update}
+		}
+		return base.UpdateResult{Cmd: s.List.SetItems(items), Handled: true, StopSpinner: true}
 	case imagesPrunedMsg:
 		log.Printf(
 			"[images] imagesPrunedMsg: deleted=%d spaceReclaimed=%d",
@@ -256,6 +338,8 @@ func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 			},
 			Handled: true,
 		}
+	case key.Matches(msg, keys.Keys.PullImageUpdate):
+		return s.pullUpdateCmd()
 	case key.Matches(msg, keys.Keys.Delete):
 		return base.UpdateResult{Cmd: s.confirmImageDelete(), Handled: true}
 	case key.Matches(msg, keys.Keys.CreateAndRunContainer):
@@ -293,11 +377,8 @@ func (s *Section) updateImagesCmd() tea.Cmd {
 		if err != nil {
 			return imagesLoadedMsg{error: err}
 		}
-		items := make([]list.Item, len(images))
-		for idx, img := range images {
-			items[idx] = imageItem{image: img}
-		}
-		return imagesLoadedMsg{items: items}
+
+		return imagesLoadedMsg{images: images}
 	}
 }
 
@@ -309,6 +390,35 @@ func (s *Section) pullImageCmd(image, platform string) tea.Cmd {
 		err := svc.Pull(ctx, image, platform)
 
 		return imagePullMsg{err: err, image: image}
+	}
+}
+
+func (s *Section) pullUpdateCmd() base.UpdateResult {
+	items := s.List.Items()
+	idx := s.List.Index()
+	if idx < 0 || idx >= len(items) {
+		return base.UpdateResult{}
+	}
+	dockerImage, ok := items[idx].(imageItem)
+	if !ok {
+		return base.UpdateResult{}
+	}
+	if !dockerImage.hasUpdate {
+		return base.UpdateResult{
+			Cmd: func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("No update available for %s", dockerImage.Title()),
+					IsError: false,
+				}
+			},
+			Handled: true,
+		}
+	}
+	image := fmt.Sprintf("%s:%s", dockerImage.image.Repo, dockerImage.image.Tag)
+	platform := "" // auto-detect
+	return base.UpdateResult{
+		Cmd:     s.WithSpinner(s.pullImageCmd(image, platform)),
+		Handled: true,
 	}
 }
 

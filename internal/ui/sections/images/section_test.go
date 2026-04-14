@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
@@ -31,7 +32,7 @@ type imageSectionModel struct {
 func newModel() imageSectionModel {
 	client := client.NewMockClient()
 	images, _ := client.Images().List(context.Background())
-	section := New(context.Background(), images, client)
+	section := New(context.Background(), images, client, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 	return imageSectionModel{section: section}
 }
@@ -62,6 +63,72 @@ func TestImageListRendersItems(t *testing.T) {
 	waitFor(t, tm, "nginx")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestInitShowsBannerForInvalidUpdateCheckInterval(t *testing.T) {
+	t.Parallel()
+
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{
+		Enabled:  true,
+		Interval: "not-a-duration",
+	})
+	section.SetSize(120, 40)
+
+	msgs := runBatch(section.Init())
+
+	for _, msg := range msgs {
+		banner, ok := msg.(message.ShowBannerMsg)
+		if !ok {
+			continue
+		}
+
+		if !banner.IsError {
+			t.Fatal("expected invalid interval banner to be marked as an error")
+		}
+
+		if !strings.Contains(banner.Message, `Invalid update check interval "not-a-duration"`) {
+			t.Fatalf("unexpected banner message: %q", banner.Message)
+		}
+
+		return
+	}
+
+	t.Fatal("expected ShowBannerMsg for invalid update check interval")
+}
+
+func TestInitShowsBannerForNonPositiveUpdateCheckInterval(t *testing.T) {
+	t.Parallel()
+
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{
+		Enabled:  true,
+		Interval: "0s",
+	})
+	section.SetSize(120, 40)
+
+	msgs := runBatch(section.Init())
+
+	for _, msg := range msgs {
+		banner, ok := msg.(message.ShowBannerMsg)
+		if !ok {
+			continue
+		}
+
+		if !banner.IsError {
+			t.Fatal("expected non-positive interval banner to be marked as an error")
+		}
+
+		if !strings.Contains(banner.Message, `Non-positive update check interval "0s"`) {
+			t.Fatalf("unexpected banner message: %q", banner.Message)
+		}
+
+		return
+	}
+
+	t.Fatal("expected ShowBannerMsg for non-positive update check interval")
 }
 
 func TestImageListLayersVisible(t *testing.T) {
@@ -115,7 +182,7 @@ func TestImageListRefresh(t *testing.T) {
 func TestRunContainerKeyShowsForm(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
@@ -148,7 +215,7 @@ func TestImageListPrune(t *testing.T) {
 func TestPullImageKeyShowsForm(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
@@ -169,7 +236,7 @@ func TestPullImageKeyShowsForm(t *testing.T) {
 func TestPullImageCmdSuccess(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	cmd := section.pullImageCmd("nginx:latest", "")
@@ -197,7 +264,7 @@ func TestPullImageCmdError(t *testing.T) {
 		pullErr:      errors.New("pull failed"),
 	}
 	images, _ := mc.Images().List(context.Background())
-	section := New(context.Background(), images, mc)
+	section := New(context.Background(), images, mc, config.UpdateCheckConfig{})
 	section.imageService = errImageSvc
 	section.SetSize(120, 40)
 
@@ -216,7 +283,7 @@ func TestPullImageCmdError(t *testing.T) {
 func TestPullImageMsgSuccess_ShowsBanner(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	cmd := section.Update(imagePullMsg{image: "nginx:latest", err: nil})
@@ -246,7 +313,7 @@ func TestPullImageMsgSuccess_ShowsBanner(t *testing.T) {
 func TestPullImageMsgError_ShowsErrorBanner(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	pullErr := errors.New("image not found")
@@ -358,10 +425,117 @@ func TestValidateEnv(t *testing.T) {
 	}
 }
 
+func TestImageItemDescriptionShowsUpdateIcon(t *testing.T) {
+	img := client.Image{ID: "sha256:abc", Repo: "nginx", Tag: "latest"}
+	withUpdate := imageItem{image: img, hasUpdate: true}
+	withoutUpdate := imageItem{image: img, hasUpdate: false}
+
+	if !strings.Contains(withUpdate.Description(), "⬆") {
+		t.Errorf("Description() with hasUpdate=true should contain update icon, got: %q", withUpdate.Description())
+	}
+	if strings.Contains(withoutUpdate.Description(), "⬆") {
+		t.Errorf(
+			"Description() with hasUpdate=false should not contain update icon, got: %q",
+			withoutUpdate.Description(),
+		)
+	}
+}
+
+func TestImageUpdatesMsg_UpdatesListItems(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section.SetSize(120, 40)
+
+	// Find the nginx image ID (mock has nginx:latest first)
+	var nginxID string
+	for _, img := range images {
+		if img.Repo == "nginx" && img.Tag == "latest" {
+			nginxID = img.ID
+			break
+		}
+	}
+	if nginxID == "" {
+		t.Fatal("nginx:latest not found in mock images")
+	}
+
+	// Dispatch imageUpdatesMsg marking nginx as having an update
+	section.Update(imageUpdatesMsg{updates: map[string]bool{nginxID: true}})
+
+	// Verify the list item for nginx has hasUpdate=true
+	found := false
+	for _, it := range section.List.Items() {
+		ii, ok := it.(imageItem)
+		if !ok {
+			continue
+		}
+		if ii.image.ID == nginxID {
+			found = true
+			if !ii.hasUpdate {
+				t.Errorf("expected hasUpdate=true for nginx after imageUpdatesMsg, got false")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("nginx image not found in list after imageUpdatesMsg")
+	}
+}
+
+func TestPullUpdateCmd_NoUpdateShowsBanner(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section.SetSize(120, 40)
+
+	// Default: no imageUpdatesMsg sent, so hasUpdate=false for all items.
+	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if cmd == nil {
+		t.Fatal("pressing 'u' with no update should return a non-nil cmd")
+	}
+	msg := cmd()
+	banner, ok := msg.(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", msg)
+	}
+	if banner.IsError {
+		t.Error("'No update available' banner should not be an error")
+	}
+	if !strings.Contains(banner.Message, "No update available") {
+		t.Errorf("expected 'No update available' in banner, got %q", banner.Message)
+	}
+}
+
+func TestPullUpdateCmd_WithUpdate_FiresPull(t *testing.T) {
+	c := client.NewMockClient()
+	images, _ := c.Images().List(context.Background())
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section.SetSize(120, 40)
+
+	// Mark first image as having an update.
+	section.Update(imageUpdatesMsg{updates: map[string]bool{images[0].ID: true}})
+
+	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	if cmd == nil {
+		t.Fatal("pressing 'u' with an available update should return a non-nil cmd")
+	}
+	msgs := runBatch(cmd)
+	found := false
+	for _, m := range msgs {
+		if _, ok := m.(imagePullMsg); ok {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected imagePullMsg in batch result when update is available")
+	}
+}
+
 func TestPanelClosedOnUpNavigation(t *testing.T) {
 	c := client.NewMockClient()
 	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c)
+	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	// Navigate to second image

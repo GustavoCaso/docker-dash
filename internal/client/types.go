@@ -93,15 +93,16 @@ const none = "<none>"
 
 // Image represents a Docker image.
 type Image struct {
-	ID         string
-	Repo       string
-	Tag        string
-	Size       int64
-	Created    time.Time
-	Dangling   bool
-	Containers int64
-	UsedBy     []string // Container IDs using this image
-	Config     *dockerspec.DockerOCIImageConfig
+	ID          string
+	Repo        string
+	Tag         string
+	Size        int64
+	Created     time.Time
+	Dangling    bool
+	Containers  int64
+	UsedBy      []string // Container IDs using this image
+	Config      *dockerspec.DockerOCIImageConfig
+	RepoDigests []string // e.g. ["nginx@sha256:abc123..."]
 }
 
 func (i Image) Name() string {
