@@ -170,7 +170,9 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 		if msg.Action == "deleting" {
 			cmds = append(cmds, s.RemoveItemAndUpdatePanel(msg.Idx))
 		}
-		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" || msg.Action == "pausing" || msg.Action == "unpausing" {
+		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" ||
+			msg.Action == "pausing" ||
+			msg.Action == "unpausing" {
 			cmds = append(cmds, s.updateContainersCmd())
 			stopSpinner = false
 		}
@@ -435,5 +437,4 @@ func (s *Section) confirmContainerPauseUnpause() tea.Cmd {
 			OnConfirm: s.WithSpinner(pauseUnpauseCmd),
 		}
 	}
-
 }
