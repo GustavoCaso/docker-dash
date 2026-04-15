@@ -71,3 +71,9 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/GustavoCaso/docker-dash"
     description: "Terminal UI dashboard for managing Docker containers, images, volumes, and networks"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/docker-dash"]
+          end
