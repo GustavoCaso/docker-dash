@@ -170,7 +170,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 		if msg.Action == "deleting" {
 			cmds = append(cmds, s.RemoveItemAndUpdatePanel(msg.Idx))
 		}
-		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" {
+		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" || msg.Action == "pausing" || msg.Action == "unpausing" {
 			cmds = append(cmds, s.updateContainersCmd())
 			stopSpinner = false
 		}
@@ -210,6 +210,8 @@ func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 		return base.UpdateResult{Cmd: s.confirmContainerToggle(), Handled: true}
 	case key.Matches(msg, keys.Keys.ContainerRestart):
 		return base.UpdateResult{Cmd: s.confirmContainerRestart(), Handled: true}
+	case key.Matches(msg, keys.Keys.ContainerPauseUnpause):
+		return base.UpdateResult{Cmd: s.confirmContainerPauseUnpause(), Handled: true}
 	}
 	return base.UpdateResult{}
 }
@@ -305,6 +307,35 @@ func (s *Section) pruneContainersCmd() tea.Cmd {
 	}
 }
 
+func (s *Section) pauseUnpauseContainerCmd() tea.Cmd {
+	ctx := s.ctx
+	svc := s.service
+	items := s.List.Items()
+	idx := s.List.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+
+	ci, ok := items[idx].(containerItem)
+	if !ok {
+		return nil
+	}
+
+	container := ci.container
+	return func() tea.Msg {
+		var err error
+		var action string
+		if container.State == client.StatePaused {
+			action = "unpausing"
+			err = svc.Unpause(ctx, container.ID)
+		} else {
+			action = "pausing"
+			err = svc.Pause(ctx, container.ID)
+		}
+		return containerActionMsg{ID: container.ID, Action: action, Idx: idx, Error: err}
+	}
+}
+
 func (s *Section) confirmContainerPrune() tea.Cmd {
 	pruneCmd := s.pruneContainersCmd()
 	return func() tea.Msg {
@@ -378,4 +409,31 @@ func (s *Section) confirmContainerRestart() tea.Cmd {
 			OnConfirm: s.WithSpinner(restartCmd),
 		}
 	}
+}
+
+func (s *Section) confirmContainerPauseUnpause() tea.Cmd {
+	items := s.List.Items()
+	idx := s.List.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+
+	ci, ok := items[idx].(containerItem)
+	if !ok {
+		return nil
+	}
+
+	action := "Pause"
+	if ci.container.State == client.StatePaused {
+		action = "Unpause"
+	}
+	pauseUnpauseCmd := s.pauseUnpauseContainerCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     fmt.Sprintf("%s Container", action),
+			Body:      fmt.Sprintf("%s container %s?", action, helper.ShortID(ci.ID())),
+			OnConfirm: s.WithSpinner(pauseUnpauseCmd),
+		}
+	}
+
 }

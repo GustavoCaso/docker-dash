@@ -22,9 +22,10 @@ type KeyMap struct {
 	CreateAndRunContainer key.Binding
 	PullImage             key.Binding
 
-	ContainerDelete    key.Binding
-	ContainerStartStop key.Binding
-	ContainerRestart   key.Binding
+	ContainerDelete       key.Binding
+	ContainerStartStop    key.Binding
+	ContainerRestart      key.Binding
+	ContainerPauseUnpause key.Binding
 
 	ComposeUp        key.Binding
 	ComposeDown      key.Binding
@@ -134,6 +135,10 @@ var Keys = &KeyMap{
 		key.WithKeys("ctrl+R"),
 		key.WithHelp("ctrl+R", "restart container"),
 	),
+	ContainerPauseUnpause: key.NewBinding(
+		key.WithKeys("p"),
+		key.WithHelp("p", "pause/unpause container"),
+	),
 	ComposeUp: key.NewBinding(
 		key.WithKeys("u"),
 		key.WithHelp("u", "compose up"),
@@ -219,7 +224,7 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.ContainerDelete, k.ContainerStartStop, k.ContainerRestart, k.Prune},
-			{k.Filter, k.Help, k.Quit},
+			{k.ContainerPauseUnpause, k.Filter, k.Help, k.Quit},
 		},
 		contextualKeys: []key.Binding{},
 	}
