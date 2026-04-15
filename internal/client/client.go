@@ -75,6 +75,8 @@ type ContainerService interface {
 	Exec(ctx context.Context, id string) (*ExecSession, error)
 	Stats(ctx context.Context, is string) (*StatsSession, error)
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)
+	Pause(ctx context.Context, id string) error
+	Unpause(ctx context.Context, id string) error
 }
 
 // ImageService manages Docker images.

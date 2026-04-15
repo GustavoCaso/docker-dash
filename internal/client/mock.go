@@ -250,6 +250,30 @@ func (s *mockContainerService) Stop(ctx context.Context, id string) error {
 	return fmt.Errorf("container not found: %s", id)
 }
 
+func (s *mockContainerService) Pause(ctx context.Context, containerID string) error {
+	for i, c := range s.containers {
+		if c.ID == containerID || c.Name == containerID {
+			s.containers[i].State = StatePaused
+			s.containers[i].Status = "Up 16 seconds (Paused)"
+			return nil
+		}
+	}
+
+	return fmt.Errorf("container not found: %s", containerID)
+}
+
+func (s *mockContainerService) Unpause(ctx context.Context, containerID string) error {
+	for i, c := range s.containers {
+		if c.ID == containerID || c.Name == containerID {
+			s.containers[i].State = StateRunning
+			s.containers[i].Status = "Up 34 seconds"
+			return nil
+		}
+	}
+
+	return fmt.Errorf("container not found: %s", containerID)
+}
+
 func (s *mockContainerService) Restart(ctx context.Context, id string) error {
 	for i, c := range s.containers {
 		if c.ID == id || c.Name == id {
