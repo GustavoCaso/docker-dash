@@ -75,5 +75,6 @@ homebrew_casks:
       post:
         install: |
           if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{bin}/docker-dash"]
+            binary_name = Hardware::CPU.arm? ? "docker-dash_v#{version}_darwin-arm64" : "docker-dash_v#{version}_darwin-amd64"
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/#{binary_name}"]
           end
