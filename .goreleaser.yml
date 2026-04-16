@@ -75,5 +75,5 @@ homebrew_casks:
       post:
         install: |
           if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/docker-dash"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{bin}/docker-dash"]
           end
