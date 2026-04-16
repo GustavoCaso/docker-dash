@@ -179,6 +179,7 @@ Contextual actions depend on the active section. For example:
 |---|---|
 | `D` | Delete container |
 | `P` | Prune unused container |
+| `p` | pause/unpause container |
 | `s` | Start/stop |
 | `ctrl+R` | Restart |
 

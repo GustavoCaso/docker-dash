@@ -248,12 +248,12 @@ func TestContainerListPrune(t *testing.T) {
 
 func TestContainerPauseUnpause(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx:latest")
+	waitFor(t, tm, "running nginx:latest")
 	// Toggle pause/unpause
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	waitFor(t, tm, "paused")
+	waitFor(t, tm, "paused nginx:latest")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	waitFor(t, tm, "running")
+	waitFor(t, tm, "running nginx:latest")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
