@@ -286,6 +286,20 @@ func (s *containerService) Remove(ctx context.Context, id string, force bool) er
 	return err
 }
 
+func (s *containerService) Pause(ctx context.Context, id string) error {
+	log.Printf("[docker] ContainerPause: id=%q", id)
+	err := s.cli.ContainerPause(ctx, id)
+	log.Printf("[docker] ContainerPause: done err=%v", err)
+	return err
+}
+
+func (s *containerService) Unpause(ctx context.Context, id string) error {
+	log.Printf("[docker] ContainerUnpause: id=%q", id)
+	err := s.cli.ContainerUnpause(ctx, id)
+	log.Printf("[docker] ContainerUnpause: done err=%v", err)
+	return err
+}
+
 const logsSinceHours = 2 // hours of log history to fetch
 
 func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
