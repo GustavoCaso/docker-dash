@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -83,7 +84,6 @@ type model struct {
 	spinner          spinner.Model
 	spinnerRequests  map[string]spinnerRequest
 	spinnerSequence  uint64
-	initErr          string
 	confirmation     confirmation.Model
 	pendingCmd       tea.Cmd
 	showConfirmation bool
@@ -98,31 +98,7 @@ type spinnerRequest struct {
 	Seq   uint64
 }
 
-func InitialModel(ctx context.Context, version string, cfg *config.Config, client client.Client) tea.Model {
-	containersList, containersErr := client.Containers().List(ctx)
-	imagesList, imagesErr := client.Images().List(ctx)
-	volumesList, volumesErr := client.Volumes().List(ctx)
-	networksList, networksErr := client.Networks().List(ctx)
-	composeList, composeErr := client.Compose().List(ctx)
-
-	var initErr string
-	for _, err := range []error{containersErr, imagesErr, volumesErr, networksErr, composeErr} {
-		if err != nil {
-			initErr = "Failed to load data: " + err.Error()
-			break
-		}
-	}
-
-	var refreshInterval time.Duration
-	if cfg.Refresh.Interval != "" {
-		d, err := time.ParseDuration(cfg.Refresh.Interval)
-		if err != nil {
-			initErr = "Invalid refresh interval: " + err.Error()
-		} else {
-			refreshInterval = d
-		}
-	}
-
+func New(ctx context.Context, version string, cfg *config.Config, client client.Client) tea.Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -137,34 +113,40 @@ func InitialModel(ctx context.Context, version string, cfg *config.Config, clien
 		networkKeys:      keys.Keys.NetworkKeyMap(),
 		composeKeys:      keys.Keys.ComposeKeyMap(),
 		header:           header.New(version),
-		containerSection: containers.New(ctx, containersList, client.Containers()),
-		imageSection:     images.New(ctx, imagesList, client, cfg.UpdateCheck),
-		volumeSection:    volumes.New(ctx, volumesList, client.Volumes()),
-		networkSection:   networks.New(ctx, networksList, client.Networks()),
-		composeSection:   compose.New(ctx, composeList, client.Compose()),
 		statusBar:        statusbar.New(),
 		spinner:          sp,
 		spinnerRequests:  make(map[string]spinnerRequest),
-		initErr:          initErr,
 		confirmation:     confirmation.New(),
-		refreshInterval:  refreshInterval,
+		containerSection: containers.New(ctx, client.Containers()),
+		imageSection:     images.New(ctx, client, cfg.UpdateCheck),
+		volumeSection:    volumes.New(ctx, client.Volumes()),
+		networkSection:   networks.New(ctx, client.Networks()),
+		composeSection:   compose.New(ctx, client.Compose()),
 	}
 }
 
 func (m *model) Init() tea.Cmd {
-	if m.initErr != "" {
-		return func() tea.Msg {
-			return message.ShowBannerMsg{Message: m.initErr, IsError: true}
+	cmds := []tea.Cmd{}
+
+	if m.cfg.Refresh.Interval != "" {
+		d, err := time.ParseDuration(m.cfg.Refresh.Interval)
+		if err != nil {
+			errorMessage := fmt.Sprintf("Invalid refresh interval %q: %v", m.cfg.Refresh.Interval, err.Error())
+			cmds = append(cmds, func() tea.Msg {
+				return message.ShowBannerMsg{Message: errorMessage, IsError: true}
+			})
+		} else {
+			m.refreshInterval = d
 		}
 	}
 
-	cmds := []tea.Cmd{
+	cmds = append(cmds, []tea.Cmd{
 		m.imageSection.Init(),
 		m.containerSection.Init(),
 		m.volumeSection.Init(),
 		m.networkSection.Init(),
 		m.composeSection.Init(),
-	}
+	}...)
 
 	if m.refreshInterval > 0 {
 		cmds = append(cmds, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {

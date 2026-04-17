@@ -66,16 +66,11 @@ type Section struct {
 }
 
 // New creates a new container list.
-func New(ctx context.Context, containers []client.Container, svc client.ContainerService) *Section {
-	items := make([]list.Item, len(containers))
-	for i, c := range containers {
-		items[i] = containerItem{container: c}
-	}
-
+func New(ctx context.Context, svc client.ContainerService) *Section {
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
-		Section: base.New(sections.ContainersSection, items, []panel.Panel{
+		Section: base.New(sections.ContainersSection, []panel.Panel{
 			NewDetailsPanel(ctx, svc),
 			NewLogsPanel(ctx, svc),
 			NewStatsPanel(ctx, svc),
@@ -116,7 +111,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 				StopSpinner: true,
 			}
 		}
-		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
+		return base.UpdateResult{
+			Cmd:         tea.Batch(s.List.SetItems(msg.items), s.UpdateActivePanel()),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	case containersPrunedMsg:
 		log.Printf(
 			"[containers] containersPrunedMsg: deleted=%d spaceReclaimed=%d",

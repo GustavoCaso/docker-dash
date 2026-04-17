@@ -19,8 +19,7 @@ type volumeSectionModel struct {
 
 func newModel() volumeSectionModel {
 	c := client.NewMockClient()
-	volumes, _ := c.Volumes().List(context.Background())
-	section := New(context.Background(), volumes, c.Volumes())
+	section := New(context.Background(), c.Volumes())
 	section.SetSize(120, 40)
 	return volumeSectionModel{section: section}
 }

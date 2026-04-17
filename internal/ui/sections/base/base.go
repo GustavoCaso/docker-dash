@@ -73,10 +73,9 @@ type UpdateResult struct {
 
 func New(
 	name sections.SectionName,
-	items []list.Item,
-	pannels []panel.Panel,
+	panels []panel.Panel,
 ) *Section {
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	l := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	l.SetShowTitle(false)
 	l.SetShowHelp(false)
 	l.SetShowStatusBar(true)
@@ -84,17 +83,19 @@ func New(
 	return &Section{
 		name:           name,
 		List:           l,
-		panels:         pannels,
+		panels:         panels,
 		activePanelIdx: 0,
 	}
 }
 
-// Init implements the bubbletea Model Init method.  For panel sections it
-// initialises the active panel for the currently-selected item; for sections
-// without panels it is a no-op (updateActivePanel returns nil when
-// ActivePanelInitFn is not set).
+// Init implements the bubbletea Model Init method. It fires RefreshCmd to
+// load data asynchronously (with spinner).
 func (b *Section) Init() tea.Cmd {
-	return b.updateActivePanel()
+	var refreshCmd tea.Cmd
+	if b.RefreshCmd != nil {
+		refreshCmd = b.WithSpinner(b.RefreshCmd())
+	}
+	return refreshCmd
 }
 
 // SetSize sets dimensions, using a split-pane layout when panels are
@@ -177,7 +178,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 				currentPanel := b.ActivePanel()
 				var listCmd tea.Cmd
 				b.List, listCmd = b.List.Update(keyMsg)
-				return tea.Batch(listCmd, currentPanel.Close(), b.updateActivePanel())
+				return tea.Batch(listCmd, currentPanel.Close(), b.UpdateActivePanel())
 			}
 			var listCmd tea.Cmd
 			b.List, listCmd = b.List.Update(keyMsg)
@@ -217,7 +218,7 @@ func (b *Section) RemoveItemAndUpdatePanel(idx int) tea.Cmd {
 		return b.ActivePanel().Close()
 	}
 	b.List.Select(min(idx, len(b.List.Items())-1))
-	return b.updateActivePanel()
+	return b.UpdateActivePanel()
 }
 
 // RemoveItem removes the item at idx from the list and clamps the selection.
@@ -228,6 +229,24 @@ func (b *Section) RemoveItem(idx int) {
 	if len(b.List.Items()) > 0 {
 		b.List.Select(min(idx, len(b.List.Items())-1))
 	}
+}
+
+// UpdateActivePanel calls ActivePanelInitFn on the selected list item and
+// passes the result to the active panel's Init method.
+// Returns nil when no item is selected or ActivePanelInitFn is not set.
+func (b *Section) UpdateActivePanel() tea.Cmd {
+	if b.ActivePanelInitFn == nil {
+		return nil
+	}
+	selected := b.List.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	id := b.ActivePanelInitFn(selected)
+	if id == "" {
+		return nil
+	}
+	return b.ActivePanel().Init(id)
 }
 
 // handleFilterKey processes keyboard events while filter mode is active.
@@ -384,32 +403,14 @@ func (b *Section) handlePanelKeys(msg tea.KeyMsg) (bool, tea.Cmd) {
 		currentPanel := b.ActivePanel()
 		b.activePanelIdx = (b.activePanelIdx + 1) % len(b.panels)
 		log.Printf("[%s] switching panel to: %q", b.name, b.panels[b.activePanelIdx].Name())
-		return true, tea.Batch(currentPanel.Close(), b.updateActivePanel())
+		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
 	case key.Matches(msg, keys.Keys.PanelPrev):
 		currentPanel := b.ActivePanel()
 		b.activePanelIdx = (b.activePanelIdx - 1 + len(b.panels)) % len(b.panels)
 		log.Printf("[%s] switching panel to: %q", b.name, b.panels[b.activePanelIdx].Name())
-		return true, tea.Batch(currentPanel.Close(), b.updateActivePanel())
+		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
 	}
 	return false, nil
-}
-
-// updateActivePanel calls ActivePanelInitFn on the selected list item and
-// passes the result to the active panel's Init method.
-// Returns nil when no item is selected or ActivePanelInitFn is not set.
-func (b *Section) updateActivePanel() tea.Cmd {
-	if b.ActivePanelInitFn == nil {
-		return nil
-	}
-	selected := b.List.SelectedItem()
-	if selected == nil {
-		return nil
-	}
-	id := b.ActivePanelInitFn(selected)
-	if id == "" {
-		return nil
-	}
-	return b.ActivePanel().Init(id)
 }
 
 // renderWithPanels renders the full split-pane view: list on the left and the

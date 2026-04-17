@@ -67,16 +67,11 @@ type Section struct {
 }
 
 // New creates a new volume list.
-func New(ctx context.Context, volumes []client.Volume, svc client.VolumeService) *Section {
-	items := make([]list.Item, len(volumes))
-	for i, v := range volumes {
-		items[i] = volumeItem{volume: v}
-	}
-
+func New(ctx context.Context, svc client.VolumeService) *Section {
 	s := &Section{
 		ctx:           ctx,
 		volumeService: svc,
-		Section:       base.New(sections.VolumesSection, items, []panel.Panel{}),
+		Section:       base.New(sections.VolumesSection, []panel.Panel{}),
 	}
 
 	s.LoadingText = "Loading..."
@@ -104,7 +99,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 				StopSpinner: true,
 			}
 		}
-		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
+		return base.UpdateResult{
+			Cmd:         tea.Batch(s.List.SetItems(msg.items), s.UpdateActivePanel()),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	case volumesPrunedMsg:
 		log.Printf("[volumes] volumesPrunedMsg: deleted=%d spaceReclaimed=%d",
 			msg.report.ItemsDeleted, msg.report.SpaceReclaimed)

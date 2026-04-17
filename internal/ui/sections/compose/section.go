@@ -64,16 +64,11 @@ type Section struct {
 }
 
 // New creates a new Compose section.
-func New(ctx context.Context, projects []client.ComposeProject, svc client.ComposeProjectService) *Section {
-	items := make([]list.Item, len(projects))
-	for i, p := range projects {
-		items[i] = composeItem{project: p}
-	}
-
+func New(ctx context.Context, svc client.ComposeProjectService) *Section {
 	s := &Section{
 		ctx:            ctx,
 		composeService: svc,
-		Section:        base.New(sections.ComposeSection, items, []panel.Panel{newDetailsPanel()}),
+		Section:        base.New(sections.ComposeSection, []panel.Panel{newDetailsPanel()}),
 	}
 
 	s.LoadingText = "Loading..."
@@ -108,7 +103,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			}
 		}
 		return base.UpdateResult{
-			Cmd:         tea.Batch(s.List.SetItems(msg.items), s.Section.Init()),
+			Cmd:         tea.Batch(s.List.SetItems(msg.items), s.UpdateActivePanel()),
 			Handled:     true,
 			StopSpinner: true,
 		}

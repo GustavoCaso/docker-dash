@@ -31,8 +31,7 @@ type imageSectionModel struct {
 
 func newModel() imageSectionModel {
 	client := client.NewMockClient()
-	images, _ := client.Images().List(context.Background())
-	section := New(context.Background(), images, client, config.UpdateCheckConfig{})
+	section := New(context.Background(), client, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 	return imageSectionModel{section: section}
 }
@@ -69,8 +68,7 @@ func TestInitShowsBannerForInvalidUpdateCheckInterval(t *testing.T) {
 	t.Parallel()
 
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{
+	section := New(context.Background(), c, config.UpdateCheckConfig{
 		Enabled:  true,
 		Interval: "not-a-duration",
 	})
@@ -102,8 +100,7 @@ func TestInitShowsBannerForNonPositiveUpdateCheckInterval(t *testing.T) {
 	t.Parallel()
 
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{
+	section := New(context.Background(), c, config.UpdateCheckConfig{
 		Enabled:  true,
 		Interval: "0s",
 	})
@@ -181,9 +178,9 @@ func TestImageListRefresh(t *testing.T) {
 
 func TestRunContainerKeyShowsForm(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
+	section.Update(section.RefreshCmd()())
 
 	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 	if cmd == nil {
@@ -214,8 +211,7 @@ func TestImageListPrune(t *testing.T) {
 
 func TestPullImageKeyShowsForm(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
@@ -235,8 +231,7 @@ func TestPullImageKeyShowsForm(t *testing.T) {
 
 func TestPullImageCmdSuccess(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	cmd := section.pullImageCmd("nginx:latest", "")
@@ -263,8 +258,7 @@ func TestPullImageCmdError(t *testing.T) {
 		ImageService: mc.Images(),
 		pullErr:      errors.New("pull failed"),
 	}
-	images, _ := mc.Images().List(context.Background())
-	section := New(context.Background(), images, mc, config.UpdateCheckConfig{})
+	section := New(context.Background(), mc, config.UpdateCheckConfig{})
 	section.imageService = errImageSvc
 	section.SetSize(120, 40)
 
@@ -282,8 +276,7 @@ func TestPullImageCmdError(t *testing.T) {
 
 func TestPullImageMsgSuccess_ShowsBanner(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	cmd := section.Update(imagePullMsg{image: "nginx:latest", err: nil})
@@ -312,8 +305,7 @@ func TestPullImageMsgSuccess_ShowsBanner(t *testing.T) {
 
 func TestPullImageMsgError_ShowsErrorBanner(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	pullErr := errors.New("image not found")
@@ -443,13 +435,17 @@ func TestImageItemDescriptionShowsUpdateIcon(t *testing.T) {
 
 func TestImageUpdatesMsg_UpdatesListItems(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
+
+	// Load images by running the RefreshCmd synchronously
+	cmd := section.RefreshCmd()
+	msg := cmd()
+	section.Update(msg)
 
 	// Find the nginx image ID (mock has nginx:latest first)
 	var nginxID string
-	for _, img := range images {
+	for _, img := range section.currentImages {
 		if img.Repo == "nginx" && img.Tag == "latest" {
 			nginxID = img.ID
 			break
@@ -484,9 +480,9 @@ func TestImageUpdatesMsg_UpdatesListItems(t *testing.T) {
 
 func TestPullUpdateCmd_NoUpdateShowsBanner(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
+	section.Update(section.RefreshCmd()())
 
 	// Default: no imageUpdatesMsg sent, so hasUpdate=false for all items.
 	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
@@ -508,12 +504,15 @@ func TestPullUpdateCmd_NoUpdateShowsBanner(t *testing.T) {
 
 func TestPullUpdateCmd_WithUpdate_FiresPull(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
+	// Load images synchronously first
+	loadCmd := section.RefreshCmd()
+	section.Update(loadCmd())
+
 	// Mark first image as having an update.
-	section.Update(imageUpdatesMsg{updates: map[string]bool{images[0].ID: true}})
+	section.Update(imageUpdatesMsg{updates: map[string]bool{section.currentImages[0].ID: true}})
 
 	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
 	if cmd == nil {
@@ -534,8 +533,7 @@ func TestPullUpdateCmd_WithUpdate_FiresPull(t *testing.T) {
 
 func TestPanelClosedOnUpNavigation(t *testing.T) {
 	c := client.NewMockClient()
-	images, _ := c.Images().List(context.Background())
-	section := New(context.Background(), images, c, config.UpdateCheckConfig{})
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
 	// Navigate to second image
