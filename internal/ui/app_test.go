@@ -17,7 +17,7 @@ import (
 )
 
 func TestFullOutput(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	tm.Send(tea.KeyMsg{
@@ -28,7 +28,7 @@ func TestFullOutput(t *testing.T) {
 }
 
 func TestExecPanel(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -57,7 +57,7 @@ func TestExecPanel(t *testing.T) {
 }
 
 func TestContainerSwitchSectionResetsPanel(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch to Containers view
@@ -78,7 +78,7 @@ func TestContainerSwitchSectionResetsPanel(t *testing.T) {
 }
 
 func TestSwitchingSectionResetActiveView(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch section and back
@@ -92,7 +92,7 @@ func TestSwitchingSectionResetActiveView(t *testing.T) {
 }
 
 func TestSwitchingSectionResetVolumesActiveView(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Navigate to Volumes view (Images -> Containers -> Volumes)
@@ -110,7 +110,7 @@ func TestSwitchingSectionResetVolumesActiveView(t *testing.T) {
 }
 
 func TestSwitchingSectionResetNetworksActiveView(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Navigate to Networks view (Images -> Containers -> Volumes -> Networks)
@@ -129,7 +129,7 @@ func TestSwitchingSectionResetNetworksActiveView(t *testing.T) {
 }
 
 func TestVolumesView(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -152,7 +152,7 @@ func TestAutoRefreshInvalidInterval(t *testing.T) {
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "not-a-duration"},
 	}
-	m := InitialModel(context.Background(), "test", cfg, client.NewMockClient())
+	m := New(context.Background(), "test", cfg, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Invalid interval should surface as an error banner
@@ -166,7 +166,7 @@ func TestAutoRefreshValidInterval(t *testing.T) {
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "500ms"},
 	}
-	m := InitialModel(context.Background(), "test", cfg, client.NewMockClient())
+	m := New(context.Background(), "test", cfg, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// UI should still render normally with a valid interval configured
@@ -177,7 +177,7 @@ func TestAutoRefreshValidInterval(t *testing.T) {
 }
 
 func TestConfirmationModalAppearsOnDelete(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Default view is Images — wait for it
@@ -200,7 +200,7 @@ func TestConfirmationModalAppearsOnDelete(t *testing.T) {
 }
 
 func TestConfirmationModalDismissedOnN(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	waitForString(t, tm, "nginx")
@@ -218,7 +218,7 @@ func TestConfirmationModalDismissedOnN(t *testing.T) {
 }
 
 func TestConfirmationModalDismissedOnEsc(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	waitForString(t, tm, "nginx")
@@ -236,7 +236,7 @@ func TestConfirmationModalDismissedOnEsc(t *testing.T) {
 }
 
 func TestConfirmationModalConfirmDeletesImage(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	waitForString(t, tm, "nginx")
@@ -254,7 +254,7 @@ func TestConfirmationModalConfirmDeletesImage(t *testing.T) {
 }
 
 func TestContextualKeyBindingsBeforeViewRender(t *testing.T) {
-	m := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 
 	// Send AddContextualKeyBindingsMsg before activeKeys is set — must not panic.
 	m.Update(message.AddContextualKeyBindingsMsg{
@@ -266,9 +266,9 @@ func TestContextualKeyBindingsBeforeViewRender(t *testing.T) {
 }
 
 func TestSpinnerOverlayFollowsShowAndCancelMessages(t *testing.T) {
-	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
 	if !ok {
-		t.Fatal("InitialModel should return *model")
+		t.Fatal("New should return *model")
 	}
 
 	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
@@ -292,9 +292,9 @@ func TestSpinnerOverlayFollowsShowAndCancelMessages(t *testing.T) {
 }
 
 func TestSpinnerOverlayHidesWhenActiveSectionHasNoSpinner(t *testing.T) {
-	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
 	if !ok {
-		t.Fatal("InitialModel should return *model")
+		t.Fatal("New should return *model")
 	}
 
 	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
@@ -320,9 +320,9 @@ func TestSpinnerOverlayHidesWhenActiveSectionHasNoSpinner(t *testing.T) {
 }
 
 func TestSpinnerOverlayIgnoresNestedActiveSpinner(t *testing.T) {
-	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
 	if !ok {
-		t.Fatal("InitialModel should return *model")
+		t.Fatal("New should return *model")
 	}
 
 	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
@@ -342,9 +342,9 @@ func TestSpinnerOverlayIgnoresNestedActiveSpinner(t *testing.T) {
 }
 
 func TestSpinnerOverlayShowsNestedSpinnerForActivePanel(t *testing.T) {
-	appModel, ok := InitialModel(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
 	if !ok {
-		t.Fatal("InitialModel should return *model")
+		t.Fatal("New should return *model")
 	}
 
 	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})

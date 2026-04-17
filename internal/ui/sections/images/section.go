@@ -90,22 +90,16 @@ type Section struct {
 }
 
 // New creates a new image section.
-func New(ctx context.Context, images []client.Image, client client.Client, cfg config.UpdateCheckConfig) *Section {
-	items := make([]list.Item, len(images))
-	for i, img := range images {
-		items[i] = imageItem{image: img}
-	}
-
+func New(ctx context.Context, client client.Client, cfg config.UpdateCheckConfig) *Section {
 	il := &Section{
 		ctx:              ctx,
 		cfg:              cfg,
 		imageService:     client.Images(),
 		containerService: client.Containers(),
-		currentImages:    images,
+		currentImages:    nil,
 		imageUpdates:     make(map[string]bool),
 		Section: base.New(
 			sections.ImagesSection,
-			items,
 			[]panel.Panel{NewLayersPanel(ctx, client.Images())},
 		),
 	}
@@ -210,7 +204,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 
 			items[idx] = imageItem{image: img, hasUpdate: update}
 		}
-		return base.UpdateResult{Cmd: s.List.SetItems(items), Handled: true, StopSpinner: true}
+		return base.UpdateResult{
+			Cmd:         tea.Batch(s.List.SetItems(items), s.UpdateActivePanel()),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	case imagesPrunedMsg:
 		log.Printf(
 			"[images] imagesPrunedMsg: deleted=%d spaceReclaimed=%d",

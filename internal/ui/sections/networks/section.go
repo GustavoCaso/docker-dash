@@ -67,16 +67,11 @@ type Section struct {
 }
 
 // New creates a new network section.
-func New(ctx context.Context, networks []client.Network, svc client.NetworkService) *Section {
-	items := make([]list.Item, len(networks))
-	for i, n := range networks {
-		items[i] = networkItem{network: n}
-	}
-
+func New(ctx context.Context, svc client.NetworkService) *Section {
 	s := &Section{
 		ctx:            ctx,
 		networkService: svc,
-		Section:        base.New(sections.NetworksSection, items, []panel.Panel{newDetailsPanel()}),
+		Section:        base.New(sections.NetworksSection, []panel.Panel{newDetailsPanel()}),
 	}
 
 	s.LoadingText = "Loading..."
@@ -111,7 +106,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 				StopSpinner: true,
 			}
 		}
-		return base.UpdateResult{Cmd: s.List.SetItems(msg.items), Handled: true, StopSpinner: true}
+		return base.UpdateResult{
+			Cmd:         tea.Batch(s.List.SetItems(msg.items), s.UpdateActivePanel()),
+			Handled:     true,
+			StopSpinner: true,
+		}
 	case networksPrunedMsg:
 		log.Printf(
 			"[networks] networksPrunedMsg: deleted=%d spaceReclaimed=%d",

@@ -20,9 +20,10 @@ type composeSectionModel struct {
 
 func newModel() composeSectionModel {
 	c := client.NewMockClient()
-	projects, _ := c.Compose().List(context.Background())
-	section := New(context.Background(), projects, c.Compose())
+	section := New(context.Background(), c.Compose())
 	section.SetSize(120, 40)
+	// Load data synchronously so tests that call View/Update directly work without teatest.
+	section.Update(section.RefreshCmd()())
 	return composeSectionModel{section: section}
 }
 

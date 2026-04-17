@@ -20,8 +20,7 @@ type containerSectionModel struct {
 
 func newContainerSectionModel() containerSectionModel {
 	client := client.NewMockClient()
-	containers, _ := client.Containers().List(context.Background())
-	section := New(context.Background(), containers, client.Containers())
+	section := New(context.Background(), client.Containers())
 	section.SetSize(120, 40)
 	return containerSectionModel{section: section}
 }
@@ -186,8 +185,7 @@ func TestContainerListRefresh(t *testing.T) {
 
 func TestContainerListExecMouseScroll(t *testing.T) {
 	dockerClient := client.NewMockClient()
-	containers, _ := dockerClient.Containers().List(context.Background())
-	section := New(context.Background(), containers, dockerClient.Containers())
+	section := New(context.Background(), dockerClient.Containers())
 	section.SetSize(120, 40)
 
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
@@ -214,8 +212,7 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 
 func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	dockerClient := client.NewMockClient()
-	containers, _ := dockerClient.Containers().List(context.Background())
-	section := New(context.Background(), containers, dockerClient.Containers())
+	section := New(context.Background(), dockerClient.Containers())
 	section.SetSize(120, 40)
 
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)

@@ -19,8 +19,7 @@ type networkSectionModel struct {
 
 func newModel() networkSectionModel {
 	c := client.NewMockClient()
-	networks, _ := c.Networks().List(context.Background())
-	section := New(context.Background(), networks, c.Networks())
+	section := New(context.Background(), c.Networks())
 	section.SetSize(120, 40)
 	return networkSectionModel{section: section}
 }

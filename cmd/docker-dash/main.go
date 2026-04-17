@@ -88,7 +88,7 @@ func main() {
 	}
 
 	p := tea.NewProgram(
-		ui.InitialModel(ctx, Version, cfg, dockerClient),
+		ui.New(ctx, Version, cfg, dockerClient),
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(),
 	)
