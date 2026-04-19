@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/docker/docker/api/types/container"
+
+	"github.com/GustavoCaso/docker-dash/internal/config"
 )
 
 // tarBuilder helps create in-memory tar archives for tests.
@@ -334,7 +335,11 @@ func TestBuildContainerHealth(t *testing.T) {
 		h := buildContainerHealth(payload)
 
 		if h.FailingStreak != pHealth.FailingStreak {
-			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+			t.Errorf(
+				"unexpected number of failing streak got= %d, expected= %d",
+				h.FailingStreak,
+				pHealth.FailingStreak,
+			)
 		}
 		if h.Status != HealthStatus(pHealth.Status) {
 			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
@@ -343,7 +348,11 @@ func TestBuildContainerHealth(t *testing.T) {
 			t.Errorf("unexpected output got= %q, expected= %q", h.Output, pHealth.Log[len(pHealth.Log)-1].Output)
 		}
 		if h.LastCheck != pHealth.Log[len(pHealth.Log)-1].End {
-			t.Errorf("different last check time got= %q, expected= %q", h.LastCheck.String(), pHealth.Log[len(pHealth.Log)-1].End.String())
+			t.Errorf(
+				"different last check time got= %q, expected= %q",
+				h.LastCheck.String(),
+				pHealth.Log[len(pHealth.Log)-1].End.String(),
+			)
 		}
 	})
 
@@ -367,7 +376,11 @@ func TestBuildContainerHealth(t *testing.T) {
 		h := buildContainerHealth(payload)
 
 		if h.FailingStreak != pHealth.FailingStreak {
-			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+			t.Errorf(
+				"unexpected number of failing streak got= %d, expected= %d",
+				h.FailingStreak,
+				pHealth.FailingStreak,
+			)
 		}
 		if h.Status != HealthStatus(pHealth.Status) {
 			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
@@ -376,7 +389,11 @@ func TestBuildContainerHealth(t *testing.T) {
 			t.Errorf("unexpected output got= %q, expected= %q", h.Output, pHealth.Log[len(pHealth.Log)-1].Output)
 		}
 		if h.LastCheck != pHealth.Log[len(pHealth.Log)-1].End {
-			t.Errorf("different last check time got= %q, expected= %q", h.LastCheck.String(), pHealth.Log[len(pHealth.Log)-1].End.String())
+			t.Errorf(
+				"different last check time got= %q, expected= %q",
+				h.LastCheck.String(),
+				pHealth.Log[len(pHealth.Log)-1].End.String(),
+			)
 		}
 	})
 
@@ -400,7 +417,11 @@ func TestBuildContainerHealth(t *testing.T) {
 		h := buildContainerHealth(payload)
 
 		if h.FailingStreak != pHealth.FailingStreak {
-			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+			t.Errorf(
+				"unexpected number of failing streak got= %d, expected= %d",
+				h.FailingStreak,
+				pHealth.FailingStreak,
+			)
 		}
 		if h.Status != HealthStatus(pHealth.Status) {
 			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
@@ -409,7 +430,11 @@ func TestBuildContainerHealth(t *testing.T) {
 			t.Errorf("unexpected output got= %q, expected= %q", h.Output, pHealth.Log[len(pHealth.Log)-1].Output)
 		}
 		if h.LastCheck != pHealth.Log[len(pHealth.Log)-1].End {
-			t.Errorf("different last check time got= %q, expected= %q", h.LastCheck.String(), pHealth.Log[len(pHealth.Log)-1].End.String())
+			t.Errorf(
+				"different last check time got= %q, expected= %q",
+				h.LastCheck.String(),
+				pHealth.Log[len(pHealth.Log)-1].End.String(),
+			)
 		}
 	})
 
@@ -426,7 +451,11 @@ func TestBuildContainerHealth(t *testing.T) {
 		h := buildContainerHealth(payload)
 
 		if h.FailingStreak != pHealth.FailingStreak {
-			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+			t.Errorf(
+				"unexpected number of failing streak got= %d, expected= %d",
+				h.FailingStreak,
+				pHealth.FailingStreak,
+			)
 		}
 		if h.Status != HealthStatus(pHealth.Status) {
 			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
