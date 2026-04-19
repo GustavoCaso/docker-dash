@@ -18,6 +18,11 @@ var (
 	StatusError   = lipgloss.Color("#E74C3C")
 	StatusPaused  = lipgloss.Color("#F39C12")
 
+	// Health colors.
+	StatusHealthy   = lipgloss.Color("#2ECC71")
+	StatusUnhealthy = lipgloss.Color("#E74C3C")
+	StatusStarting  = lipgloss.Color("#F39C12")
+
 	// UI colors.
 	TextPrimary   = lipgloss.Color("#FFFFFF")
 	TextSecondary = lipgloss.Color("#A0AEC0")
@@ -46,6 +51,11 @@ const (
 	IconStopped = "\uf04d" // Stop icon (stopped)
 	IconPaused  = "\uf04c" // Pause icon
 	IconError   = "\uf00d" // X/error icon
+
+	// Container Health icons.
+	IconHealthy   = "\uf111" // Healthy icon
+	IconUnhealthy = "\uf111" // Unhealthy icon
+	IconStarting  = "\u23F3" // Starting icon
 
 	// Image Status icons.
 	ImageUsedIcon = "\uf111" // nf-fa-circle
@@ -175,6 +185,17 @@ var (
 
 	StatusPausedStyle = lipgloss.NewStyle().
 				Foreground(StatusPaused)
+
+		// Health Status Styles.
+	StatusHealthyStyle = lipgloss.NewStyle().
+				Foreground(StatusHealthy).
+				Bold(true)
+
+	StatusUnhealthyStyle = lipgloss.NewStyle().
+				Foreground(StatusUnhealthy)
+
+	StatusStartingStyle = lipgloss.NewStyle().
+				Foreground(StatusStarting)
 )
 
 // Status bar styles.
@@ -198,6 +219,35 @@ func GetContainerStatusIcon(state string) string {
 		return IconError
 	default:
 		return IconStopped
+	}
+}
+
+// GetContainerHealthStatusIcon returns the appropiate icon for a given container health state.
+func GetContainerHealthStatusIcon(state string) string {
+	switch state {
+	case "healthy":
+		return IconHealthy
+	case "unhealthy":
+		return IconUnhealthy
+	case "starting":
+		return IconStarting
+	default:
+		return ""
+	}
+}
+
+// GetContainerHealthStatusStyle returns the appropriate style for a given container
+// Recognized states: "health", "unhealthy", "starting".
+func GetContainerHealthStatusStyle(state string) lipgloss.Style {
+	switch state {
+	case "healthy":
+		return StatusHealthyStyle
+	case "unhealthy":
+		return StatusUnhealthyStyle
+	case "starting":
+		return StatusStartingStyle
+	default:
+		return lipgloss.Style{}
 	}
 }
 
