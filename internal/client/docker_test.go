@@ -7,8 +7,10 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/GustavoCaso/docker-dash/internal/config"
+	"github.com/docker/docker/api/types/container"
 )
 
 // tarBuilder helps create in-memory tar archives for tests.
@@ -308,6 +310,134 @@ func TestBuildContainerFileTree_ComplexTree(t *testing.T) {
 	if appConf.Depth != 3 {
 		t.Errorf("'app.conf' depth: got %d, want 3", appConf.Depth)
 	}
+}
+
+func TestBuildContainerHealth(t *testing.T) {
+	now := time.Now()
+	t.Run("Status Healthy", func(t *testing.T) {
+		payload := &container.ContainerJSONBase{
+			State: &container.State{
+				Health: &container.Health{
+					Status:        container.Healthy,
+					FailingStreak: 2,
+					Log: []*container.HealthcheckResult{
+						{
+							End:    now,
+							Output: "HTTP/1.1 200 OK",
+						},
+					},
+				},
+			},
+		}
+
+		pHealth := payload.State.Health
+		h := buildContainerHealth(payload)
+
+		if h.FailingStreak != pHealth.FailingStreak {
+			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+		}
+		if h.Status != HealthStatus(pHealth.Status) {
+			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
+		}
+		if h.Output != pHealth.Log[len(pHealth.Log)-1].Output {
+			t.Errorf("unexpected output got= %q, expected= %q", h.Output, pHealth.Log[len(pHealth.Log)-1].Output)
+		}
+		if h.LastCheck != pHealth.Log[len(pHealth.Log)-1].End {
+			t.Errorf("different last check time got= %q, expected= %q", h.LastCheck.String(), pHealth.Log[len(pHealth.Log)-1].End.String())
+		}
+	})
+
+	t.Run("Status Unhealthy", func(t *testing.T) {
+		payload := &container.ContainerJSONBase{
+			State: &container.State{
+				Health: &container.Health{
+					Status:        container.Unhealthy,
+					FailingStreak: 3,
+					Log: []*container.HealthcheckResult{
+						{
+							End:    now.Add(-1 * time.Hour),
+							Output: "connection refused",
+						},
+					},
+				},
+			},
+		}
+
+		pHealth := payload.State.Health
+		h := buildContainerHealth(payload)
+
+		if h.FailingStreak != pHealth.FailingStreak {
+			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+		}
+		if h.Status != HealthStatus(pHealth.Status) {
+			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
+		}
+		if h.Output != pHealth.Log[len(pHealth.Log)-1].Output {
+			t.Errorf("unexpected output got= %q, expected= %q", h.Output, pHealth.Log[len(pHealth.Log)-1].Output)
+		}
+		if h.LastCheck != pHealth.Log[len(pHealth.Log)-1].End {
+			t.Errorf("different last check time got= %q, expected= %q", h.LastCheck.String(), pHealth.Log[len(pHealth.Log)-1].End.String())
+		}
+	})
+
+	t.Run("Status Starting", func(t *testing.T) {
+		payload := &container.ContainerJSONBase{
+			State: &container.State{
+				Health: &container.Health{
+					Status:        container.Starting,
+					FailingStreak: 1,
+					Log: []*container.HealthcheckResult{
+						{
+							End:    now.Add(-30 * time.Minute),
+							Output: "HTTP/1.1 200 OK",
+						},
+					},
+				},
+			},
+		}
+
+		pHealth := payload.State.Health
+		h := buildContainerHealth(payload)
+
+		if h.FailingStreak != pHealth.FailingStreak {
+			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+		}
+		if h.Status != HealthStatus(pHealth.Status) {
+			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
+		}
+		if h.Output != pHealth.Log[len(pHealth.Log)-1].Output {
+			t.Errorf("unexpected output got= %q, expected= %q", h.Output, pHealth.Log[len(pHealth.Log)-1].Output)
+		}
+		if h.LastCheck != pHealth.Log[len(pHealth.Log)-1].End {
+			t.Errorf("different last check time got= %q, expected= %q", h.LastCheck.String(), pHealth.Log[len(pHealth.Log)-1].End.String())
+		}
+	})
+
+	t.Run("Status None", func(t *testing.T) {
+		payload := &container.ContainerJSONBase{
+			State: &container.State{
+				Health: &container.Health{
+					Status: container.NoHealthcheck,
+				},
+			},
+		}
+
+		pHealth := payload.State.Health
+		h := buildContainerHealth(payload)
+
+		if h.FailingStreak != pHealth.FailingStreak {
+			t.Errorf("unexpected number of failing streak got= %d, expected= %d", h.FailingStreak, pHealth.FailingStreak)
+		}
+		if h.Status != HealthStatus(pHealth.Status) {
+			t.Errorf("unexpected health status got= %q, expected= %q", h.Status, pHealth.Status)
+		}
+		if h.Output != "" {
+			t.Errorf("unexpected output got= %q, expected= %q", h.Output, "")
+		}
+		if !h.LastCheck.IsZero() {
+			t.Errorf("unexpected last check time got= %q, expected= %q", h.LastCheck.String(), time.Time{})
+		}
+	})
 }
 
 // buildMuxFrame builds a Docker multiplexed-stream frame for the given streamType and payload.

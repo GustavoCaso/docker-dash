@@ -31,6 +31,7 @@ type Container struct {
 	WorkingDir string
 	Env        []string
 	Labels     map[string]string
+	Health     *HealthInfo
 
 	// Resource limits
 	MemoryLimit   int64  // bytes; 0 = unlimited
@@ -51,6 +52,22 @@ type FileNode struct {
 	Parent    *FileNode
 	Depth     int
 }
+
+type HealthInfo struct {
+	Status        HealthStatus
+	FailingStreak int
+	LastCheck     time.Time
+	Output        string
+}
+
+type HealthStatus string
+
+const (
+	HealthHealthy   HealthStatus = "healthy"
+	HealthUnhealthy HealthStatus = "unhealthy"
+	HealthStarting  HealthStatus = "starting"
+	HealthNone      HealthStatus = "none"
+)
 
 type ContainerState string
 
