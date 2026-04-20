@@ -71,7 +71,7 @@ func (s *containerService) List(ctx context.Context) ([]Container, error) {
 			return nil, err
 		}
 
-		health := buildContainerHealth(ci.ContainerJSONBase)
+		health := buildContainerHealth(ci.State.Health)
 
 		result[i] = Container{
 			ID:      c.ID,
@@ -233,7 +233,7 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 		})
 	}
 
-	health := buildContainerHealth(c.ContainerJSONBase)
+	health := buildContainerHealth(c.State.Health)
 
 	restartPolicy := string(c.HostConfig.RestartPolicy.Name)
 	if c.HostConfig.RestartPolicy.MaximumRetryCount > 0 {
@@ -510,14 +510,13 @@ func buildContainerFileTree(reader io.ReadCloser) *FileNode {
 	return t
 }
 
-func buildContainerHealth(c *container.ContainerJSONBase) *HealthInfo {
-	if c.State.Health == nil {
+func buildContainerHealth(h *container.Health) *HealthInfo {
+	if h == nil {
 		return &HealthInfo{
 			Status: HealthNone,
 		}
 	}
 
-	h := c.State.Health
 	healthStatus := HealthNone
 	switch h.Status {
 	case container.Healthy:
