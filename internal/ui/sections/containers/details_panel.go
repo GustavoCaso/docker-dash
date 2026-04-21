@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -102,6 +103,25 @@ func formatDetails(c *client.Container) string {
 	stateIcon := theme.GetContainerStatusIcon(string(c.State))
 	fmt.Fprintf(&b, "State:   %s\n", stateStyle.Render(stateIcon+" "+string(c.State)))
 	fmt.Fprintf(&b, "Created: %s\n\n", c.Created.Format("2006-01-02 15:04:05"))
+
+	// Health
+	b.WriteString("=== Health ===\n")
+	if c.Health == nil || c.Health.Status == client.HealthNone {
+		b.WriteString("no healthcheck configured\n")
+	} else {
+		if c.Health.Status != "" {
+			fmt.Fprintf(&b, "Status:            %s\n", c.Health.Status)
+		}
+		if c.Health.FailingStreak >= 0 {
+			fmt.Fprintf(&b, "Failing Streak:    %d\n", c.Health.FailingStreak)
+		}
+		lastCheckTime := c.Health.LastCheck.Format(time.TimeOnly)
+		fmt.Fprintf(&b, "Last Check Time:   %s\n", lastCheckTime)
+
+		output := strings.ReplaceAll(c.Health.Output, "\r", "")
+		fmt.Fprintf(&b, "Last Output:      %s\n", output)
+	}
+	b.WriteString("\n")
 
 	// Networking
 	b.WriteString("=== Networking ===\n")

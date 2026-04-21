@@ -24,9 +24,9 @@ type containerService struct {
 
 func (s *containerService) List(ctx context.Context) ([]Container, error) {
 	log.Printf("[docker] ContainerList: all=true")
-	containers, err := s.cli.ContainerList(ctx, container.ListOptions{All: true})
-	if err != nil {
-		return nil, err
+	containers, listErr := s.cli.ContainerList(ctx, container.ListOptions{All: true})
+	if listErr != nil {
+		return nil, listErr
 	}
 
 	result := make([]Container, len(containers))
@@ -66,19 +66,27 @@ func (s *containerService) List(ctx context.Context) ([]Container, error) {
 			}
 		}
 
+		ci, err := s.cli.ContainerInspect(ctx, c.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		health := buildContainerHealth(ci.State.Health)
+
 		result[i] = Container{
 			ID:      c.ID,
 			Name:    name,
 			Image:   c.Image,
 			Status:  c.Status,
 			State:   state,
+			Health:  health,
 			Created: timeFromUnix(c.Created),
 			Ports:   ports,
 			Mounts:  mounts,
 		}
 	}
 
-	log.Printf("[docker] ContainerList: returned count=%d err=%v", len(result), err)
+	log.Printf("[docker] ContainerList: returned count=%d err=%v", len(result), listErr)
 	return result, nil
 }
 
@@ -225,6 +233,8 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 		})
 	}
 
+	health := buildContainerHealth(c.State.Health)
+
 	restartPolicy := string(c.HostConfig.RestartPolicy.Name)
 	if c.HostConfig.RestartPolicy.MaximumRetryCount > 0 {
 		restartPolicy = fmt.Sprintf("%s:%d", restartPolicy, c.HostConfig.RestartPolicy.MaximumRetryCount)
@@ -250,6 +260,7 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 		WorkingDir: c.Config.WorkingDir,
 		Env:        c.Config.Env,
 		Labels:     c.Config.Labels,
+		Health:     health,
 		// Resource limits
 		MemoryLimit:   c.HostConfig.Memory,
 		CPUShares:     c.HostConfig.CPUShares,
@@ -497,4 +508,40 @@ func buildContainerFileTree(reader io.ReadCloser) *FileNode {
 	}
 
 	return t
+}
+
+func buildContainerHealth(h *container.Health) *HealthInfo {
+	if h == nil {
+		return &HealthInfo{
+			Status: HealthNone,
+		}
+	}
+
+	healthStatus := HealthNone
+	switch h.Status {
+	case container.Healthy:
+		healthStatus = HealthHealthy
+	case container.Unhealthy:
+		healthStatus = HealthUnhealthy
+	case container.Starting:
+		healthStatus = HealthStarting
+	}
+
+	var (
+		lastCheckTime time.Time
+		lastOutput    string
+	)
+
+	if len(h.Log) > 0 {
+		last := h.Log[len(h.Log)-1]
+		lastCheckTime = last.End
+		lastOutput = last.Output
+	}
+
+	return &HealthInfo{
+		Status:        healthStatus,
+		FailingStreak: h.FailingStreak,
+		LastCheck:     lastCheckTime,
+		Output:        lastOutput,
+	}
 }

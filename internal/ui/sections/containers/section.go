@@ -47,10 +47,16 @@ type containerItem struct {
 func (c containerItem) ID() string    { return c.container.ID }
 func (c containerItem) Title() string { return c.container.Name }
 func (c containerItem) Description() string {
+	var healthStatus string
+	if c.container.Health != nil {
+		healthStatusStyle := theme.GetContainerHealthStatusStyle(string(c.container.Health.Status))
+		healthIcon := theme.GetContainerHealthStatusIcon(string(c.container.Health.Status))
+		healthStatus = healthStatusStyle.Render(healthIcon)
+	}
 	stateIcon := theme.GetContainerStatusIcon(string(c.container.State))
 	stateStyle := theme.GetContainerStatusStyle(string(c.container.State))
 	state := stateStyle.Render(stateIcon + " " + string(c.container.State))
-	return state + " " + c.container.Image + " " + helper.ShortID(c.ID())
+	return state + " " + healthStatus + " " + c.container.Image + " " + helper.ShortID(c.ID())
 }
 func (c containerItem) FilterValue() string { return c.container.Name }
 
