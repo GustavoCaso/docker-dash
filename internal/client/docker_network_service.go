@@ -30,23 +30,15 @@ func (s *networkService) List(ctx context.Context) ([]Network, error) {
 
 	for i, n := range networks {
 		idx := i
-		networkID := n.ID
-		networkName := n.Name
-		networkDriver := n.Driver
-		networkScope := n.Scope
-		networkInternal := n.Internal
-		networkCreated := n.Created
-		ipamConfig := n.IPAM
-
 		group.Go(func() error {
-			inspectResponse, inspectErr := s.cli.NetworkInspect(groupCtx, networkID, network.InspectOptions{})
+			inspectResponse, inspectErr := s.cli.NetworkInspect(groupCtx, n.ID, network.InspectOptions{})
 			if inspectErr != nil {
 				return inspectErr
 			}
 
 			subnet := ""
 			gateway := ""
-			if len(ipamConfig.Config) > 0 {
+			if len(inspectResponse.IPAM.Config) > 0 {
 				subnet = inspectResponse.IPAM.Config[0].Subnet
 				gateway = inspectResponse.IPAM.Config[0].Gateway
 			}
@@ -60,12 +52,12 @@ func (s *networkService) List(ctx context.Context) ([]Network, error) {
 				})
 			}
 			resultMap.Store(idx, Network{
-				ID:                  networkID,
-				Name:                networkName,
-				Driver:              networkDriver,
-				Scope:               networkScope,
-				Internal:            networkInternal,
-				Created:             networkCreated,
+				ID:                  n.ID,
+				Name:                n.Name,
+				Driver:              n.Driver,
+				Scope:               n.Scope,
+				Internal:            n.Internal,
+				Created:             n.Created,
 				ConnectedContainers: connected,
 				IPAM:                NetworkIPAM{Subnet: subnet, Gateway: gateway},
 			})
