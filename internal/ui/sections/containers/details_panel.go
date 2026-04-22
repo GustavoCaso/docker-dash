@@ -87,7 +87,7 @@ func (d *detailsPanel) fetchCmd(containerID string) tea.Cmd {
 	}
 }
 
-func formatDetails(c *client.Container) string {
+func formatDetails(c client.Container) string {
 	var b strings.Builder
 
 	// Header

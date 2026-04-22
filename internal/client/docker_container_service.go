@@ -8,13 +8,16 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
+	"golang.org/x/sync/errgroup"
 )
 
 // Local Container Service.
@@ -23,70 +26,51 @@ type containerService struct {
 }
 
 func (s *containerService) List(ctx context.Context) ([]Container, error) {
-	log.Printf("[docker] ContainerList: all=true")
-	containers, listErr := s.cli.ContainerList(ctx, container.ListOptions{All: true})
-	if listErr != nil {
-		return nil, listErr
+	log.Printf("[docker] ContainerList")
+	du, err := s.cli.DiskUsage(ctx, dockertypes.DiskUsageOptions{
+		Types: []dockertypes.DiskUsageObject{dockertypes.ContainerObject},
+	})
+
+	if err != nil {
+		return nil, err
 	}
+
+	containers := du.Containers
 
 	result := make([]Container, len(containers))
+	resultMap := sync.Map{}
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(parallelInspectLimit)
+
 	for i, c := range containers {
-		name := ""
-		if len(c.Names) > 0 {
-			name = strings.TrimPrefix(c.Names[0], "/")
-		}
+		idx := i
 
-		state := StateStopped
-		switch c.State {
-		case "running":
-			state = StateRunning
-		case "paused":
-			state = StatePaused
-		case "restarting":
-			state = StateRestarting
-		}
+		group.Go(func() error {
+			container, containerErr := s.Get(groupCtx, c.ID)
 
-		ports := make([]PortMapping, 0)
-		for _, p := range c.Ports {
-			if p.PublicPort > 0 {
-				ports = append(ports, PortMapping{
-					HostPort:      p.PublicPort,
-					ContainerPort: p.PrivatePort,
-					Protocol:      p.Type,
-				})
+			if containerErr != nil {
+				return containerErr
 			}
-		}
 
-		mounts := make([]Mount, len(c.Mounts))
-		for j, m := range c.Mounts {
-			mounts[j] = Mount{
-				Type:        string(m.Type),
-				Source:      m.Source,
-				Destination: m.Destination,
-			}
-		}
+			resultMap.Store(idx, container)
 
-		ci, err := s.cli.ContainerInspect(ctx, c.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		health := buildContainerHealth(ci.State.Health)
-
-		result[i] = Container{
-			ID:      c.ID,
-			Name:    name,
-			Image:   c.Image,
-			Status:  c.Status,
-			State:   state,
-			Health:  health,
-			Created: timeFromUnix(c.Created),
-			Ports:   ports,
-			Mounts:  mounts,
-		}
+			return nil
+		})
 	}
 
-	log.Printf("[docker] ContainerList: returned count=%d err=%v", len(result), listErr)
+	groupErr := group.Wait()
+	if groupErr != nil {
+		return nil, groupErr
+	}
+
+	resultMap.Range(func(key, value any) bool {
+		idx, _ := key.(int)
+		c, _ := value.(Container)
+		result[idx] = c
+		return true
+	})
+
+	log.Printf("[docker] ContainerList: returned count=%d err=%v", len(result), err)
 	return result, nil
 }
 
@@ -172,11 +156,11 @@ func (s *containerService) Run(ctx context.Context, img Image, opts RunOptions) 
 	return containerResponse.ID, nil
 }
 
-func (s *containerService) Get(ctx context.Context, id string) (*Container, error) {
+func (s *containerService) Get(ctx context.Context, id string) (Container, error) {
 	log.Printf("[docker] ContainerInspect: id=%q", id)
 	c, err := s.cli.ContainerInspect(ctx, id)
 	if err != nil {
-		return nil, err
+		return Container{}, err
 	}
 
 	state := StateStopped
@@ -192,7 +176,7 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 	var created time.Time
 	created, err = time.Parse(time.RFC3339Nano, c.Created)
 	if err != nil {
-		return nil, fmt.Errorf("parsing container created time: %w", err)
+		return Container{}, fmt.Errorf("parsing container created time: %w", err)
 	}
 
 	ports := make([]PortMapping, 0)
@@ -241,7 +225,7 @@ func (s *containerService) Get(ctx context.Context, id string) (*Container, erro
 	}
 
 	log.Printf("[docker] ContainerInspect: done")
-	return &Container{
+	return Container{
 		ID:      c.ID,
 		Name:    strings.TrimPrefix(c.Name, "/"),
 		Image:   c.Config.Image,

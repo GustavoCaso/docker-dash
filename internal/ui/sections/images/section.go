@@ -104,7 +104,7 @@ func New(ctx context.Context, client client.Client, cfg config.UpdateCheckConfig
 		),
 	}
 
-	il.LoadingText = "Refreshing..."
+	il.LoadingText = "Loading..."
 	il.ActivePanelInitFn = func(item list.Item) string {
 		ii, ok := item.(imageItem)
 		if !ok {

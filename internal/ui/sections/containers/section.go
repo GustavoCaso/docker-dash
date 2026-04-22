@@ -85,7 +85,7 @@ func New(ctx context.Context, svc client.ContainerService) *Section {
 		}),
 	}
 
-	cl.LoadingText = "Refreshing..."
+	cl.LoadingText = "Loading..."
 	cl.ActivePanelInitFn = func(item list.Item) string {
 		ci, ok := item.(containerItem)
 		if !ok {

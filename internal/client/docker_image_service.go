@@ -6,11 +6,14 @@ import (
 	"log"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
+	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	"golang.org/x/sync/errgroup"
 )
 
 // Local Image Service.
@@ -19,22 +22,46 @@ type imageService struct {
 }
 
 func (s *imageService) List(ctx context.Context) ([]Image, error) {
-	log.Printf("[docker] ImageList: all=true")
-	images, err := s.cli.ImageList(ctx, image.ListOptions{All: true})
+	log.Printf("[docker] ImageList")
+	du, err := s.cli.DiskUsage(ctx, dockertypes.DiskUsageOptions{
+		Types: []dockertypes.DiskUsageObject{dockertypes.ImageObject},
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]Image, len(images))
-	for i, img := range images {
-		imageData, imageErr := s.get(ctx, img.ID)
-		if imageErr != nil {
-			return []Image{}, imageErr
-		}
+	images := du.Images
 
-		imageData.Containers = img.Containers
-		result[i] = imageData
+	result := make([]Image, len(images))
+	resultMap := sync.Map{}
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(parallelInspectLimit)
+
+	for i, img := range images {
+		idx := i
+		group.Go(func() error {
+			imageData, imageErr := s.get(groupCtx, img.ID)
+			if imageErr != nil {
+				return imageErr
+			}
+
+			imageData.Containers = img.Containers
+			resultMap.Store(idx, imageData)
+			return nil
+		})
 	}
+
+	groupErr := group.Wait()
+	if groupErr != nil {
+		return []Image{}, groupErr
+	}
+
+	resultMap.Range(func(key, value any) bool {
+		idx, _ := key.(int)
+		img, _ := value.(Image)
+		result[idx] = img
+		return true
+	})
 
 	log.Printf("[docker] ImageList: returned count=%d", len(result))
 	return result, nil

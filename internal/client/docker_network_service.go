@@ -3,10 +3,12 @@ package client
 import (
 	"context"
 	"log"
+	"sync"
 
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"golang.org/x/sync/errgroup"
 )
 
 // Local Network Service.
@@ -22,39 +24,67 @@ func (s *networkService) List(ctx context.Context) ([]Network, error) {
 	}
 
 	result := make([]Network, len(networks))
+	resultMap := sync.Map{}
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(parallelInspectLimit)
+
 	for i, n := range networks {
-		inspectResponse, inspectErr := s.cli.NetworkInspect(ctx, n.ID, network.InspectOptions{})
+		idx := i
+		networkID := n.ID
+		networkName := n.Name
+		networkDriver := n.Driver
+		networkScope := n.Scope
+		networkInternal := n.Internal
+		networkCreated := n.Created
+		ipamConfig := n.IPAM
 
-		if inspectErr != nil {
-			return nil, inspectErr
-		}
+		group.Go(func() error {
+			inspectResponse, inspectErr := s.cli.NetworkInspect(groupCtx, networkID, network.InspectOptions{})
+			if inspectErr != nil {
+				return inspectErr
+			}
 
-		subnet := ""
-		gateway := ""
-		if len(n.IPAM.Config) > 0 {
-			subnet = inspectResponse.IPAM.Config[0].Subnet
-			gateway = inspectResponse.IPAM.Config[0].Gateway
-		}
-		connected := make([]NetworkContainer, 0, len(inspectResponse.Containers))
-		for _, c := range inspectResponse.Containers {
-			connected = append(connected, NetworkContainer{
-				Name:        c.Name,
-				IPv4Address: c.IPv4Address,
-				IPv6Address: c.IPv6Address,
-				MacAddress:  c.MacAddress,
+			subnet := ""
+			gateway := ""
+			if len(ipamConfig.Config) > 0 {
+				subnet = inspectResponse.IPAM.Config[0].Subnet
+				gateway = inspectResponse.IPAM.Config[0].Gateway
+			}
+			connected := make([]NetworkContainer, 0, len(inspectResponse.Containers))
+			for _, c := range inspectResponse.Containers {
+				connected = append(connected, NetworkContainer{
+					Name:        c.Name,
+					IPv4Address: c.IPv4Address,
+					IPv6Address: c.IPv6Address,
+					MacAddress:  c.MacAddress,
+				})
+			}
+			resultMap.Store(idx, Network{
+				ID:                  networkID,
+				Name:                networkName,
+				Driver:              networkDriver,
+				Scope:               networkScope,
+				Internal:            networkInternal,
+				Created:             networkCreated,
+				ConnectedContainers: connected,
+				IPAM:                NetworkIPAM{Subnet: subnet, Gateway: gateway},
 			})
-		}
-		result[i] = Network{
-			ID:                  n.ID,
-			Name:                n.Name,
-			Driver:              n.Driver,
-			Scope:               n.Scope,
-			Internal:            n.Internal,
-			Created:             n.Created,
-			ConnectedContainers: connected,
-			IPAM:                NetworkIPAM{Subnet: subnet, Gateway: gateway},
-		}
+			return nil
+		})
 	}
+
+	groupErr := group.Wait()
+	if groupErr != nil {
+		return nil, groupErr
+	}
+
+	resultMap.Range(func(key, value any) bool {
+		idx, _ := key.(int)
+		net, _ := value.(Network)
+		result[idx] = net
+		return true
+	})
+
 	log.Printf("[docker] NetworkList: returned count=%d", len(result))
 	return result, nil
 }
