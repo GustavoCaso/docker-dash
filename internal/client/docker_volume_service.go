@@ -15,7 +15,7 @@ type volumeService struct {
 }
 
 func (s *volumeService) List(ctx context.Context) ([]Volume, error) {
-	log.Printf("[docker] DiskUsage (volumes)")
+	log.Printf("[docker] VolumeList")
 	du, err := s.cli.DiskUsage(ctx, dockertypes.DiskUsageOptions{
 		Types: []dockertypes.DiskUsageObject{dockertypes.VolumeObject},
 	})

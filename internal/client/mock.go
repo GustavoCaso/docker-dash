@@ -250,13 +250,13 @@ func (s *mockContainerService) Run(_ context.Context, _ Image, _ RunOptions) (st
 	return "", nil
 }
 
-func (s *mockContainerService) Get(ctx context.Context, id string) (*Container, error) {
+func (s *mockContainerService) Get(ctx context.Context, id string) (Container, error) {
 	for _, c := range s.containers {
 		if c.ID == id || c.Name == id {
-			return &c, nil
+			return c, nil
 		}
 	}
-	return nil, fmt.Errorf("container not found: %s", id)
+	return Container{}, fmt.Errorf("container not found: %s", id)
 }
 
 func (s *mockContainerService) Start(ctx context.Context, id string) error {

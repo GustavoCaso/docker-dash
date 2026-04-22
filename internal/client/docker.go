@@ -14,6 +14,10 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/config"
 )
 
+// parallelInspectLimit caps concurrent inspect calls in List operations.
+// Prevents overwhelming SSH transports (MaxStartups / connection reset).
+const parallelInspectLimit = 8
+
 // dockerClient connects to a local or remote Docker daemon.
 type dockerClient struct {
 	cli        *client.Client

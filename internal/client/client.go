@@ -65,7 +65,7 @@ type RunOptions struct {
 type ContainerService interface {
 	List(ctx context.Context) ([]Container, error)
 	Run(ctx context.Context, image Image, opts RunOptions) (string, error)
-	Get(ctx context.Context, id string) (*Container, error)
+	Get(ctx context.Context, id string) (Container, error)
 	Start(ctx context.Context, id string) error
 	Stop(ctx context.Context, id string) error
 	Restart(ctx context.Context, id string) error
