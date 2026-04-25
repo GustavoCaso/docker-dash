@@ -40,8 +40,9 @@ type KeyMap struct {
 
 	Prune key.Binding
 
-	Help key.Binding
-	Quit key.Binding
+	SystemInfo key.Binding
+	Help       key.Binding
+	Quit       key.Binding
 }
 
 var navigation = key.NewBinding(
@@ -176,6 +177,10 @@ var Keys = &KeyMap{
 		key.WithKeys("P"),
 		key.WithHelp("P", "prune"),
 	),
+	SystemInfo: key.NewBinding(
+		key.WithKeys("i"),
+		key.WithHelp("i", "system info"),
+	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
 		key.WithHelp("?", "help"),
@@ -216,7 +221,8 @@ func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.CreateAndRunContainer, k.Prune, k.Filter},
-			{k.Help, k.Quit, k.PullImage, k.PullImageUpdate},
+			{k.PullImage, k.PullImageUpdate},
+			{k.Help, k.Quit, k.SystemInfo},
 		},
 		contextualKeys: []key.Binding{},
 	}
@@ -229,7 +235,8 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.ContainerDelete, k.ContainerStartStop, k.ContainerRestart, k.Prune},
-			{k.ContainerPauseUnpause, k.Filter, k.Help, k.Quit},
+			{k.ContainerPauseUnpause, k.Filter},
+			{k.Help, k.Quit, k.SystemInfo},
 		},
 		contextualKeys: []key.Binding{},
 	}
@@ -242,7 +249,7 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.Delete, k.Prune, k.Filter},
-			{k.Help, k.Quit},
+			{k.Help, k.Quit, k.SystemInfo},
 		},
 		contextualKeys: []key.Binding{},
 	}
@@ -255,7 +262,7 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.NetworkDelete, k.Prune, k.Filter},
-			{k.Help, k.Quit},
+			{k.Help, k.Quit, k.SystemInfo},
 		},
 		contextualKeys: []key.Binding{},
 	}
@@ -269,7 +276,7 @@ func (k KeyMap) ComposeKeyMap() *ViewKeyMap {
 			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
 			{k.ComposeUp, k.ComposeDown, k.ComposeStartStop, k.ComposeRestart},
 			{k.Refresh, k.Filter},
-			{k.Help, k.Quit},
+			{k.Help, k.Quit, k.SystemInfo},
 		},
 		contextualKeys: []key.Binding{},
 	}

@@ -16,6 +16,7 @@ type MockClient struct {
 	volumes    *mockVolumeService
 	networks   *mockNetworkService
 	compose    *mockComposeProjectService
+	info       *mockSystemInfo
 }
 
 // NewMockClient creates a new mock Docker client with sample data.
@@ -26,16 +27,18 @@ func NewMockClient() *MockClient {
 		volumes:    newMockVolumeService(),
 		networks:   newMockNetworkService(),
 		compose:    newMockComposeProjectService(),
+		info:       newMockSystemInfo(),
 	}
 }
 
-func (c *MockClient) Containers() ContainerService   { return c.containers }
-func (c *MockClient) Images() ImageService           { return c.images }
-func (c *MockClient) Volumes() VolumeService         { return c.volumes }
-func (c *MockClient) Networks() NetworkService       { return c.networks }
-func (c *MockClient) Compose() ComposeProjectService { return c.compose }
-func (c *MockClient) Ping(ctx context.Context) error { return nil }
-func (c *MockClient) Close() error                   { return nil }
+func (c *MockClient) Containers() ContainerService                 { return c.containers }
+func (c *MockClient) Images() ImageService                         { return c.images }
+func (c *MockClient) Volumes() VolumeService                       { return c.volumes }
+func (c *MockClient) Networks() NetworkService                     { return c.networks }
+func (c *MockClient) Compose() ComposeProjectService               { return c.compose }
+func (c *MockClient) Info(ctx context.Context) (SystemInfo, error) { return c.info.SystemInfo, nil }
+func (c *MockClient) Ping(ctx context.Context) error               { return nil }
+func (c *MockClient) Close() error                                 { return nil }
 
 // mockContainerService provides mock container data.
 type mockContainerService struct {
@@ -832,4 +835,45 @@ func (s *mockComposeProjectService) setProjectState(project ComposeProject, stat
 	}
 
 	return fmt.Errorf("compose project not found: %s", project.Name)
+}
+
+type mockSystemInfo struct {
+	SystemInfo
+}
+
+func newMockSystemInfo() *mockSystemInfo {
+	return &mockSystemInfo{
+		SystemInfo{
+			DockerVersion:    "27.3.1",
+			APIVersion:       "1.46",
+			OS:               "linux",
+			Arch:             "amd64",
+			Kernel:           "6.1.0-amd64",
+			CPUs:             8,
+			TotalMemoryBytes: 16 * 1024 * 1024 * 1024,
+			StorageDriver: StorageDriver{
+				Driver: "overlay2",
+				DriverStatus: [][2]string{
+					{
+						"Backing Filesystem",
+						"extfs",
+					},
+					{
+						"Supports d_type",
+						"true",
+					},
+				},
+			},
+			DiskUsage: DiskUsage{
+				LayerSize:      2 * 1024 * 1024 * 1024,
+				ImagesSize:     1 * 1024 * 1024 * 1024,
+				VolumesSize:    512 * 1024 * 1024,
+				ContainersSize: 256 * 1024 * 1024,
+			},
+			Warnings: []string{
+				"WARNING: DOCKER_INSECURE_NO_IPTABLES_RAW is set",
+				"WARNING: daemon is not using the default seccomp profile",
+			},
+		},
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/cli/cli/connhelper"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 
 	"github.com/GustavoCaso/docker-dash/internal/config"
@@ -94,6 +95,68 @@ func (c *dockerClient) Images() ImageService           { return c.images }
 func (c *dockerClient) Volumes() VolumeService         { return c.volumes }
 func (c *dockerClient) Networks() NetworkService       { return c.networks }
 func (c *dockerClient) Compose() ComposeProjectService { return c.compose }
+func (c *dockerClient) Info(ctx context.Context) (SystemInfo, error) {
+	systemInfo, err := c.cli.Info(ctx)
+	if err != nil {
+		return SystemInfo{}, err
+	}
+
+	diskUsage, err := c.cli.DiskUsage(ctx, types.DiskUsageOptions{
+		Types: []types.DiskUsageObject{
+			types.ContainerObject,
+			types.ImageObject,
+			types.VolumeObject,
+		},
+	})
+	if err != nil {
+		return SystemInfo{}, err
+	}
+
+	var (
+		imagesSize     int64
+		volumesSize    int64
+		containersSize int64
+	)
+
+	for _, usage := range diskUsage.Images {
+		if usage != nil {
+			imagesSize += usage.Size
+		}
+	}
+
+	for _, usage := range diskUsage.Volumes {
+		if usage != nil && usage.UsageData != nil {
+			volumesSize += usage.UsageData.Size
+		}
+	}
+
+	for _, usage := range diskUsage.Containers {
+		if usage != nil {
+			containersSize += usage.SizeRootFs
+		}
+	}
+
+	return SystemInfo{
+		DockerVersion:    systemInfo.ServerVersion,
+		APIVersion:       c.cli.ClientVersion(),
+		OS:               systemInfo.OSType,
+		Arch:             systemInfo.Architecture,
+		Kernel:           systemInfo.KernelVersion,
+		CPUs:             systemInfo.NCPU,
+		TotalMemoryBytes: systemInfo.MemTotal,
+		StorageDriver: StorageDriver{
+			Driver:       systemInfo.Driver,
+			DriverStatus: systemInfo.DriverStatus,
+		},
+		DiskUsage: DiskUsage{
+			LayerSize:      diskUsage.LayersSize,
+			ImagesSize:     imagesSize,
+			VolumesSize:    volumesSize,
+			ContainersSize: containersSize,
+		},
+		Warnings: systemInfo.Warnings,
+	}, nil
+}
 
 func (c *dockerClient) Ping(ctx context.Context) error {
 	log.Printf("[docker] Ping")
