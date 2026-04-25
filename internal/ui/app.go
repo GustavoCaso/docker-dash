@@ -18,6 +18,7 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/header"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/statusbar"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/systeminfo"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -89,6 +90,8 @@ type model struct {
 	showConfirmation bool
 	showForm         bool
 	formModel        *form.Model
+	systemInfo       systeminfo.Model
+	showSystemInfo   bool
 	refreshInterval  time.Duration
 }
 
@@ -122,6 +125,7 @@ func New(ctx context.Context, version string, cfg *config.Config, client client.
 		volumeSection:    volumes.New(ctx, client.Volumes()),
 		networkSection:   networks.New(ctx, client.Networks()),
 		composeSection:   compose.New(ctx, client.Compose()),
+		systemInfo:       systeminfo.New(ctx, client),
 	}
 }
 
@@ -158,7 +162,7 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) handleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
+	if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" { //nolint:goconst //multiple 'esc' declarations
 		m.showForm = false
 		m.formModel = nil
 		return m, nil
@@ -213,6 +217,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if handled {
 			return model, cmd
 		}
+	}
+
+	if m.showSystemInfo {
+		km, ok := msg.(tea.KeyMsg)
+		if !ok {
+			return m, nil
+		}
+		switch km.String() {
+		case "esc", keys.Keys.SystemInfo.Keys()[0]:
+			m.showSystemInfo = false
+			return m, nil
+		}
+		return m, nil
 	}
 
 	switch msg := msg.(type) {
@@ -273,6 +290,40 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}))
 		return m, tea.Batch(cmds...)
 
+	case message.SystemInfoOutputMsg:
+		switch {
+		case msg.Err != nil:
+			m.showSystemInfo = false
+			return m, func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("failed to retrieve system information: %v", msg.Err),
+					IsError: true,
+				}
+			}
+
+		case msg.Info == nil:
+			m.showSystemInfo = false
+			return m, func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: "system information is not available",
+					IsError: true,
+				}
+			}
+		}
+
+		model, cmd := m.systemInfo.Update(msg)
+		systemModel, ok := model.(systeminfo.Model)
+		if !ok {
+			return m, nil
+		}
+		m.systemInfo = systemModel
+		m.showSystemInfo = true
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
+		return m, tea.Batch(cmds...)
+
 	case message.ShowSpinnerMsg:
 		log.Printf("[app] ShowSpinnerMsg: id=%q text=%q", msg.ID, msg.Text)
 		if cmd := m.showSpinner(msg); cmd != nil {
@@ -330,6 +381,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
+		case key.Matches(msg, m.keys.SystemInfo):
+			if m.showSystemInfo {
+				m.showSystemInfo = false
+				return m, tea.Batch(cmds...)
+			}
+			cmds = append(cmds, m.systemInfo.Init())
+			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Left):
 			// section := m.activeSection()
 			m.header.MoveLeft()
@@ -392,6 +450,14 @@ func (m *model) View() string {
 			m.width, m.height,
 			lipgloss.Center, lipgloss.Center,
 			m.confirmation.View(),
+		)
+	}
+
+	if m.showSystemInfo {
+		return lipgloss.Place(
+			m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			m.systemInfo.View(),
 		)
 	}
 

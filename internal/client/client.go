@@ -12,8 +12,34 @@ type Client interface {
 	Volumes() VolumeService
 	Networks() NetworkService
 	Compose() ComposeProjectService
+	Info(ctx context.Context) (SystemInfo, error)
 	Ping(ctx context.Context) error
 	Close() error
+}
+
+type SystemInfo struct {
+	DockerVersion    string
+	APIVersion       string
+	OS               string
+	Arch             string
+	Kernel           string
+	CPUs             int
+	TotalMemoryBytes int64
+	StorageDriver    StorageDriver
+	DiskUsage        DiskUsage
+	Warnings         []string
+}
+
+type StorageDriver struct {
+	Driver       string
+	DriverStatus [][2]string
+}
+
+type DiskUsage struct {
+	LayerSize      int64
+	ImagesSize     int64
+	VolumesSize    int64
+	ContainersSize int64
 }
 
 // ComposeUpOptions configures how a Compose project is brought up.
