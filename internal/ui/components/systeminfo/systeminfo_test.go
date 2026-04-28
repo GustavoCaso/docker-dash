@@ -45,3 +45,30 @@ func TestSystemInfoView(t *testing.T) {
 		t.Errorf("view does not contain Arch")
 	}
 }
+
+func TestSystemInfoSetSize(t *testing.T) {
+	c := client.NewMockClient()
+	m := New(context.Background(), c)
+
+	m.width = defaultModalWidth
+	m.height = defaultModalHeight
+
+	m.SetSize(10, 10)
+
+	if m.width != 10 {
+		t.Fatalf("expected width to be 10 got %T", m.width)
+	}
+	if m.height != 10 {
+		t.Fatalf("expected height to be 10 got %T", m.height)
+	}
+}
+
+func TestSystemInfoViewWithoutInfo(t *testing.T) {
+	c := client.NewMockClient()
+	m := New(context.Background(), c)
+
+	view := m.View()
+	if !strings.Contains(view, "Loading") {
+		t.Errorf("view does not contain Loading state")
+	}
+}
