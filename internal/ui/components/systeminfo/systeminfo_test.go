@@ -56,10 +56,10 @@ func TestSystemInfoSetSize(t *testing.T) {
 	m.SetSize(10, 10)
 
 	if m.width != 10 {
-		t.Fatalf("expected width to be 10 got %T", m.width)
+		t.Fatalf("expected width to be 10 got %d", m.width)
 	}
 	if m.height != 10 {
-		t.Fatalf("expected height to be 10 got %T", m.height)
+		t.Fatalf("expected height to be 10 got %d", m.height)
 	}
 }
 
