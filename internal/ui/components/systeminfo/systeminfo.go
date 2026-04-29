@@ -21,6 +21,7 @@ var (
 	modalStyleX, modalStyleY = modalStyle.GetFrameSize()
 	titleStyle               = lipgloss.NewStyle().Bold(true)
 	diskTitleStyle           = lipgloss.NewStyle().Bold(true)
+	hintStyle                = lipgloss.NewStyle().Faint(true)
 )
 
 const (
@@ -30,6 +31,7 @@ const (
 )
 
 var title = titleStyle.Render("System Information")
+var hintText = hintStyle.Render("[i/esc] exit")
 
 type Model struct {
 	ctx        context.Context
@@ -146,6 +148,7 @@ func (m Model) View() string {
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Top,
+		lipgloss.PlaceHorizontal(modalWidth, lipgloss.Left, hintText),
 		lipgloss.PlaceHorizontal(modalWidth, lipgloss.Center, title),
 		columns,
 		lipgloss.NewStyle().Width(modalWidth).Render(warnings.String()),

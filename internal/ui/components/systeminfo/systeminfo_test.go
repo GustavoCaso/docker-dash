@@ -32,6 +32,9 @@ func TestSystemInfoView(t *testing.T) {
 	}
 
 	view := systemM.View()
+	if !strings.Contains(view, "[i/esc]") {
+		t.Errorf("view does not contain hint")
+	}
 	if !strings.Contains(view, systemM.systemInfo.DockerVersion) {
 		t.Errorf("view does not contain DockerVersion")
 	}
