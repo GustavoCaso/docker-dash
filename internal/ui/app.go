@@ -256,6 +256,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.networkSection.SetSize(msg.Width, contentHeight)
 		m.composeSection.SetSize(msg.Width, contentHeight)
 		m.statusBar.SetSize(msg.Width, statusBarHeight)
+		m.systemInfo.SetSize(msg.Width, contentHeight)
 
 	case message.ShowConfirmationMsg:
 		log.Printf("[app] ShowConfirmationMsg: title=%q", msg.Title)

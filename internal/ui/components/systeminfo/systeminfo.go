@@ -13,36 +13,46 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
-const (
-	modalWidth   = 65
-	modalPadding = 2
-	modalHeight  = 30
-	columnGap    = 10
-)
-
 var (
 	modalStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(theme.Border).
-			AlignVertical(lipgloss.Top).
-			Padding(1, modalPadding).
-			Height(modalHeight).
-			Width(modalWidth)
-	titleStyle     = lipgloss.NewStyle().Bold(true)
-	diskTitleStyle = lipgloss.NewStyle().Bold(true)
+			Padding(1)
+	modalStyleX, modalStyleY = modalStyle.GetFrameSize()
+	titleStyle               = lipgloss.NewStyle().Bold(true)
+	diskTitleStyle           = lipgloss.NewStyle().Bold(true)
+	hintStyle                = lipgloss.NewStyle().Faint(true)
 )
+
+const (
+	defaultModalWidth  = 100
+	defaultModalHeight = 30
+	columnsNumber      = 2
+)
+
+var title = titleStyle.Render("System Information")
+var hintText = hintStyle.Render("[i/esc] exit")
 
 type Model struct {
 	ctx        context.Context
 	client     client.Client
 	systemInfo *client.SystemInfo
+	width      int
+	height     int
 }
 
 func New(ctx context.Context, c client.Client) Model {
 	return Model{
 		ctx:    ctx,
 		client: c,
+		width:  defaultModalWidth,
+		height: defaultModalHeight,
 	}
+}
+
+func (m *Model) SetSize(width, height int) {
+	m.width = width
+	m.height = height
 }
 
 func (m Model) Init() tea.Cmd {
@@ -70,21 +80,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
-	title := "System Information"
+	modalWidth := m.width - modalStyleX
+	modalHeight := m.height - modalStyleY
+	columnsSize := (modalWidth / columnsNumber) - modalStyleX
+
+	if m.systemInfo == nil {
+		return modalStyle.Width(modalWidth).Height(modalHeight).Render(
+			lipgloss.Place(modalWidth, modalHeight, lipgloss.Center, lipgloss.Center, "Loading..."),
+		)
+	}
 
 	kernelTruncated := m.systemInfo.Kernel
-	if len(kernelTruncated) > 18 { //nolint:mnd // number of characters until it brokes the UI
-		kernelTruncated = kernelTruncated[:18] + "\n" + kernelTruncated[18:]
+	if len(kernelTruncated) > columnsSize {
+		kernelTruncated = kernelTruncated[:columnsSize] + "\n" + kernelTruncated[columnsSize:]
 	}
 
 	var driverStatus strings.Builder
 	for _, pair := range m.systemInfo.StorageDriver.DriverStatus {
 		key := pair[0]
 		value := pair[1]
-		maxValueLen := 20 - len(key) //nolint:mnd // truncate driver value if too large
-		if maxValueLen < 0 {
-			maxValueLen = 0
-		}
+		maxValueLen := max(columnsSize-len(key), 0)
 		if len(value) > maxValueLen {
 			value = value[:maxValueLen] + "..."
 		}
@@ -117,11 +132,10 @@ func (m Model) View() string {
 	fmt.Fprintf(&rightCol, "Images size: %s\n\n", imagesSize)
 	fmt.Fprintf(&rightCol, "Volumes size: %s", volumesSize)
 
-	rightColStyle := lipgloss.NewStyle().PaddingLeft(columnGap)
 	columns := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		leftCol.String(),
-		rightColStyle.Render(rightCol.String()),
+		lipgloss.Left,
+		lipgloss.PlaceHorizontal(columnsSize, lipgloss.Center, leftCol.String()),
+		lipgloss.PlaceHorizontal(columnsSize, lipgloss.Center, rightCol.String()),
 	)
 
 	var warnings strings.Builder
@@ -132,8 +146,15 @@ func (m Model) View() string {
 		}
 	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left, columns, warnings.String())
-	return modalStyle.Render(titleStyle.Render(title), content)
+	content := lipgloss.JoinVertical(
+		lipgloss.Top,
+		lipgloss.PlaceHorizontal(modalWidth, lipgloss.Left, hintText),
+		lipgloss.PlaceHorizontal(modalWidth, lipgloss.Center, title),
+		columns,
+		lipgloss.NewStyle().Width(modalWidth).Render(warnings.String()),
+	)
+
+	return modalStyle.Width(modalWidth).Height(modalHeight).Render(content)
 }
 
 func formatBytes(b int64) string {
