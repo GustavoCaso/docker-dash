@@ -221,13 +221,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.showSystemInfo {
 		km, ok := msg.(tea.KeyMsg)
-		if !ok {
-			return m, nil
-		}
-		switch km.String() {
-		case "esc", keys.Keys.SystemInfo.Keys()[0]:
-			m.showSystemInfo = false
-			return m, nil
+		if ok {
+			switch {
+			case key.Matches(km, m.keys.Esc), key.Matches(km, keys.Keys.SystemInfo):
+				m.showSystemInfo = false
+				return m, nil
+			}
 		}
 		return m, nil
 	}
