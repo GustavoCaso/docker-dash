@@ -162,7 +162,7 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) handleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" { //nolint:goconst //multiple 'esc' declarations
+	if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
 		m.showForm = false
 		m.formModel = nil
 		return m, nil
