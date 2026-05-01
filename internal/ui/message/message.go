@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
 )
 
@@ -72,4 +73,9 @@ type ShowConfirmationMsg struct {
 
 type ShowFormMsg struct {
 	Form *form.Model
+}
+
+type SystemInfoOutputMsg struct {
+	Info *client.SystemInfo
+	Err  error
 }
