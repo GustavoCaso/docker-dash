@@ -170,6 +170,11 @@ func (c *dockerClient) Close() error {
 	return errors.Join(c.cli.Close(), c.compose.Close())
 }
 
+func (c *dockerClient) Kill(ctx context.Context, id string, signal string) error {
+	err := c.cli.ContainerKill(ctx, id, signal)
+	return err
+}
+
 // timeFromUnix converts Unix timestamp to time.Time.
 func timeFromUnix(unix int64) time.Time {
 	return time.Unix(unix, 0)

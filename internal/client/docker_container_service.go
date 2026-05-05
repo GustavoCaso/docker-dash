@@ -281,6 +281,13 @@ func (s *containerService) Remove(ctx context.Context, id string, force bool) er
 	return err
 }
 
+func (s *containerService) Kill(ctx context.Context, id string, signal string) error {
+	log.Printf("[docker] ContainerKill: id=%q", id)
+	err := s.cli.ContainerKill(ctx, id, signal)
+	log.Printf("[docker] ContainerKill: done err=%v", id)
+	return err
+}
+
 func (s *containerService) Pause(ctx context.Context, id string) error {
 	log.Printf("[docker] ContainerPause: id=%q", id)
 	err := s.cli.ContainerPause(ctx, id)
