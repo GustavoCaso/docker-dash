@@ -177,7 +177,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 		}
 		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" ||
 			msg.Action == "pausing" ||
-			msg.Action == "unpausing" {
+			msg.Action == "unpausing" || msg.Action == "terminating" {
 			cmds = append(cmds, s.updateContainersCmd())
 			stopSpinner = false
 		}
@@ -219,6 +219,8 @@ func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 		return base.UpdateResult{Cmd: s.confirmContainerRestart(), Handled: true}
 	case key.Matches(msg, keys.Keys.ContainerPauseUnpause):
 		return base.UpdateResult{Cmd: s.confirmContainerPauseUnpause(), Handled: true}
+	case key.Matches(msg, keys.Keys.ContainerKill):
+		return base.UpdateResult{Cmd: s.confirmContainerKill(), Handled: true}
 	}
 	return base.UpdateResult{}
 }
@@ -288,6 +290,26 @@ func (s *Section) restartContainerCmd() tea.Cmd {
 	return func() tea.Msg {
 		err := svc.Restart(s.ctx, ci.ID())
 		return containerActionMsg{ID: ci.ID(), Action: "restarting", Idx: idx, Error: err}
+	}
+}
+
+func (s *Section) killContainerCmd() tea.Cmd {
+	ctx := s.ctx
+	svc := s.service
+	items := s.List.Items()
+	idx := s.List.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+
+	ci, ok := items[idx].(containerItem)
+	if !ok {
+		return nil
+	}
+
+	return func() tea.Msg {
+		err := svc.Kill(ctx, ci.ID(), "SIGKILL")
+		return containerActionMsg{ID: ci.ID(), Action: "terminating", Idx: idx, Error: err}
 	}
 }
 
@@ -370,6 +392,23 @@ func (s *Section) confirmContainerDelete() tea.Cmd {
 			Title:     "Delete Container",
 			Body:      fmt.Sprintf("Delete container %s?", helper.ShortID(ci.ID())),
 			OnConfirm: s.WithSpinner(deleteCmd),
+		}
+	}
+}
+
+func (s *Section) confirmContainerKill() tea.Cmd {
+	items := s.List.Items()
+	idx := s.List.Index()
+	if idx < 0 || idx >= len(items) {
+		return nil
+	}
+
+	killCmd := s.killContainerCmd()
+	return func() tea.Msg {
+		return message.ShowConfirmationMsg{
+			Title:     "Kill Container",
+			Body:      "Force kill container ? This sends SIGKILL",
+			OnConfirm: s.WithSpinner(killCmd),
 		}
 	}
 }

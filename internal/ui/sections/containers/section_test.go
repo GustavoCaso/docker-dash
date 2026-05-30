@@ -255,6 +255,16 @@ func TestContainerPauseUnpause(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestContainerKill(t *testing.T) {
+	model := newContainerSectionModel()
+	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
+	waitFor(t, tm, "nginx:latest")
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("K")})
+	waitFor(t, tm, "stopped")
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func TestFormatBytes(t *testing.T) {
 	tests := []struct {
 		input    uint64

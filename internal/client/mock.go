@@ -31,14 +31,15 @@ func NewMockClient() *MockClient {
 	}
 }
 
-func (c *MockClient) Containers() ContainerService                 { return c.containers }
-func (c *MockClient) Images() ImageService                         { return c.images }
-func (c *MockClient) Volumes() VolumeService                       { return c.volumes }
-func (c *MockClient) Networks() NetworkService                     { return c.networks }
-func (c *MockClient) Compose() ComposeProjectService               { return c.compose }
-func (c *MockClient) Info(ctx context.Context) (SystemInfo, error) { return c.info.SystemInfo, nil }
-func (c *MockClient) Ping(ctx context.Context) error               { return nil }
-func (c *MockClient) Close() error                                 { return nil }
+func (c *MockClient) Containers() ContainerService                             { return c.containers }
+func (c *MockClient) Images() ImageService                                     { return c.images }
+func (c *MockClient) Volumes() VolumeService                                   { return c.volumes }
+func (c *MockClient) Networks() NetworkService                                 { return c.networks }
+func (c *MockClient) Compose() ComposeProjectService                           { return c.compose }
+func (c *MockClient) Info(ctx context.Context) (SystemInfo, error)             { return c.info.SystemInfo, nil }
+func (c *MockClient) Ping(ctx context.Context) error                           { return nil }
+func (c *MockClient) Close() error                                             { return nil }
+func (c *MockClient) Kill(ctx context.Context, id string, signal string) error { return nil }
 
 // mockContainerService provides mock container data.
 type mockContainerService struct {
@@ -329,6 +330,20 @@ func (s *mockContainerService) Remove(ctx context.Context, id string, force bool
 			return nil
 		}
 	}
+	return fmt.Errorf("container not found: %s", id)
+}
+
+func (s *mockContainerService) Kill(ctx context.Context, id, signal string) error {
+	for i, c := range s.containers {
+		if c.ID == id || c.Name == id {
+			if signal == "SIGKILL" {
+				s.containers[i].State = StateStopped
+				s.containers[i].Status = "Exited (137) 2 seconds ago"
+			}
+			return nil
+		}
+	}
+
 	return fmt.Errorf("container not found: %s", id)
 }
 

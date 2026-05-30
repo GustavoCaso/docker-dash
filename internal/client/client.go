@@ -96,6 +96,7 @@ type ContainerService interface {
 	Stop(ctx context.Context, id string) error
 	Restart(ctx context.Context, id string) error
 	Remove(ctx context.Context, id string, force bool) error
+	Kill(ctx context.Context, id string, signal string) error
 	FileTree(ctx context.Context, id string) (*FileNode, error)
 	Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error)
 	Exec(ctx context.Context, id string) (*ExecSession, error)
