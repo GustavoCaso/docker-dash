@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
@@ -72,13 +73,13 @@ type Section struct {
 }
 
 // New creates a new container list.
-func New(ctx context.Context, svc client.ContainerService) *Section {
+func New(ctx context.Context, svc client.ContainerService, logsCfg config.LogsConfig) *Section {
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
 		Section: base.New(sections.ContainersSection, []panel.Panel{
 			NewDetailsPanel(ctx, svc),
-			NewLogsPanel(ctx, svc),
+			NewLogsPanel(ctx, svc, logsCfg),
 			NewStatsPanel(ctx, svc),
 			panel.NewFilesPanel(ctx, string(sections.ContainersSection), svc),
 			NewExecPanel(ctx, svc),

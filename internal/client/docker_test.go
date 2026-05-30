@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"strconv"
 	"testing"
 	"time"
 
@@ -501,4 +502,46 @@ func TestNewDockerClientFromConfig_TCPHost(t *testing.T) {
 		t.Errorf("NewDockerClientFromConfig() TCP host creation error: %v", err)
 	}
 	defer client.Close()
+}
+
+func TestSinceUnix(t *testing.T) {
+	t.Run("empty since returns empty string", func(t *testing.T) {
+		if got := sinceUnix(""); got != "" {
+			t.Errorf("sinceUnix(%q) = %q, want %q", "", got, "")
+		}
+	})
+
+	t.Run("invalid duration returns empty string", func(t *testing.T) {
+		if got := sinceUnix("notaduration"); got != "" {
+			t.Errorf("sinceUnix(%q) = %q, want empty", "notaduration", got)
+		}
+	})
+
+	t.Run("valid duration returns unix timestamp string", func(t *testing.T) {
+		before := time.Now().Add(-2 * time.Hour).Unix()
+		got := sinceUnix("2h")
+		after := time.Now().Add(-2 * time.Hour).Unix()
+
+		ts, err := strconv.ParseInt(got, 10, 64)
+		if err != nil {
+			t.Fatalf("sinceUnix(%q) = %q, not a valid integer: %v", "2h", got, err)
+		}
+		if ts < before || ts > after {
+			t.Errorf("sinceUnix(%q) = %d, want between %d and %d", "2h", ts, before, after)
+		}
+	})
+
+	t.Run("short duration returns recent timestamp", func(t *testing.T) {
+		before := time.Now().Add(-10 * time.Minute).Unix()
+		got := sinceUnix("10m")
+		after := time.Now().Add(-10 * time.Minute).Unix()
+
+		ts, err := strconv.ParseInt(got, 10, 64)
+		if err != nil {
+			t.Fatalf("sinceUnix(%q) = %q, not a valid integer: %v", "10m", got, err)
+		}
+		if ts < before || ts > after {
+			t.Errorf("sinceUnix(%q) = %d, want between %d and %d", "10m", ts, before, after)
+		}
+	})
 }

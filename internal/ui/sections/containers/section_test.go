@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
@@ -20,7 +21,7 @@ type containerSectionModel struct {
 
 func newContainerSectionModel() containerSectionModel {
 	client := client.NewMockClient()
-	section := New(context.Background(), client.Containers())
+	section := New(context.Background(), client.Containers(), config.DefaultLogsConfig())
 	section.SetSize(120, 40)
 	return containerSectionModel{section: section}
 }
@@ -185,7 +186,7 @@ func TestContainerListRefresh(t *testing.T) {
 
 func TestContainerListExecMouseScroll(t *testing.T) {
 	dockerClient := client.NewMockClient()
-	section := New(context.Background(), dockerClient.Containers())
+	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
 	section.SetSize(120, 40)
 
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
@@ -212,7 +213,7 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 
 func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	dockerClient := client.NewMockClient()
-	section := New(context.Background(), dockerClient.Containers())
+	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
 	section.SetSize(120, 40)
 
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
@@ -221,13 +222,13 @@ func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 
 	pr, pw := io.Pipe()
 	lp.logsSession = client.NewLogsSession(io.NopCloser(pr), func() { pr.Close(); pw.Close() })
-	lp.logsOutput = "some logs"
+	lp.appendLines("some logs\n")
 
 	// Simulate exec close which calls activePanel().Close()
 	section.ActivePanel().Close()
 
-	if lp.logsOutput != "" {
-		t.Errorf("Close() should clear logsOutput, got %q", lp.logsOutput)
+	if len(lp.list.Items()) != 0 {
+		t.Errorf("Close() should clear list items, got %d", len(lp.list.Items()))
 	}
 }
 

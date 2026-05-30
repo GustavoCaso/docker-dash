@@ -16,6 +16,7 @@ type Config struct {
 	Refresh     RefreshConfig     `toml:"refresh"`
 	Debug       DebugConfig       `toml:"debug"`
 	UpdateCheck UpdateCheckConfig `toml:"update_check"`
+	Logs        LogsConfig        `toml:"logs"`
 }
 
 // DockerConfig holds Docker client connection settings.
@@ -44,6 +45,27 @@ type UpdateCheckConfig struct {
 	Interval string `toml:"interval"`
 }
 
+// LogsConfig holds log streaming settings.
+type LogsConfig struct {
+	// Follow streams logs in real-time when true.
+	Follow bool `toml:"follow"`
+	// Tail is the number of lines to show from the end ("100", "all", etc).
+	Tail string `toml:"tail"`
+	// Timestamps prepends timestamps to each log line.
+	Timestamps bool `toml:"timestamps"`
+	// Since shows logs since a relative duration or timestamp (e.g. "2h", "10m").
+	Since string `toml:"since"`
+}
+
+// DefaultLogsConfig returns sensible defaults for log streaming.
+func DefaultLogsConfig() LogsConfig {
+	return LogsConfig{
+		Follow: true,
+		Tail:   "100",
+		Since:  "2h",
+	}
+}
+
 // DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml.
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
@@ -57,6 +79,7 @@ func DefaultPath() string {
 // If the file does not exist, an empty Config is returned with no error.
 func Load(path string) (*Config, error) {
 	cfg := &Config{}
+	cfg.Logs = DefaultLogsConfig()
 	_, err := toml.DecodeFile(path, cfg)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {

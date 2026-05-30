@@ -204,6 +204,7 @@ type LogOptions struct {
 	Follow     bool
 	Tail       string
 	Timestamps bool
+	Since      string
 }
 
 type LogsSession struct {
