@@ -127,8 +127,8 @@ follow = true
 tail = "100"
 # Prepend timestamps to each log line.
 timestamps = false
-# Show logs since a relative duration or absolute timestamp.
-# Relative: "10m", "2h", "24h". Absolute: "2006-01-02T15:04:05".
+# Show logs since a relative duration.
+# "10m", "2h", "24h".
 # Empty string means show all available logs.
 since = "2h"
 ```
