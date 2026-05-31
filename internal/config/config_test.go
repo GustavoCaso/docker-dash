@@ -167,3 +167,50 @@ enabled = true
 		t.Errorf("expected Debug.Enabled=true, got false")
 	}
 }
+
+func TestDefaultLogsConfig(t *testing.T) {
+	cfg, err := config.Load("/nonexistent/path/config.toml")
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if !cfg.Logs.Follow {
+		t.Error("default Follow should be true")
+	}
+	if cfg.Logs.Tail != "100" {
+		t.Errorf("default Tail = %q, want %q", cfg.Logs.Tail, "100")
+	}
+	if cfg.Logs.Since != "2h" {
+		t.Errorf("default Since = %q, want %q", cfg.Logs.Since, "2h")
+	}
+}
+
+func TestLogsConfigFromTOML(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "config*.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`
+[logs]
+follow = false
+tail = "50"
+timestamps = true
+since = "30m"
+`)
+	f.Close()
+	cfg, err := config.Load(f.Name())
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Logs.Follow {
+		t.Error("Follow should be false when set in TOML")
+	}
+	if cfg.Logs.Tail != "50" {
+		t.Errorf("Tail = %q, want %q", cfg.Logs.Tail, "50")
+	}
+	if !cfg.Logs.Timestamps {
+		t.Error("Timestamps should be true when set in TOML")
+	}
+	if cfg.Logs.Since != "30m" {
+		t.Errorf("Since = %q, want %q", cfg.Logs.Since, "30m")
+	}
+}

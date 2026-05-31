@@ -119,6 +119,18 @@ enabled = false
 enabled = false
 # Polling interval. Examples: "30m", "1h", "6h"
 interval = "1h"
+
+[logs]
+# Stream logs in real-time (follow mode). Set to false to fetch a static snapshot.
+follow = true
+# Number of log lines to show from the end of the log. Use "all" to show everything.
+tail = "100"
+# Prepend timestamps to each log line.
+timestamps = false
+# Show logs since a relative duration.
+# "10m", "2h", "24h".
+# Empty string means show all available logs.
+since = "2h"
 ```
 
 ### CLI flags

@@ -302,18 +302,28 @@ func (s *containerService) Unpause(ctx context.Context, id string) error {
 	return err
 }
 
-const logsSinceHours = 2 // hours of log history to fetch
+// sinceUnix converts a duration string (e.g. "2h", "10m") to a Unix timestamp
+// string as required by the Docker API. Returns empty string if since is empty.
+func sinceUnix(since string) string {
+	if since == "" {
+		return ""
+	}
+	d, err := time.ParseDuration(since)
+	if err != nil {
+		return ""
+	}
+	return strconv.FormatInt(time.Now().Add(-d).Unix(), 10)
+}
 
 func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error) {
-	log.Printf("[docker] ContainerLogs: id=%q follow=%v tail=%q", id, opts.Follow, opts.Tail)
-	now := time.Now()
+	log.Printf("[docker] ContainerLogs: id=%q follow=%v tail=%q since=%q", id, opts.Follow, opts.Tail, opts.Since)
 	reader, err := s.cli.ContainerLogs(ctx, id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     opts.Follow,
 		Tail:       opts.Tail,
 		Timestamps: opts.Timestamps,
-		Since:      strconv.FormatInt(now.Add(-time.Hour*logsSinceHours).Unix(), 10),
+		Since:      sinceUnix(opts.Since),
 	})
 
 	if err != nil {

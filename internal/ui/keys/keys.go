@@ -39,6 +39,9 @@ type KeyMap struct {
 	PanelNext key.Binding
 	PanelPrev key.Binding
 
+	LogScrollLeft  key.Binding
+	LogScrollRight key.Binding
+
 	Prune key.Binding
 
 	SystemInfo key.Binding
@@ -177,6 +180,14 @@ var Keys = &KeyMap{
 	PanelPrev: key.NewBinding(
 		key.WithKeys("shift+left"),
 		key.WithHelp("shift+←", "prev panel"),
+	),
+	LogScrollLeft: key.NewBinding(
+		key.WithKeys("["),
+		key.WithHelp("[", "scroll line left"),
+	),
+	LogScrollRight: key.NewBinding(
+		key.WithKeys("]"),
+		key.WithHelp("]", "scroll line right"),
 	),
 	Prune: key.NewBinding(
 		key.WithKeys("P"),

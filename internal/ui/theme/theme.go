@@ -206,6 +206,11 @@ var (
 // UpdateAvailableStyle is the style used to render the update-available icon.
 var UpdateAvailableStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700"))
 
+// SelectedLogLine is the style used to render the currently selected log line.
+var SelectedLogLine = lipgloss.NewStyle().
+	Background(lipgloss.Color("#1e3a5f")).
+	Foreground(lipgloss.Color("#ffffff"))
+
 // GetContainerStatusIcon returns the appropriate icon for a given container/resource state.
 func GetContainerStatusIcon(state string) string {
 	switch state {
