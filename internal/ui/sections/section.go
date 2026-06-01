@@ -23,6 +23,8 @@ type Section interface {
 	Update(msg tea.Msg) tea.Cmd
 	// View renders the list.
 	View() string
+	// IsFilter returns if the filter is active or nor
+	IsFilter() bool
 	// ActivePanel returns the active panel
 	ActivePanel() panel.Panel
 	// ActivePanelName returns the active panel name or an empty string when the

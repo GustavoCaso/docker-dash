@@ -249,6 +249,10 @@ func (b *Section) UpdateActivePanel() tea.Cmd {
 	return b.ActivePanel().Init(id)
 }
 
+func (b *Section) IsFilter() bool {
+	return b.isFilter
+}
+
 // handleFilterKey processes keyboard events while filter mode is active.
 // It forwards every key to the list and, when Esc is pressed, deactivates
 // filter mode and clears the contextual key bindings.

@@ -366,6 +366,31 @@ func TestSpinnerOverlayShowsNestedSpinnerForActivePanel(t *testing.T) {
 	}
 }
 
+func TestFilterModeBlocksGlobalShortcuts(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+
+	// Default view is Images — wait for it
+	waitForString(t, tm, "nginx")
+
+	// Activate filter mode with '/'
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	// 'd' would normally open the delete confirmation modal; in filter mode it
+	// should be treated as filter input, so no confirmation modal must appear.
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+
+	waitFor(t, tm, func(b []byte) bool {
+		s := string(b)
+		return !strings.Contains(s, "Delete Image")
+	})
+
+	// Exit filter mode with Esc, then quit normally.
+	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
 	teatest.WaitFor(
 		t,
