@@ -212,6 +212,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.isFilterActive() {
+		return m.forwardMessageToActive(msg)
+	}
+
 	if m.showConfirmation {
 		model, cmd, handled := m.handleConfirmationUpdate(msg)
 		if handled {
@@ -597,6 +601,10 @@ func (m *model) activeSectionName() string {
 	default:
 		return ""
 	}
+}
+
+func (m *model) isFilterActive() bool {
+	return m.activeSection().IsFilter()
 }
 
 func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
