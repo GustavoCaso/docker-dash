@@ -308,6 +308,7 @@ func (b *Section) toggleFilter(msg tea.KeyMsg) []tea.Cmd {
 func (b *Section) extendFilterHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			key.NewBinding(key.WithKeys("↑↓"), key.WithHelp("↑↓", "navigation")),
 			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select item")),
 			keys.Keys.Esc,
 		}}
