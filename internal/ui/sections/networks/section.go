@@ -107,7 +107,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			}
 		}
 		return base.UpdateResult{
-			Cmd:         tea.Batch(s.List.SetItems(msg.items), s.UpdateActivePanel()),
+			Cmd:         tea.Batch(s.UpdateItems(msg.items)...),
 			Handled:     true,
 			StopSpinner: true,
 		}

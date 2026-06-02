@@ -531,6 +531,47 @@ func TestPullUpdateCmd_WithUpdate_FiresPull(t *testing.T) {
 	}
 }
 
+func TestImagesLoadedMsgCallsUpdateItems(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
+	section.SetSize(120, 40)
+
+	if len(section.List.Items()) != 0 {
+		t.Fatal("expected empty list before loading")
+	}
+
+	loadedMsg := section.RefreshCmd()()
+	cmd := section.Update(loadedMsg)
+
+	if len(section.List.Items()) == 0 {
+		t.Fatal("UpdateItems should populate the list after imagesLoadedMsg")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd after imagesLoadedMsg")
+	}
+}
+
+func TestImagesLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
+	section.SetSize(120, 40)
+
+	section.Update(section.RefreshCmd()())
+	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	cmd := section.Update(imagesLoadedMsg{images: []client.Image{}})
+
+	if len(section.List.Items()) != 0 {
+		t.Errorf("expected 0 items after empty imagesLoadedMsg, got %d", len(section.List.Items()))
+	}
+	if section.IsFilter() {
+		t.Error("Reset via UpdateItems should clear isFilter")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd (SetItems) after empty imagesLoadedMsg")
+	}
+}
+
 func TestPanelClosedOnUpNavigation(t *testing.T) {
 	c := client.NewMockClient()
 	section := New(context.Background(), c, config.UpdateCheckConfig{})

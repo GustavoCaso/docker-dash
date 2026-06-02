@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
@@ -112,6 +113,48 @@ func TestNetworkListPrune(t *testing.T) {
 	waitFor(t, tm, "app-network") // connected networks remain
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestNetworksLoadedMsgCallsUpdateItems(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	if len(section.List.Items()) != 0 {
+		t.Fatal("expected empty list before loading")
+	}
+
+	loadedMsg := section.RefreshCmd()()
+	cmd := section.Update(loadedMsg)
+
+	if len(section.List.Items()) == 0 {
+		t.Fatal("UpdateItems should populate the list after networksLoadedMsg")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd after networksLoadedMsg")
+	}
+}
+
+func TestNetworksLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	section.Update(section.RefreshCmd()())
+	// Manually toggle filter via Update to set isFilter via the base's toggleFilter path
+	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	cmd := section.Update(networksLoadedMsg{items: []list.Item{}})
+
+	if len(section.List.Items()) != 0 {
+		t.Errorf("expected 0 items after empty networksLoadedMsg, got %d", len(section.List.Items()))
+	}
+	if section.IsFilter() {
+		t.Error("Reset via UpdateItems should clear isFilter")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd (SetItems) after empty networksLoadedMsg")
+	}
 }
 
 func waitFor(t *testing.T, tm *teatest.TestModel, s string) {

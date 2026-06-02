@@ -448,3 +448,59 @@ func TestFilterInactiveIgnoresMsgs(t *testing.T) {
 		t.Error("handleFilterKey should return no cmds when filter is not active")
 	}
 }
+
+func TestUpdateItemsSetsItems(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	section := New(sections.SectionName("test"), []panel.Panel{fp})
+	section.ActivePanelInitFn = func(item list.Item) string {
+		i := item.(fakeItem)
+		return i.name
+	}
+
+	items := []list.Item{fakeItem{name: "item1"}, fakeItem{name: "item2"}}
+	cmds := section.UpdateItems(items)
+
+	if len(section.List.Items()) != 2 {
+		t.Errorf("expected 2 items, got %d", len(section.List.Items()))
+	}
+	if len(cmds) != 2 {
+		t.Errorf("expected 2 cmds (SetItems + UpdateActivePanel), got %d", len(cmds))
+	}
+	// UpdateActivePanel (cmds[1]) should produce fakePanelInitCmd for the selected item
+	if cmds[1] == nil {
+		t.Fatal("cmds[1] (UpdateActivePanel) should not be nil")
+	}
+	if _, ok := cmds[1]().(fakePanelInitCmd); !ok {
+		t.Errorf("cmds[1] should produce fakePanelInitCmd, got %T", cmds[1]())
+	}
+	if !slices.Contains(fp.ids, "item1") {
+		t.Errorf("UpdateItems should init the active panel with the selected item, got %q", fp.ids)
+	}
+}
+
+func TestUpdateItemsEmptyResetsSection(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	items := []list.Item{fakeItem{name: "item1"}}
+	section := newSectionWithItems(items, []panel.Panel{fp})
+	section.ActivePanelInitFn = func(item list.Item) string {
+		i := item.(fakeItem)
+		return i.name
+	}
+	section.isFilter = true
+
+	cmds := section.UpdateItems([]list.Item{})
+
+	if len(section.List.Items()) != 0 {
+		t.Errorf("expected 0 items after clearing, got %d", len(section.List.Items()))
+	}
+	if section.isFilter {
+		t.Error("UpdateItems with empty items should reset isFilter via Reset()")
+	}
+	if len(cmds) != 2 {
+		t.Errorf("expected 2 cmds (SetItems + Reset), got %d", len(cmds))
+	}
+	// cmds[1] comes from Reset() → ActivePanel().Close() which fakePanel returns nil
+	if cmds[1] != nil {
+		t.Errorf("cmds[1] (Reset/Close) should be nil for fakePanel, got non-nil")
+	}
+}
