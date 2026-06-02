@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -389,6 +390,58 @@ func TestFilterModeBlocksGlobalShortcuts(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyEsc})
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContextualKeyBindingsProcessedDuringFilterMode(t *testing.T) {
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	if !ok {
+		t.Fatal("New should return *model")
+	}
+
+	// activeKeys is set lazily inside View(); trigger it.
+	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	appModel.View()
+
+	// Activate filter on the active section.
+	appModel.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	if !appModel.isFilterActive() {
+		t.Fatal("filter mode did not activate")
+	}
+
+	if appModel.activeKeys == nil {
+		t.Fatal("activeKeys should not be nil after View()")
+	}
+
+	sentinel := key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "sentinel"))
+
+	// AddContextualKeyBindingsMsg must be processed even while filter is active.
+	appModel.Update(message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{sentinel}})
+
+	shortHelp := appModel.activeKeys.ShortHelp()
+	found := false
+	for _, b := range shortHelp {
+		if slices.Contains(b.Keys(), "x") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contextual binding should appear in ShortHelp after AddContextualKeyBindingsMsg during filter mode")
+	}
+
+	// ClearContextualKeyBindingsMsg must also be processed while filter is active.
+	appModel.Update(message.ClearContextualKeyBindingsMsg{})
+
+	shortHelp = appModel.activeKeys.ShortHelp()
+	for _, b := range shortHelp {
+		if slices.Contains(b.Keys(), "x") {
+			t.Error(
+				"contextual binding should be gone from ShortHelp after ClearContextualKeyBindingsMsg during filter mode",
+			)
+			break
+		}
+	}
 }
 
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {

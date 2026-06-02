@@ -206,20 +206,27 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, spinnerCmd)
 	}
 
+	m.updateContextualMenu(msg)
+
 	if m.showForm {
 		if _, ok := msg.(tea.WindowSizeMsg); !ok {
-			return m.handleFormUpdate(msg)
+			m, cmd := m.handleFormUpdate(msg)
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
 		}
 	}
 
 	if m.isFilterActive() {
-		return m.forwardMessageToActive(msg)
+		m, cmd := m.forwardMessageToActive(msg)
+		cmds = append(cmds, cmd)
+		return m, tea.Batch(cmds...)
 	}
 
 	if m.showConfirmation {
 		model, cmd, handled := m.handleConfirmationUpdate(msg)
 		if handled {
-			return model, cmd
+			cmds = append(cmds, cmd)
+			return model, tea.Batch(cmds...)
 		}
 	}
 
@@ -229,10 +236,10 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case key.Matches(km, m.keys.Esc), key.Matches(km, keys.Keys.SystemInfo):
 				m.showSystemInfo = false
-				return m, nil
+				return m, tea.Batch(cmds...)
 			}
 		}
-		return m, nil
+		return m, tea.Batch(cmds...)
 	}
 
 	switch msg := msg.(type) {
@@ -365,21 +372,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}))
 		return m, tea.Batch(cmds...)
 
-	case message.AddContextualKeyBindingsMsg:
-		log.Printf("[app] AddContextualKeyBindingsMsg")
-		if m.activeKeys != nil {
-			m.activeKeys.ToggleContextual(msg.Bindings)
-		}
-
-		return m, tea.Batch(cmds...)
-
-	case message.ClearContextualKeyBindingsMsg:
-		log.Printf("[app] ClearContextualKeyBindingsMsg")
-		if m.activeKeys != nil {
-			m.activeKeys.DisableContextual()
-		}
-		return m, tea.Batch(cmds...)
-
 	case tea.KeyMsg:
 		log.Printf("[app] KeyMsg: key=%q", msg.String())
 		switch {
@@ -393,11 +385,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.systemInfo.Init())
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Left):
-			// section := m.activeSection()
 			m.header.MoveLeft()
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Right):
-			// section := m.activeSection()
 			m.header.MoveRight()
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Refresh):
@@ -524,6 +514,21 @@ func (m *model) updateSpinner(msg tea.Msg) tea.Cmd {
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)
 	return cmd
+}
+
+func (m *model) updateContextualMenu(teaMsg tea.Msg) {
+	switch msg := teaMsg.(type) {
+	case message.AddContextualKeyBindingsMsg:
+		log.Printf("[app] AddContextualKeyBindingsMsg")
+		if m.activeKeys != nil {
+			m.activeKeys.ToggleContextual(msg.Bindings)
+		}
+	case message.ClearContextualKeyBindingsMsg:
+		log.Printf("[app] ClearContextualKeyBindingsMsg")
+		if m.activeKeys != nil {
+			m.activeKeys.DisableContextual()
+		}
+	}
 }
 
 func (m *model) showSpinner(msg message.ShowSpinnerMsg) tea.Cmd {

@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
+	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
 
@@ -353,5 +354,97 @@ func TestPanelPrevWrapsAround(t *testing.T) {
 	}
 	if !slices.Contains(panelB.ids, "item1") {
 		t.Errorf("PanelPrev wrap should init panelB with the selected item id, got %q", panelB.ids)
+	}
+}
+
+func TestFilterEscClearsFilterMode(t *testing.T) {
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
+	section.isFilter = true
+
+	handled, cmds := section.handleFilterKey(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if !handled {
+		t.Error("handleFilterKey should return handled=true when filter is active")
+	}
+	if section.isFilter {
+		t.Error("Esc should set isFilter to false")
+	}
+	var gotClear bool
+	for _, cmd := range cmds {
+		if cmd == nil {
+			continue
+		}
+		if _, ok := cmd().(message.ClearContextualKeyBindingsMsg); ok {
+			gotClear = true
+		}
+	}
+	if !gotClear {
+		t.Error("Esc should emit ClearContextualKeyBindingsMsg")
+	}
+}
+
+func TestFilterEnterResetsFilterAndSelectsItem(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	items := []list.Item{
+		fakeItem{name: "item1"},
+		fakeItem{name: "item2"},
+	}
+	section := newSectionWithItems(items, []panel.Panel{fp})
+	section.ActivePanelInitFn = func(item list.Item) string {
+		i := item.(fakeItem)
+		return i.name
+	}
+	section.isFilter = true
+
+	handled, cmds := section.handleFilterKey(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if !handled {
+		t.Error("handleFilterKey should return handled=true when filter is active")
+	}
+	if section.isFilter {
+		t.Error("Enter should set isFilter to false")
+	}
+	var gotClear bool
+	for _, cmd := range cmds {
+		if cmd == nil {
+			continue
+		}
+		if _, ok := cmd().(message.ClearContextualKeyBindingsMsg); ok {
+			gotClear = true
+		}
+	}
+	if !gotClear {
+		t.Error("Enter should emit ClearContextualKeyBindingsMsg")
+	}
+	if !fp.closed {
+		t.Error("Enter should close the active panel")
+	}
+}
+
+func TestFilterHandlesNonKeyMsg(t *testing.T) {
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
+	section.isFilter = true
+
+	// A non-key message should still be forwarded to the list and return handled=true
+	handled, _ := section.handleFilterKey(tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	if !handled {
+		t.Error("handleFilterKey should return handled=true for non-key msgs when filter is active")
+	}
+	if !section.isFilter {
+		t.Error("non-key msg should not exit filter mode")
+	}
+}
+
+func TestFilterInactiveIgnoresMsgs(t *testing.T) {
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
+
+	handled, cmds := section.handleFilterKey(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if handled {
+		t.Error("handleFilterKey should return handled=false when filter is not active")
+	}
+	if len(cmds) != 0 {
+		t.Error("handleFilterKey should return no cmds when filter is not active")
 	}
 }

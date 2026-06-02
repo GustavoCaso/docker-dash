@@ -142,14 +142,14 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
+	if handled, filterCmds := b.handleFilterKey(msg); handled {
+		return tea.Batch(filterCmds...)
+	}
+
 	//nolint:nestif // The complexity is acceptable because Update function
 	// hanldes all the logic
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		log.Printf("[%s] KeyMsg: key=%q", b.name, keyMsg.String())
-
-		if handled, filterCmds := b.handleFilterKey(keyMsg); handled {
-			return tea.Batch(filterCmds...)
-		}
 
 		if len(b.panels) > 0 {
 			if handled, cmd := b.handlePanelKeys(keyMsg); handled {
@@ -259,7 +259,7 @@ func (b *Section) IsFilter() bool {
 //
 // Returns (true, cmds) when filter mode was active and the event was consumed,
 // or (false, nil) when filter mode is not active.
-func (b *Section) handleFilterKey(msg tea.KeyMsg) (bool, []tea.Cmd) {
+func (b *Section) handleFilterKey(msg tea.Msg) (bool, []tea.Cmd) {
 	if !b.isFilter {
 		return false, nil
 	}
@@ -267,10 +267,25 @@ func (b *Section) handleFilterKey(msg tea.KeyMsg) (bool, []tea.Cmd) {
 	var listCmd tea.Cmd
 	b.List, listCmd = b.List.Update(msg)
 	cmds = append(cmds, listCmd)
-	if key.Matches(msg, keys.Keys.Esc) {
-		b.isFilter = false
-		cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch {
+		case key.Matches(keyMsg, keys.Keys.Esc):
+			b.isFilter = false
+			cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+		case key.Matches(keyMsg, keys.Keys.Enter):
+			b.isFilter = false
+			selectedIdx := b.List.GlobalIndex()
+			b.List.ResetFilter()
+			b.List.Select(selectedIdx)
+			cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
+			if len(b.panels) > 0 {
+				currentPanel := b.ActivePanel()
+				cmds = append(cmds, currentPanel.Close(), b.UpdateActivePanel())
+			}
+		}
 	}
+
 	return true, cmds
 }
 
@@ -288,11 +303,13 @@ func (b *Section) toggleFilter(msg tea.KeyMsg) []tea.Cmd {
 	return cmds
 }
 
-// extendFilterHelpCommand returns a tea.Cmd that adds the Esc key binding to
+// extendFilterHelpCommand returns a tea.Cmd that adds the Esc and Enter key binding to
 // the contextual help bar while filter mode is active.
 func (b *Section) extendFilterHelpCommand() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
+			key.NewBinding(key.WithKeys("↑↓"), key.WithHelp("↑↓", "navigation")),
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "select item")),
 			keys.Keys.Esc,
 		}}
 	}
