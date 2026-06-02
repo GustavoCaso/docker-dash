@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
@@ -264,6 +265,47 @@ func TestContainerKill(t *testing.T) {
 	waitFor(t, tm, "stopped")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContainersLoadedMsgCallsUpdateItems(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+
+	if len(section.List.Items()) != 0 {
+		t.Fatal("expected empty list before loading")
+	}
+
+	loadedMsg := section.RefreshCmd()()
+	cmd := section.Update(loadedMsg)
+
+	if len(section.List.Items()) == 0 {
+		t.Fatal("UpdateItems should populate the list after containersLoadedMsg")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd after containersLoadedMsg")
+	}
+}
+
+func TestContainersLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+
+	section.Update(section.RefreshCmd()())
+	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	cmd := section.Update(containersLoadedMsg{items: []list.Item{}})
+
+	if len(section.List.Items()) != 0 {
+		t.Errorf("expected 0 items after empty containersLoadedMsg, got %d", len(section.List.Items()))
+	}
+	if section.IsFilter() {
+		t.Error("Reset via UpdateItems should clear isFilter")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd (SetItems) after empty containersLoadedMsg")
+	}
 }
 
 func TestFormatBytes(t *testing.T) {

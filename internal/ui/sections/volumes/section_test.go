@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/exp/teatest"
 
@@ -77,6 +78,48 @@ func TestVolumeListPrune(t *testing.T) {
 	waitFor(t, tm, "postgres_data") // used volumes remain
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestVolumesLoadedMsgCallsUpdateItems(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Volumes())
+	section.SetSize(120, 40)
+
+	if len(section.List.Items()) != 0 {
+		t.Fatal("expected empty list before loading")
+	}
+
+	loadedMsg := section.RefreshCmd()()
+	cmd := section.Update(loadedMsg)
+
+	if len(section.List.Items()) == 0 {
+		t.Fatal("UpdateItems should populate the list after volumesLoadedMsg")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd after volumesLoadedMsg")
+	}
+}
+
+func TestVolumesLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Volumes())
+	section.SetSize(120, 40)
+
+	// Pre-load items then send empty loaded msg to trigger the reset branch.
+	section.Update(section.RefreshCmd()())
+	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	cmd := section.Update(volumesLoadedMsg{items: []list.Item{}})
+
+	if len(section.List.Items()) != 0 {
+		t.Errorf("expected 0 items after empty volumesLoadedMsg, got %d", len(section.List.Items()))
+	}
+	if section.IsFilter() {
+		t.Error("Reset via UpdateItems should clear isFilter")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd (SetItems) after empty volumesLoadedMsg")
+	}
 }
 
 func waitFor(t *testing.T, tm *teatest.TestModel, s string) {

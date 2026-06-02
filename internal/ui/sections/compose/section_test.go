@@ -140,3 +140,45 @@ func TestComposeLoadedMsgRefreshesActivePanel(t *testing.T) {
 		t.Fatalf("expected details to show refreshed project, got %q", details)
 	}
 }
+
+func TestComposeLoadedMsgCallsUpdateItems(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Compose())
+	section.SetSize(120, 40)
+
+	// Only call Init; do not pre-load so the list starts empty.
+	if len(section.List.Items()) != 0 {
+		t.Fatal("expected empty list before loading")
+	}
+
+	loadedMsg := section.RefreshCmd()()
+	cmd := section.Update(loadedMsg)
+
+	if len(section.List.Items()) == 0 {
+		t.Fatal("UpdateItems should populate the list after composeLoadedMsg")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd after composeLoadedMsg")
+	}
+}
+
+func TestComposeLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Compose())
+	section.SetSize(120, 40)
+
+	section.Update(section.RefreshCmd()())
+	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+
+	cmd := section.Update(composeLoadedMsg{items: []list.Item{}})
+
+	if len(section.List.Items()) != 0 {
+		t.Errorf("expected 0 items after empty composeLoadedMsg, got %d", len(section.List.Items()))
+	}
+	if section.IsFilter() {
+		t.Error("Reset via UpdateItems should clear isFilter")
+	}
+	if cmd == nil {
+		t.Error("Update should return a non-nil cmd (SetItems) after empty composeLoadedMsg")
+	}
+}

@@ -205,7 +205,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			items[idx] = imageItem{image: img, hasUpdate: update}
 		}
 		return base.UpdateResult{
-			Cmd:         tea.Batch(s.List.SetItems(items), s.UpdateActivePanel()),
+			Cmd:         tea.Batch(s.UpdateItems(items)...),
 			Handled:     true,
 			StopSpinner: true,
 		}

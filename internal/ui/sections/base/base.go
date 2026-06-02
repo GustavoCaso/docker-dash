@@ -195,6 +195,17 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+func (b *Section) UpdateItems(items []list.Item) []tea.Cmd {
+	cmds := []tea.Cmd{b.List.SetItems(items)}
+	if len(items) > 0 {
+		cmds = append(cmds, b.UpdateActivePanel())
+	} else {
+		cmds = append(cmds, b.Reset())
+	}
+
+	return cmds
+}
+
 // ActivePanel returns the currently active detail panel.
 func (b *Section) ActivePanel() panel.Panel {
 	return b.panels[b.activePanelIdx]
