@@ -191,7 +191,6 @@ func TestComposeProjectServiceUp_LoadsProjectFromConfigFiles(t *testing.T) {
 		composeSvc:   fakeCompose,
 		loadProject:  nil,
 	}
-	service.loadProject = service.loadComposeProject
 
 	project := ComposeProject{
 		Name:        "test-app",
@@ -227,7 +226,6 @@ func TestComposeProjectServiceUp_ErrorsWhenProjectCannotLoad(t *testing.T) {
 		engineClient: cli,
 		composeSvc:   &fakeComposeSDK{},
 	}
-	service.loadProject = service.loadComposeProject
 
 	err := service.Up(context.Background(), ComposeProject{
 		Name:        "missing",
@@ -570,7 +568,6 @@ func TestLoadComposeProject_ViaSSH(t *testing.T) {
 		composeSvc:   &fakeComposeSDK{},
 		sshTarget:    "testhost",
 	}
-	service.loadProject = service.loadComposeProject
 
 	project := ComposeProject{
 		Name:        "myapp",
@@ -578,9 +575,35 @@ func TestLoadComposeProject_ViaSSH(t *testing.T) {
 		ConfigFiles: remoteComposePath,
 	}
 
-	loaded, err := service.loadComposeProject(context.Background(), project)
+	tmpDir := t.TempDir()
+
+	loaded, cleanup, err := service.loadComposeProject(context.Background(), project, tmpDir)
 	if err != nil {
 		t.Fatalf("loadComposeProject() error = %v", err)
+	}
+
+	// Verify SSH loader fetched files into the temp dir before cleanup.
+	beforeEntries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadDir(%q) before cleanup: %v", tmpDir, err)
+	}
+	if len(beforeEntries) == 0 {
+		t.Fatal("expected temp dir to contain fetched files before cleanup")
+	}
+
+	cleanup()
+
+	// Verify cleanup removed all fetched files from the temp dir.
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("ReadDir(%q): %v", tmpDir, err)
+	}
+	if len(entries) != 0 {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Errorf("cleanup() left files behind in temp dir: %v", names)
 	}
 
 	if loaded.Name != project.Name {

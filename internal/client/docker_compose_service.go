@@ -36,7 +36,7 @@ type composeSDK interface {
 	Restart(ctx context.Context, projectName string, options composeapi.RestartOptions) error
 }
 
-type composeProjectLoader func(context.Context, ComposeProject) (*composetypes.Project, error)
+type composeProjectLoader func(context.Context, ComposeProject, string) (*composetypes.Project, func(), error)
 
 // composeProjectService manages Compose projects using label discovery plus the
 // Docker Compose SDK for project actions.
@@ -157,7 +157,17 @@ func (s *composeProjectService) Up(ctx context.Context, project ComposeProject, 
 		return err
 	}
 
-	loadedProject, err := s.loadComposeProject(ctx, project)
+	var tmpDir string
+	if s.sshTarget != "" {
+		var err error
+		tmpDir, err = os.MkdirTemp("", "docker-dash-compose-*")
+		if err != nil {
+			return fmt.Errorf("creating temp dir for remote compose files: %w", err)
+		}
+	}
+
+	loadedProject, cleanup, err := s.loadComposeProject(ctx, project, tmpDir)
+	defer cleanup()
 	if err != nil {
 		return err
 	}
@@ -225,10 +235,13 @@ func (s *composeProjectService) Restart(
 func (s *composeProjectService) loadComposeProject(
 	ctx context.Context,
 	project ComposeProject,
-) (*composetypes.Project, error) {
+	tmpDir string,
+) (*composetypes.Project, func(), error) {
+	cleanup := func() {}
+
 	configPaths := splitLabelValues(project.ConfigFiles)
 	if len(configPaths) == 0 {
-		return nil, fmt.Errorf("compose project %q has no config files label", project.Name)
+		return nil, cleanup, fmt.Errorf("compose project %q has no config files label", project.Name)
 	}
 
 	projectOpts := []composegocli.ProjectOptionsFn{
@@ -241,22 +254,19 @@ func (s *composeProjectService) loadComposeProject(
 	}
 
 	if s.sshTarget != "" {
-		sshOpts, cleanup, err := s.buildSSHProjectOpts(ctx, project)
-		if err != nil {
-			return nil, err
-		}
-		defer cleanup()
+		sshOpts := s.buildSSHProjectOpts(ctx, project, tmpDir)
 		projectOpts = sshOpts
+		cleanup = func() { _ = os.RemoveAll(tmpDir) }
 	}
 
 	projectOptions, err := composegocli.NewProjectOptions(configPaths, projectOpts...)
 	if err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
 	loadedProject, err := projectOptions.LoadProject(ctx)
 	if err != nil {
-		return nil, err
+		return nil, cleanup, err
 	}
 
 	// For SSH hosts the SDK resolves paths against the local temp dir. Remap
@@ -273,18 +283,14 @@ func (s *composeProjectService) loadComposeProject(
 		splitLabelValues(project.EnvironmentFiles),
 	)
 
-	return loadedProject, nil
+	return loadedProject, cleanup, nil
 }
 
 func (s *composeProjectService) buildSSHProjectOpts(
 	ctx context.Context,
 	project ComposeProject,
-) ([]composegocli.ProjectOptionsFn, func(), error) {
-	tmpDir, err := os.MkdirTemp("", "docker-dash-compose-*")
-	if err != nil {
-		return nil, nil, fmt.Errorf("creating temp dir for remote compose files: %w", err)
-	}
-
+	tmpDir string,
+) []composegocli.ProjectOptionsFn {
 	log.Printf("[compose] loadComposeProject: using SSH resource loader for target %q, tmpDir=%q", s.sshTarget, tmpDir)
 
 	sshLoader := newSSHResourceLoader(s.sshTarget, project.WorkingDir, tmpDir)
@@ -312,7 +318,7 @@ func (s *composeProjectService) buildSSHProjectOpts(
 		opts = append(opts, composegocli.WithEnvFiles(dotEnvPath))
 	}
 
-	return opts, func() { _ = os.RemoveAll(tmpDir) }, nil
+	return opts
 }
 
 // remapProjectPaths replaces any local temp dir prefix in a loaded project's
