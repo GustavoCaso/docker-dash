@@ -45,6 +45,9 @@ func main() {
 	if *host != "" {
 		cfg.Docker.Host = *host
 		fmt.Fprintf(os.Stderr, "Override Docker host configuration with %s\n", *host)
+	} else if dockerHostEnv := os.Getenv("DOCKER_HOST"); dockerHostEnv != "" {
+		cfg.Docker.Host = dockerHostEnv
+		fmt.Fprint(os.Stderr, "Override Docker host configuration from DOCKER_HOST\n")
 	}
 
 	if *refreshConfig != "" {

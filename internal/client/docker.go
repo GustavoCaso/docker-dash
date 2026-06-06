@@ -32,7 +32,7 @@ type dockerClient struct {
 // NewDockerClientFromConfig creates a dockerClient using settings from cfg.
 //
 // Connection logic:
-//   - cfg.Host empty → client.FromEnv (reads DOCKER_HOST, etc. from environment)
+//   - cfg.Host empty → client.FromEnv (reads DOCKER_HOST, etc. from environment or uses the default host)
 //   - cfg.Host is ssh:// using docker GetConnectionHelper
 //   - cfg.Host is anything else (tcp://, unix://) → client.WithHost directly
 func NewDockerClientFromConfig(cfg config.DockerConfig) (Client, error) {
