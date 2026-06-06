@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,16 +35,12 @@ type composeSDK interface {
 	Restart(ctx context.Context, projectName string, options composeapi.RestartOptions) error
 }
 
-type composeProjectLoader func(context.Context, ComposeProject, string) (*composetypes.Project, func(), error)
-
 // composeProjectService manages Compose projects using label discovery plus the
 // Docker Compose SDK for project actions.
 type composeProjectService struct {
 	engineClient *dockerclient.Client
 	composeSvc   composeSDK
 	dockerCLI    *command.DockerCli
-	loadProject  composeProjectLoader
-	// sshTarget is "user@host" or "host" when the Docker host is ssh://.
 	// Empty string means local Docker socket — no SSH file fetching needed.
 	sshTarget string
 }
@@ -85,7 +80,7 @@ func newComposeProjectService(
 			composepkg.WithPrompt(func(string, bool) (bool, error) { return true, nil }),
 		),
 		dockerCLI: dockerCLI,
-		sshTarget: parseSSHTarget(cfg.Host),
+		sshTarget: checkSSHTarget(cfg.Host),
 	}
 
 	return svc, nil
@@ -157,17 +152,16 @@ func (s *composeProjectService) Up(ctx context.Context, project ComposeProject, 
 		return err
 	}
 
-	var tmpDir string
+	tmpDir := ""
 	if s.sshTarget != "" {
-		var err error
-		tmpDir, err = os.MkdirTemp("", "docker-dash-compose-*")
-		if err != nil {
-			return fmt.Errorf("creating temp dir for remote compose files: %w", err)
+		var mkErr error
+		tmpDir, mkErr = os.MkdirTemp("", "docker-dash-compose-*")
+		if mkErr != nil {
+			return fmt.Errorf("creating temp dir for remote compose files: %w", mkErr)
 		}
 	}
 
-	loadedProject, cleanup, err := s.loadComposeProject(ctx, project, tmpDir)
-	defer cleanup()
+	loadedProject, err := s.loadComposeProject(ctx, project, tmpDir)
 	if err != nil {
 		return err
 	}
@@ -236,12 +230,12 @@ func (s *composeProjectService) loadComposeProject(
 	ctx context.Context,
 	project ComposeProject,
 	tmpDir string,
-) (*composetypes.Project, func(), error) {
-	cleanup := func() {}
+) (*composetypes.Project, error) {
+	defer os.RemoveAll(tmpDir)
 
 	configPaths := splitLabelValues(project.ConfigFiles)
 	if len(configPaths) == 0 {
-		return nil, cleanup, fmt.Errorf("compose project %q has no config files label", project.Name)
+		return nil, fmt.Errorf("compose project %q has no config files label", project.Name)
 	}
 
 	projectOpts := []composegocli.ProjectOptionsFn{
@@ -254,19 +248,21 @@ func (s *composeProjectService) loadComposeProject(
 	}
 
 	if s.sshTarget != "" {
-		sshOpts := s.buildSSHProjectOpts(ctx, project, tmpDir)
+		sshOpts, err := s.buildSSHProjectOpts(ctx, project, tmpDir)
+		if err != nil {
+			return nil, err
+		}
 		projectOpts = sshOpts
-		cleanup = func() { _ = os.RemoveAll(tmpDir) }
 	}
 
 	projectOptions, err := composegocli.NewProjectOptions(configPaths, projectOpts...)
 	if err != nil {
-		return nil, cleanup, err
+		return nil, err
 	}
 
 	loadedProject, err := projectOptions.LoadProject(ctx)
 	if err != nil {
-		return nil, cleanup, err
+		return nil, err
 	}
 
 	// For SSH hosts the SDK resolves paths against the local temp dir. Remap
@@ -283,14 +279,14 @@ func (s *composeProjectService) loadComposeProject(
 		splitLabelValues(project.EnvironmentFiles),
 	)
 
-	return loadedProject, cleanup, nil
+	return loadedProject, nil
 }
 
 func (s *composeProjectService) buildSSHProjectOpts(
 	ctx context.Context,
 	project ComposeProject,
 	tmpDir string,
-) []composegocli.ProjectOptionsFn {
+) ([]composegocli.ProjectOptionsFn, error) {
 	log.Printf("[compose] loadComposeProject: using SSH resource loader for target %q, tmpDir=%q", s.sshTarget, tmpDir)
 
 	sshLoader := newSSHResourceLoader(s.sshTarget, project.WorkingDir, tmpDir)
@@ -308,17 +304,24 @@ func (s *composeProjectService) buildSSHProjectOpts(
 	for _, remotePath := range splitLabelValues(project.EnvironmentFiles) {
 		localPath, fetchErr := sshLoader.Load(ctx, remotePath)
 		if fetchErr != nil {
-			log.Printf("[compose] loadComposeProject: skipping env file %s: %v", remotePath, fetchErr)
-			continue
+			log.Printf("[compose] loadComposeProject: failed to load environment file %s: %v", remotePath, fetchErr)
+			return []composegocli.ProjectOptionsFn{}, fetchErr
 		}
 		opts = append(opts, composegocli.WithEnvFiles(localPath))
 	}
-	// Fetch the default .env; ignore errors if it doesn't exist.
-	if dotEnvPath, fetchErr := sshLoader.Load(ctx, filepath.Join(project.WorkingDir, ".env")); fetchErr == nil {
+	// Fetch the default .env;
+	dotenv := filepath.Join(project.WorkingDir, ".env")
+	dotEnvExists := sshLoader.FileExists(ctx, dotenv)
+	if dotEnvExists {
+		dotEnvPath, fetchErr := sshLoader.Load(ctx, dotenv)
+		if fetchErr != nil {
+			log.Printf("[compose] loadComposeProject: failed to load .env file %v", fetchErr)
+			return []composegocli.ProjectOptionsFn{}, fetchErr
+		}
 		opts = append(opts, composegocli.WithEnvFiles(dotEnvPath))
 	}
 
-	return opts
+	return opts, nil
 }
 
 // remapProjectPaths replaces any local temp dir prefix in a loaded project's
@@ -344,9 +347,14 @@ func remapProjectPaths(project *composetypes.Project, remoteWorkingDir string) {
 }
 
 func remapPath(path, localTmpDir, remoteWorkingDir string) string {
-	if strings.HasPrefix(path, localTmpDir) {
+	if path == localTmpDir {
+		return remoteWorkingDir
+	}
+
+	if strings.HasPrefix(path, localTmpDir+string(os.PathSeparator)) {
 		return remoteWorkingDir + path[len(localTmpDir):]
 	}
+
 	return path
 }
 
@@ -444,23 +452,12 @@ func firstContainerName(names []string) string {
 	return names[0]
 }
 
-// parseSSHTarget extracts "user@host" or "host" from an ssh:// URL.
-// Returns empty string for non-SSH hosts.
-func parseSSHTarget(host string) string {
-	if !strings.HasPrefix(host, "ssh://") {
-		return ""
+func checkSSHTarget(host string) string {
+	if isSSHHost(host) {
+		return host
 	}
 
-	u, err := url.Parse(host)
-	if err != nil {
-		return ""
-	}
-
-	if u.User != nil && u.User.Username() != "" {
-		return u.User.Username() + "@" + u.Hostname()
-	}
-
-	return u.Hostname()
+	return ""
 }
 
 // sshResourceLoader implements loader.ResourceLoader by fetching remote files
@@ -480,12 +477,10 @@ func newSSHResourceLoader(sshTarget, remoteWorkingDir, tmpDir string) *sshResour
 	}
 }
 
-// Accept returns true for any path that doesn't already exist locally.
-// This covers both absolute remote paths and relative includes that the
-// localResourceLoader would otherwise fail to find.
+// Accept returns true for plain file paths so they can be fetched from the remote host.
+// It intentionally ignores URL-like paths so built-in protocol loaders (http/https/oci/git, etc.) can handle them.
 func (r *sshResourceLoader) Accept(path string) bool {
-	_, err := os.Stat(path)
-	return os.IsNotExist(err)
+	return !strings.Contains(path, "://")
 }
 
 // Load fetches the remote file via SSH and writes it to the shared temp dir.
@@ -497,7 +492,9 @@ func (r *sshResourceLoader) Load(ctx context.Context, path string) (string, erro
 		remotePath = filepath.Join(r.remoteWorkingDir, remotePath)
 	}
 
-	localPath := filepath.Join(r.tmpDir, filepath.Base(remotePath))
+	remotePath = filepath.Clean(remotePath)
+
+	localPath := filepath.Join(r.tmpDir, strings.TrimPrefix(remotePath, string(os.PathSeparator)))
 
 	// Return cached copy if already fetched.
 	if _, err := os.Stat(localPath); err == nil {
@@ -506,9 +503,13 @@ func (r *sshResourceLoader) Load(ctx context.Context, path string) (string, erro
 
 	log.Printf("[compose] sshResourceLoader: fetching %q from %q", remotePath, r.sshTarget)
 	//nolint:gosec // remotePath is derived from Docker container labels on the remote host
-	content, err := exec.CommandContext(ctx, "ssh", r.sshTarget, "cat", remotePath).Output()
+	content, err := exec.CommandContext(ctx, "ssh", r.sshTarget, "cat", "--", remotePath).Output()
 	if err != nil {
 		return "", fmt.Errorf("ssh cat %s:%s: %w", r.sshTarget, remotePath, err)
+	}
+
+	if mkdirErr := os.MkdirAll(filepath.Dir(localPath), 0o700); mkdirErr != nil {
+		return "", mkdirErr
 	}
 
 	if writeErr := os.WriteFile(localPath, content, 0o600); writeErr != nil {
@@ -516,6 +517,13 @@ func (r *sshResourceLoader) Load(ctx context.Context, path string) (string, erro
 	}
 
 	return localPath, nil
+}
+
+func (r *sshResourceLoader) FileExists(ctx context.Context, path string) bool {
+	log.Printf("[compose] sshResourceLoader: check file exists %q", path)
+	//nolint:gosec // remotePath is derived from Docker container labels on the remote host
+	_, err := exec.CommandContext(ctx, "ssh", r.sshTarget, "test", "-e", path).Output()
+	return err == nil
 }
 
 // Dir returns the local temp dir so that when the SDK rebuilds ResourceLoaders

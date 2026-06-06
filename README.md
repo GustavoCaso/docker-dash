@@ -101,7 +101,6 @@ By default, `docker-dash` looks for a config file at `~/.config/docker-dash/conf
 ```toml
 [docker]
 # Docker daemon URL. Accepts tcp, unix, and ssh schemes.
-# Defaults to the DOCKER_HOST environment variable.
 host = "ssh://pi5@pi5"
 
 [refresh]

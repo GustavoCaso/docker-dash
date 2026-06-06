@@ -22,7 +22,6 @@ type Config struct {
 // DockerConfig holds Docker client connection settings.
 type DockerConfig struct {
 	// Host is the Docker daemon URL. Accepts unix://, tcp://, ssh:// schemes.
-	// If empty, the default local socket / DOCKER_HOST env var is used.
 	Host string `toml:"host"`
 }
 
