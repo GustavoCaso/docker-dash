@@ -317,6 +317,7 @@ func TestValidateOptionalDuration(t *testing.T) {
 		{"", false},
 		{"   ", false},
 		{"10s", false},
+		{" 10s ", false},
 		{"1m30s", false},
 		{"500ms", false},
 		{"garbage", true},

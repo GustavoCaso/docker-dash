@@ -432,10 +432,11 @@ func composeRestartForm(noDeps *bool, timeout *string) *huh.Form {
 }
 
 func validateOptionalDuration(s string) error {
-	if strings.TrimSpace(s) == "" {
+	t := strings.TrimSpace(s)
+	if t == "" {
 		return nil
 	}
-	_, err := time.ParseDuration(s)
+	_, err := time.ParseDuration(t)
 	if err != nil {
 		return fmt.Errorf("invalid duration %q: use Go format e.g. 10s, 1m30s", s)
 	}
