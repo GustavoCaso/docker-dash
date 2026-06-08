@@ -142,8 +142,8 @@ var Keys = &KeyMap{
 		key.WithHelp("s", "start/stop container"),
 	),
 	ContainerRestart: key.NewBinding(
-		key.WithKeys("ctrl+R"),
-		key.WithHelp("ctrl+R", "restart container"),
+		key.WithKeys("R"),
+		key.WithHelp("R", "restart container"),
 	),
 	ContainerPauseUnpause: key.NewBinding(
 		key.WithKeys("p"),
@@ -166,8 +166,8 @@ var Keys = &KeyMap{
 		key.WithHelp("s", "start/stop project"),
 	),
 	ComposeRestart: key.NewBinding(
-		key.WithKeys("ctrl+R"),
-		key.WithHelp("ctrl+R", "restart project"),
+		key.WithKeys("R"),
+		key.WithHelp("R", "restart project"),
 	),
 	NetworkDelete: key.NewBinding(
 		key.WithKeys("D"),

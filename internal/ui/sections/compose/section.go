@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -141,13 +144,13 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 	switch {
 	case key.Matches(msg, keys.Keys.ComposeUp):
-		return base.UpdateResult{Cmd: s.confirmProjectUp(), Handled: true}
+		return base.UpdateResult{Cmd: s.showUpForm(), Handled: true}
 	case key.Matches(msg, keys.Keys.ComposeDown):
-		return base.UpdateResult{Cmd: s.confirmProjectDown(), Handled: true}
+		return base.UpdateResult{Cmd: s.showDownForm(), Handled: true}
 	case key.Matches(msg, keys.Keys.ComposeStartStop):
 		return base.UpdateResult{Cmd: s.confirmProjectToggle(), Handled: true}
 	case key.Matches(msg, keys.Keys.ComposeRestart):
-		return base.UpdateResult{Cmd: s.confirmProjectRestart(), Handled: true}
+		return base.UpdateResult{Cmd: s.showRestartForm(), Handled: true}
 	}
 
 	return base.UpdateResult{}
@@ -184,26 +187,26 @@ func (s *Section) selectedProject() (client.ComposeProject, bool) {
 	return item.project, true
 }
 
-func (s *Section) projectUpCmd() tea.Cmd {
+func (s *Section) projectUpCmd(opts client.ComposeUpOptions) tea.Cmd {
 	project, ok := s.selectedProject()
 	if !ok {
 		return nil
 	}
 
 	return func() tea.Msg {
-		err := s.composeService.Up(s.ctx, project, client.ComposeUpOptions{})
+		err := s.composeService.Up(s.ctx, project, opts)
 		return composeActionMsg{project: project, action: "up", err: err}
 	}
 }
 
-func (s *Section) projectDownCmd() tea.Cmd {
+func (s *Section) projectDownCmd(opts client.ComposeDownOptions) tea.Cmd {
 	project, ok := s.selectedProject()
 	if !ok {
 		return nil
 	}
 
 	return func() tea.Msg {
-		err := s.composeService.Down(s.ctx, project, client.ComposeDownOptions{})
+		err := s.composeService.Down(s.ctx, project, opts)
 		return composeActionMsg{project: project, action: "down", err: err}
 	}
 }
@@ -232,47 +235,66 @@ func (s *Section) projectToggleCmd() tea.Cmd {
 	}
 }
 
-func (s *Section) projectRestartCmd() tea.Cmd {
+func (s *Section) projectRestartCmd(opts client.ComposeRestartOptions) tea.Cmd {
 	project, ok := s.selectedProject()
 	if !ok {
 		return nil
 	}
 
 	return func() tea.Msg {
-		err := s.composeService.Restart(s.ctx, project, client.ComposeRestartOptions{})
+		err := s.composeService.Restart(s.ctx, project, opts)
 		return composeActionMsg{project: project, action: "restarted", err: err}
 	}
 }
 
-func (s *Section) confirmProjectUp() tea.Cmd {
+func (s *Section) showUpForm() tea.Cmd {
 	project, ok := s.selectedProject()
 	if !ok {
 		return nil
 	}
 
-	upCmd := s.projectUpCmd()
+	var build, removeOrphans, wait bool
+	f := composeUpForm(&build, &removeOrphans, &wait)
+	upForm := form.New(
+		fmt.Sprintf("Up — %s", project.Name),
+		f,
+		func(_ *huh.Form) tea.Cmd {
+			opts := client.ComposeUpOptions{
+				Build:         build,
+				RemoveOrphans: removeOrphans,
+				Wait:          wait,
+			}
+			return s.WithSpinner(s.projectUpCmd(opts))
+		},
+	)
 	return func() tea.Msg {
-		return message.ShowConfirmationMsg{
-			Title:     "Compose Up",
-			Body:      fmt.Sprintf("Run compose up for project %s?", project.Name),
-			OnConfirm: s.WithSpinner(upCmd),
-		}
+		return message.ShowFormMsg{Form: upForm}
 	}
 }
 
-func (s *Section) confirmProjectDown() tea.Cmd {
+func (s *Section) showDownForm() tea.Cmd {
 	project, ok := s.selectedProject()
 	if !ok {
 		return nil
 	}
 
-	downCmd := s.projectDownCmd()
+	var removeOrphans, volumes bool
+	var images string
+	f := composeDownForm(&removeOrphans, &volumes, &images)
+	downForm := form.New(
+		fmt.Sprintf("Down — %s", project.Name),
+		f,
+		func(_ *huh.Form) tea.Cmd {
+			opts := client.ComposeDownOptions{
+				RemoveOrphans: removeOrphans,
+				Volumes:       volumes,
+				Images:        images,
+			}
+			return s.WithSpinner(s.projectDownCmd(opts))
+		},
+	)
 	return func() tea.Msg {
-		return message.ShowConfirmationMsg{
-			Title:     "Compose Down",
-			Body:      fmt.Sprintf("Run compose down for project %s?", project.Name),
-			OnConfirm: s.WithSpinner(downCmd),
-		}
+		return message.ShowFormMsg{Form: downForm}
 	}
 }
 
@@ -297,20 +319,35 @@ func (s *Section) confirmProjectToggle() tea.Cmd {
 	}
 }
 
-func (s *Section) confirmProjectRestart() tea.Cmd {
+func (s *Section) showRestartForm() tea.Cmd {
 	project, ok := s.selectedProject()
 	if !ok {
 		return nil
 	}
 
-	restartCmd := s.projectRestartCmd()
+	var noDeps bool
+	var timeoutStr string
+	f := composeRestartForm(&noDeps, &timeoutStr)
+	restartForm := form.New(
+		fmt.Sprintf("Restart — %s", project.Name),
+		f,
+		func(_ *huh.Form) tea.Cmd {
+			return s.WithSpinner(s.projectRestartCmd(buildRestartOptions(noDeps, timeoutStr)))
+		},
+	)
 	return func() tea.Msg {
-		return message.ShowConfirmationMsg{
-			Title:     "Restart Compose Project",
-			Body:      fmt.Sprintf("Restart compose project %s?", project.Name),
-			OnConfirm: s.WithSpinner(restartCmd),
+		return message.ShowFormMsg{Form: restartForm}
+	}
+}
+
+func buildRestartOptions(noDeps bool, timeoutStr string) client.ComposeRestartOptions {
+	opts := client.ComposeRestartOptions{NoDeps: noDeps}
+	if t := strings.TrimSpace(timeoutStr); t != "" {
+		if d, err := time.ParseDuration(t); err == nil {
+			opts.Timeout = &d
 		}
 	}
+	return opts
 }
 
 func projectHasRunningServices(project client.ComposeProject) bool {
@@ -321,4 +358,87 @@ func projectHasRunningServices(project client.ComposeProject) bool {
 	}
 
 	return false
+}
+
+func composeUpForm(build, removeOrphans, wait *bool) *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Key("build").
+				Title("Build").
+				Description("Rebuild images before starting containers.").
+				Value(build),
+
+			huh.NewConfirm().
+				Key("remove_orphans").
+				Title("Remove Orphans").
+				Description("Remove containers for services not defined in the Compose file.").
+				Value(removeOrphans),
+
+			huh.NewConfirm().
+				Key("wait").
+				Title("Wait").
+				Description("Wait for services to be healthy before returning.").
+				Value(wait),
+		),
+	)
+}
+
+func composeDownForm(removeOrphans, volumes *bool, images *string) *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Key("remove_orphans").
+				Title("Remove Orphans").
+				Description("Remove containers for services not defined in the Compose file.").
+				Value(removeOrphans),
+
+			huh.NewConfirm().
+				Key("volumes").
+				Title("Remove Volumes").
+				Description("Remove named volumes declared in the Compose file.").
+				Value(volumes),
+
+			huh.NewSelect[string]().
+				Key("images").
+				Title("Remove Images").
+				Value(images).
+				Options(
+					huh.NewOption("none", ""),
+					huh.NewOption("local (images without a custom tag)", "local"),
+					huh.NewOption("all (all images used by services)", "all"),
+				),
+		),
+	)
+}
+
+func composeRestartForm(noDeps *bool, timeout *string) *huh.Form {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Key("no_deps").
+				Title("No Deps").
+				Description("Don't restart dependent services.").
+				Value(noDeps),
+
+			huh.NewInput().
+				Key("timeout").
+				Title("Timeout").
+				Description("Shutdown timeout before killing (e.g. 10s, 1m). Leave blank for default.").
+				Value(timeout).
+				Validate(validateOptionalDuration),
+		),
+	)
+}
+
+func validateOptionalDuration(s string) error {
+	t := strings.TrimSpace(s)
+	if t == "" {
+		return nil
+	}
+	_, err := time.ParseDuration(t)
+	if err != nil {
+		return fmt.Errorf("invalid duration %q: use Go format e.g. 10s, 1m30s", s)
+	}
+	return nil
 }
