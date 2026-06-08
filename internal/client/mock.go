@@ -15,7 +15,7 @@ type MockClient struct {
 	images     *mockImageService
 	volumes    *mockVolumeService
 	networks   *mockNetworkService
-	compose    *mockComposeProjectService
+	compose    *MockComposeProjectService
 	info       *mockSystemInfo
 }
 
@@ -26,7 +26,7 @@ func NewMockClient() *MockClient {
 		images:     newMockImageService(),
 		volumes:    newMockVolumeService(),
 		networks:   newMockNetworkService(),
-		compose:    newMockComposeProjectService(),
+		compose:    NewMockComposeProjectService(),
 		info:       newMockSystemInfo(),
 	}
 }
@@ -775,13 +775,17 @@ func (s *mockNetworkService) Prune(_ context.Context, _ PruneOptions) (PruneRepo
 	return PruneReport{ItemsDeleted: count, SpaceReclaimed: 0}, nil
 }
 
-// mockComposeProjectService provides mock Compose project data.
-type mockComposeProjectService struct {
-	projects []ComposeProject
+// MockComposeProjectService provides mock Compose project data.
+type MockComposeProjectService struct {
+	projects        []ComposeProject
+	LastUpOpts      ComposeUpOptions
+	LastDownOpts    ComposeDownOptions
+	LastStopOpts    ComposeStopOptions
+	LastRestartOpts ComposeRestartOptions
 }
 
-func newMockComposeProjectService() *mockComposeProjectService {
-	return &mockComposeProjectService{
+func NewMockComposeProjectService() *MockComposeProjectService {
+	return &MockComposeProjectService{
 		projects: []ComposeProject{
 			{
 				Name:        "web-app",
@@ -806,15 +810,17 @@ func newMockComposeProjectService() *mockComposeProjectService {
 	}
 }
 
-func (s *mockComposeProjectService) List(_ context.Context) ([]ComposeProject, error) {
+func (s *MockComposeProjectService) List(_ context.Context) ([]ComposeProject, error) {
 	return s.projects, nil
 }
 
-func (s *mockComposeProjectService) Up(_ context.Context, project ComposeProject, _ ComposeUpOptions) error {
+func (s *MockComposeProjectService) Up(_ context.Context, project ComposeProject, opts ComposeUpOptions) error {
+	s.LastUpOpts = opts
 	return s.setProjectState(project, "running")
 }
 
-func (s *mockComposeProjectService) Down(_ context.Context, project ComposeProject, _ ComposeDownOptions) error {
+func (s *MockComposeProjectService) Down(_ context.Context, project ComposeProject, opts ComposeDownOptions) error {
+	s.LastDownOpts = opts
 	for idx, existing := range s.projects {
 		if existing.Identity() == project.Identity() {
 			s.projects = append(s.projects[:idx], s.projects[idx+1:]...)
@@ -825,19 +831,25 @@ func (s *mockComposeProjectService) Down(_ context.Context, project ComposeProje
 	return fmt.Errorf("compose project not found: %s", project.Name)
 }
 
-func (s *mockComposeProjectService) Start(_ context.Context, project ComposeProject, _ ComposeStartOptions) error {
+func (s *MockComposeProjectService) Start(_ context.Context, project ComposeProject, _ ComposeStartOptions) error {
 	return s.setProjectState(project, "running")
 }
 
-func (s *mockComposeProjectService) Stop(_ context.Context, project ComposeProject, _ ComposeStopOptions) error {
+func (s *MockComposeProjectService) Stop(_ context.Context, project ComposeProject, opts ComposeStopOptions) error {
+	s.LastStopOpts = opts
 	return s.setProjectState(project, "exited")
 }
 
-func (s *mockComposeProjectService) Restart(_ context.Context, project ComposeProject, _ ComposeRestartOptions) error {
+func (s *MockComposeProjectService) Restart(
+	_ context.Context,
+	project ComposeProject,
+	opts ComposeRestartOptions,
+) error {
+	s.LastRestartOpts = opts
 	return s.setProjectState(project, "running")
 }
 
-func (s *mockComposeProjectService) setProjectState(project ComposeProject, state string) error {
+func (s *MockComposeProjectService) setProjectState(project ComposeProject, state string) error {
 	for projectIdx, existing := range s.projects {
 		if existing.Identity() != project.Identity() {
 			continue
