@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 )
@@ -823,7 +824,7 @@ func (s *MockComposeProjectService) Down(_ context.Context, project ComposeProje
 	s.LastDownOpts = opts
 	for idx, existing := range s.projects {
 		if existing.Identity() == project.Identity() {
-			s.projects = append(s.projects[:idx], s.projects[idx+1:]...)
+			s.projects = slices.Delete(s.projects, idx, idx+1)
 			return nil
 		}
 	}
