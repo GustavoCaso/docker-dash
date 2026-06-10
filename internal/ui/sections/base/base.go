@@ -162,11 +162,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 		log.Printf("[%s] KeyMsg: key=%q", b.name, keyMsg.String())
 
 		if len(b.panels) > 0 && key.Matches(keyMsg, keys.Keys.Tab) {
-			if b.focus == focusList {
-				b.focus = focusPanel
-			} else {
-				b.focus = focusList
-			}
+			b.toggleFocus()
 			return nil
 		}
 
@@ -212,8 +208,8 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 
 	if len(b.panels) > 0 {
 		_, isKey := msg.(tea.KeyMsg)
-		shouldRouteToPanel := !isKey || b.focus == focusPanel
-		if shouldRouteToPanel {
+		shouldRouteToPanelOnFallback := !isKey || b.focus == focusPanel
+		if shouldRouteToPanelOnFallback {
 			cmds = append(cmds, b.ActivePanel().Update(msg))
 		}
 	}
@@ -288,6 +284,14 @@ func (b *Section) UpdateActivePanel() tea.Cmd {
 
 func (b *Section) IsFilter() bool {
 	return b.isFilter
+}
+
+func (b *Section) toggleFocus() {
+	if b.focus == focusList {
+		b.focus = focusPanel
+		return
+	}
+	b.focus = focusList
 }
 
 // handleFilterKey processes keyboard events while filter mode is active.
