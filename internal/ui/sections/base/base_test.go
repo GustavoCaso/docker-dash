@@ -22,6 +22,7 @@ type fakePanel struct {
 	name          string
 	view          string
 	ids           []string
+	updatedKeys   []string
 	closed        bool
 	width, height int
 }
@@ -40,6 +41,9 @@ func (f *fakePanel) Init(id string) tea.Cmd {
 }
 
 func (f *fakePanel) Update(msg tea.Msg) tea.Cmd {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		f.updatedKeys = append(f.updatedKeys, keyMsg.String())
+	}
 	return nil
 }
 
@@ -446,6 +450,44 @@ func TestFilterInactiveIgnoresMsgs(t *testing.T) {
 	}
 	if len(cmds) != 0 {
 		t.Error("handleFilterKey should return no cmds when filter is not active")
+	}
+}
+
+func TestTabTogglesFocusBetweenListAndPanel(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, []panel.Panel{fp})
+
+	if section.focus != focusList {
+		t.Fatalf("expected initial focus to be list, got %d", section.focus)
+	}
+
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if section.focus != focusPanel {
+		t.Fatalf("expected focus to switch to panel, got %d", section.focus)
+	}
+
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	if section.focus != focusList {
+		t.Fatalf("expected focus to switch back to list, got %d", section.focus)
+	}
+}
+
+func TestPanelFocusedUpDownIsHandledByPanel(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	items := []list.Item{
+		fakeItem{name: "item1"},
+		fakeItem{name: "item2"},
+	}
+	section := newSectionWithItems(items, []panel.Panel{fp})
+
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	if section.List.Index() != 0 {
+		t.Fatalf("expected list selection to remain unchanged when panel is focused, got %d", section.List.Index())
+	}
+	if !slices.Contains(fp.updatedKeys, "down") {
+		t.Fatalf("expected panel to receive down key when focused, got %v", fp.updatedKeys)
 	}
 }
 

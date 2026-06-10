@@ -38,6 +38,7 @@ type Section struct {
 
 	List     list.Model
 	isFilter bool
+	focus    focusTarget
 	width    int
 	height   int
 
@@ -71,6 +72,13 @@ type UpdateResult struct {
 	StopSpinner  bool
 }
 
+type focusTarget int
+
+const (
+	focusList focusTarget = iota
+	focusPanel
+)
+
 func New(
 	name sections.SectionName,
 	panels []panel.Panel,
@@ -85,6 +93,7 @@ func New(
 		List:           l,
 		panels:         panels,
 		activePanelIdx: 0,
+		focus:          focusList,
 	}
 }
 
@@ -120,6 +129,7 @@ func (b *Section) View() string {
 // Reset resets internal state to the initial condition.
 func (b *Section) Reset() tea.Cmd {
 	b.isFilter = false
+	b.focus = focusList
 	if len(b.panels) > 0 {
 		cmd := b.ActivePanel().Close()
 		b.setSizeWithPanels(b.width, b.height)
@@ -151,6 +161,15 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		log.Printf("[%s] KeyMsg: key=%q", b.name, keyMsg.String())
 
+		if len(b.panels) > 0 && key.Matches(keyMsg, keys.Keys.Tab) {
+			if b.focus == focusList {
+				b.focus = focusPanel
+			} else {
+				b.focus = focusList
+			}
+			return nil
+		}
+
 		if len(b.panels) > 0 {
 			if handled, cmd := b.handlePanelKeys(keyMsg); handled {
 				return cmd
@@ -175,6 +194,9 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 			}
 		case key.Matches(keyMsg, keys.Keys.Up, keys.Keys.Down):
 			if len(b.panels) > 0 {
+				if b.focus == focusPanel {
+					return b.ActivePanel().Update(keyMsg)
+				}
 				currentPanel := b.ActivePanel()
 				var listCmd tea.Cmd
 				b.List, listCmd = b.List.Update(keyMsg)
@@ -189,7 +211,9 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	if len(b.panels) > 0 {
-		cmds = append(cmds, b.ActivePanel().Update(msg))
+		if _, isKey := msg.(tea.KeyMsg); !isKey || b.focus == focusPanel {
+			cmds = append(cmds, b.ActivePanel().Update(msg))
+		}
 	}
 
 	return tea.Batch(cmds...)

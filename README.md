@@ -63,9 +63,11 @@ docker-dash
 ### A few things to try
 
 1. Move between sections with `← / →`
-2. Filter the current list with `/`
-3. Refresh with `r` and open help with `?`
-4. Manage resources with contextual actions such as `s`, `D`, `P`, `+`, and `c`
+2. Press `tab` to switch focus between the list and the section panel
+3. Use `↑ / ↓` to move in the focused area
+4. Filter the current list with `/`
+5. Refresh with `r` and open help with `?`
+6. Manage resources with contextual actions such as `s`, `D`, `P`, `+`, and `c`
 
 ## Great fit for
 
@@ -154,9 +156,9 @@ Press `?` in the app to see the full keymap. The most commonly used bindings are
 | Key | Action |
 |---|---|
 | `← / →` | Switch section |
-| `↑ / ↓` | Move selection |
+| `↑ / ↓` | Move in focused area (list or panel) |
+| `tab` | Toggle focus between list and panel |
 | `shift+← / shift+→` | Switch panels |
-| `j / k` | Scroll down/up |
 | `/` | Filter |
 | `r / ctrl+r` | Refresh current view / refresh all |
 | `?` | Toggle help |

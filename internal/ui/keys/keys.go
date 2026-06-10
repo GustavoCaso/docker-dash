@@ -11,6 +11,7 @@ type KeyMap struct {
 	Right      key.Binding
 	Esc        key.Binding
 	Enter      key.Binding
+	Tab        key.Binding
 	ScrollDown key.Binding
 	ScrollUp   key.Binding
 	Space      key.Binding
@@ -54,9 +55,9 @@ var navigation = key.NewBinding(
 	key.WithHelp("↑↓←→", "navigation"),
 )
 
-var scroll = key.NewBinding(
-	key.WithKeys("j/k"),
-	key.WithHelp("j/k", "scroll"),
+var focus = key.NewBinding(
+	key.WithKeys("tab"),
+	key.WithHelp("tab", "toggle focus"),
 )
 
 var panelNavigation = key.NewBinding(
@@ -65,7 +66,7 @@ var panelNavigation = key.NewBinding(
 )
 
 func (k *KeyMap) navigationKeys() []key.Binding {
-	return []key.Binding{navigation, scroll, panelNavigation, k.Filter}
+	return []key.Binding{navigation, focus, panelNavigation, k.Filter}
 }
 
 var Keys = &KeyMap{
@@ -76,6 +77,10 @@ var Keys = &KeyMap{
 	Enter: key.NewBinding(
 		key.WithKeys("enter"),
 		key.WithHelp("enter", "enter"),
+	),
+	Tab: key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "toggle focus"),
 	),
 	Up: key.NewBinding(
 		key.WithKeys("up"),
@@ -94,12 +99,12 @@ var Keys = &KeyMap{
 		key.WithHelp("→", "next section"),
 	),
 	ScrollUp: key.NewBinding(
-		key.WithKeys("k"),
-		key.WithHelp("k", "scroll up"),
+		key.WithKeys("up"),
+		key.WithHelp("↑", "scroll up"),
 	),
 	ScrollDown: key.NewBinding(
-		key.WithKeys("j"),
-		key.WithHelp("j", "scroll down"),
+		key.WithKeys("down"),
+		key.WithHelp("↓", "scroll down"),
 	),
 	Space: key.NewBinding(
 		key.WithKeys(" "),
@@ -235,7 +240,7 @@ func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Up, k.Down, k.Tab},
 			{k.Delete, k.CreateAndRunContainer, k.Prune, k.Filter},
 			{k.PullImage, k.PullImageUpdate},
 			{k.Help, k.Quit, k.SystemInfo},
@@ -249,7 +254,7 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Up, k.Down, k.Tab},
 			{k.ContainerDelete, k.ContainerStartStop, k.ContainerRestart, k.Prune},
 			{k.ContainerPauseUnpause, k.ContainerKill, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
@@ -263,7 +268,7 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Up, k.Down, k.Tab},
 			{k.Delete, k.Prune, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
 		},
@@ -276,7 +281,7 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Up, k.Down, k.Tab},
 			{k.NetworkDelete, k.Prune, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
 		},
@@ -289,7 +294,7 @@ func (k KeyMap) ComposeKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.ScrollUp, k.ScrollDown},
+			{k.Up, k.Down, k.Tab},
 			{k.ComposeUp, k.ComposeDown, k.ComposeStartStop, k.ComposeRestart},
 			{k.Refresh, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
