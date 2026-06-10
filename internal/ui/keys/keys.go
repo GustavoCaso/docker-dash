@@ -187,12 +187,12 @@ var Keys = &KeyMap{
 		key.WithHelp("shift+←", "prev panel"),
 	),
 	LogScrollLeft: key.NewBinding(
-		key.WithKeys("["),
-		key.WithHelp("[", "scroll line left"),
+		key.WithKeys("[", "left"),
+		key.WithHelp("[/←", "scroll line left"),
 	),
 	LogScrollRight: key.NewBinding(
-		key.WithKeys("]"),
-		key.WithHelp("]", "scroll line right"),
+		key.WithKeys("]", "right"),
+		key.WithHelp("]/→", "scroll line right"),
 	),
 	Prune: key.NewBinding(
 		key.WithKeys("P"),

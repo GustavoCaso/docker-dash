@@ -31,6 +31,9 @@ type Section interface {
 	// ActivePanelName returns the active panel name or an empty string when the
 	// section has no panels.
 	ActivePanelName() string
+	// IsPanelFocused returns true when a section with panels has the focus on
+	// the panel side, false otherwise.
+	IsPanelFocused() bool
 	// UpdateItems update the list items
 	// If there are no items to set it reset the section otherewise if update the active panel
 	UpdateItems(items []list.Item) []tea.Cmd

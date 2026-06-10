@@ -248,6 +248,24 @@ func TestLogsPanelHScrollClamping(t *testing.T) {
 	}
 }
 
+func TestLogsPanelHScrollWithArrowKeys(t *testing.T) {
+	p := newTestLogsPanel()
+	p.SetSize(10, 10)
+	p.Update(logsOutputMsg{output: "0123456789abcdef\n"})
+
+	p.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if p.delegate.hOffset == 0 {
+		t.Fatal("right arrow should increase hOffset")
+	}
+
+	for range 20 {
+		p.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	}
+	if p.delegate.hOffset != 0 {
+		t.Errorf("left arrow should clamp hOffset to 0, got %d", p.delegate.hOffset)
+	}
+}
+
 func TestLogsPanelErrorEmitsShowsBanner(t *testing.T) {
 	p := newTestLogsPanel()
 	pr, pw := io.Pipe()

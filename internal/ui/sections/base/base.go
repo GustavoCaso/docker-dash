@@ -286,6 +286,10 @@ func (b *Section) IsFilter() bool {
 	return b.isFilter
 }
 
+func (b *Section) IsPanelFocused() bool {
+	return len(b.panels) > 0 && b.focus == focusPanel
+}
+
 func (b *Section) toggleFocus() {
 	if b.focus == focusList {
 		b.focus = focusPanel

@@ -385,9 +385,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.systemInfo.Init())
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Left):
+			if m.shouldRouteArrowToActiveSection() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
 			m.header.MoveLeft()
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Right):
+			if m.shouldRouteArrowToActiveSection() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
 			m.header.MoveRight()
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Refresh):
@@ -610,6 +620,11 @@ func (m *model) activeSectionName() string {
 
 func (m *model) isFilterActive() bool {
 	return m.activeSection().IsFilter()
+}
+
+func (m *model) shouldRouteArrowToActiveSection() bool {
+	section := m.activeSection()
+	return section.ActivePanelName() == "Logs" && section.IsPanelFocused()
 }
 
 func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {

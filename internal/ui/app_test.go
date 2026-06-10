@@ -13,6 +13,7 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/header"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
@@ -441,6 +442,36 @@ func TestContextualKeyBindingsProcessedDuringFilterMode(t *testing.T) {
 			)
 			break
 		}
+	}
+}
+
+func TestArrowKeysStayInContainersWhenLogsPanelFocused(t *testing.T) {
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	if !ok {
+		t.Fatal("New should return *model")
+	}
+
+	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	appModel.Update(tea.KeyMsg{Type: tea.KeyRight})      // Images -> Containers
+	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight}) // Details -> Logs panel
+	appModel.Update(tea.KeyMsg{Type: tea.KeyTab})        // Focus panel
+
+	section := appModel.activeSection()
+	if section.ActivePanelName() != "Logs" {
+		t.Fatalf("active panel = %q, want Logs", section.ActivePanelName())
+	}
+	if !section.IsPanelFocused() {
+		t.Fatal("expected panel focus to be active")
+	}
+
+	appModel.Update(tea.KeyMsg{Type: tea.KeyRight})
+	if appModel.header.ActiveView() != header.ViewContainers {
+		t.Fatal("right arrow should not switch header when logs panel is focused")
+	}
+
+	appModel.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	if appModel.header.ActiveView() != header.ViewContainers {
+		t.Fatal("left arrow should not switch header when logs panel is focused")
 	}
 }
 
