@@ -211,7 +211,9 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	if len(b.panels) > 0 {
-		if _, isKey := msg.(tea.KeyMsg); !isKey || b.focus == focusPanel {
+		_, isKey := msg.(tea.KeyMsg)
+		shouldRouteToPanel := !isKey || b.focus == focusPanel
+		if shouldRouteToPanel {
 			cmds = append(cmds, b.ActivePanel().Update(msg))
 		}
 	}
