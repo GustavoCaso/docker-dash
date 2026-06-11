@@ -385,9 +385,19 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.systemInfo.Init())
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Left):
+			if m.activeSection().IsPanelFocused() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
 			m.header.MoveLeft()
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Right):
+			if m.activeSection().IsPanelFocused() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
 			m.header.MoveRight()
 			return m, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.Refresh):

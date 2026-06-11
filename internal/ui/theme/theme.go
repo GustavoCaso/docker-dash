@@ -123,6 +123,8 @@ var (
 var (
 	NoBorders = lipgloss.NewStyle()
 
+	PanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
+
 	DetailLabelStyle = lipgloss.NewStyle().
 				Foreground(TextMuted).
 				Width(labelColumnWidth)

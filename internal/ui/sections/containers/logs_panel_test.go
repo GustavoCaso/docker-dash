@@ -230,7 +230,7 @@ func TestLogsPanelHScrollClamping(t *testing.T) {
 	maxOffset := max(0, len([]rune(selected.content))-p.list.Width())
 
 	// scroll right past max — hOffset must clamp at maxOffset
-	scrollRight := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("]")}
+	scrollRight := tea.KeyMsg{Type: tea.KeyRight}
 	for range 20 {
 		p.Update(scrollRight)
 	}
@@ -239,7 +239,7 @@ func TestLogsPanelHScrollClamping(t *testing.T) {
 	}
 
 	// scroll left past zero — hOffset must not go negative
-	scrollLeft := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("[")}
+	scrollLeft := tea.KeyMsg{Type: tea.KeyLeft}
 	for range 20 {
 		p.Update(scrollLeft)
 	}
