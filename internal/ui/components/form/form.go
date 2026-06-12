@@ -7,11 +7,6 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-const (
-	formFixedWidth  = 80
-	formFixedHeight = 10
-)
-
 type Model struct {
 	title         string
 	form          *huh.Form
@@ -20,8 +15,6 @@ type Model struct {
 }
 
 func New(title string, form *huh.Form, callback func(*huh.Form) tea.Cmd) *Model {
-	form.WithWidth(formFixedWidth)
-	form.WithHeight(formFixedHeight)
 	return &Model{
 		title:    title,
 		form:     form,
@@ -51,6 +44,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *Model) State() huh.FormState {
 	return m.form.State
+}
+
+func (m *Model) WithWidth(width int) {
+	m.form.WithWidth(width)
+}
+
+func (m *Model) WithHeight(height int) {
+	m.form.WithHeight(height)
 }
 
 func (m *Model) View() string {
