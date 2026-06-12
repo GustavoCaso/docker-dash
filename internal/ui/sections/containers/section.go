@@ -208,9 +208,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 
 func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
 	// When exec panel is active, route ALL keys directly to it.
-	if ep, ok := s.ActivePanel().(*execPanel); ok {
-		log.Print("[containers] forward message to exec panel")
-		return base.UpdateResult{Cmd: ep.Update(msg), Handled: true}
+	if s.IsPanelFocused() {
+		if ep, ok := s.ActivePanel().(*execPanel); ok {
+			log.Print("[containers] forward message to exec panel")
+			return base.UpdateResult{Cmd: ep.Update(msg), Handled: true}
+		}
 	}
 	switch {
 	case key.Matches(msg, keys.Keys.ContainerDelete):
