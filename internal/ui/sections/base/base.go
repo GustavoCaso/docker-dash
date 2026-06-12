@@ -195,7 +195,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 				currentPanel := b.ActivePanel()
 				var listCmd tea.Cmd
 				b.List, listCmd = b.List.Update(keyMsg)
-				return tea.Batch(listCmd, currentPanel.Close(), b.UpdateActivePanel())
+				return tea.Batch(listCmd, currentPanel.Close(), b.clearActivePanel())
 			}
 			var listCmd tea.Cmd
 			b.List, listCmd = b.List.Update(keyMsg)
@@ -278,6 +278,25 @@ func (b *Section) UpdateActivePanel() tea.Cmd {
 	if id == "" {
 		return nil
 	}
+	return b.ActivePanel().Init(id)
+}
+
+// clearActivePanel calls ActivePanelInitFn on the selected list item and
+// set the active panle index to 0
+// Returns nil when no item is selected or ActivePanelInitFn is not set.
+func (b *Section) clearActivePanel() tea.Cmd {
+	if b.ActivePanelInitFn == nil {
+		return nil
+	}
+	selected := b.List.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	id := b.ActivePanelInitFn(selected)
+	if id == "" {
+		return nil
+	}
+	b.activePanelIdx = 0
 	return b.ActivePanel().Init(id)
 }
 
