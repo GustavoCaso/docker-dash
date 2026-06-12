@@ -199,8 +199,8 @@ var Keys = &KeyMap{
 		key.WithHelp("P", "prune"),
 	),
 	SystemInfo: key.NewBinding(
-		key.WithKeys("i"),
-		key.WithHelp("i", "system info"),
+		key.WithKeys("alt+i"),
+		key.WithHelp("alt+i", "system info"),
 	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),

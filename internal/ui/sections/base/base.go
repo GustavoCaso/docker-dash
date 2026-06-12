@@ -165,7 +165,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 
-		if len(b.panels) > 0 {
+		if b.IsPanelFocused() {
 			if handled, cmd := b.handlePanelKeys(keyMsg); handled {
 				return cmd
 			}
