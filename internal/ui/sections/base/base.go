@@ -5,7 +5,6 @@ package base
 
 import (
 	"log"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -38,6 +37,7 @@ type Section struct {
 
 	List     list.Model
 	isFilter bool
+	focus    focusTarget
 	width    int
 	height   int
 
@@ -71,6 +71,13 @@ type UpdateResult struct {
 	StopSpinner  bool
 }
 
+type focusTarget int
+
+const (
+	focusList focusTarget = iota
+	focusPanel
+)
+
 func New(
 	name sections.SectionName,
 	panels []panel.Panel,
@@ -85,6 +92,7 @@ func New(
 		List:           l,
 		panels:         panels,
 		activePanelIdx: 0,
+		focus:          focusList,
 	}
 }
 
@@ -120,6 +128,7 @@ func (b *Section) View() string {
 // Reset resets internal state to the initial condition.
 func (b *Section) Reset() tea.Cmd {
 	b.isFilter = false
+	b.focus = focusList
 	if len(b.panels) > 0 {
 		cmd := b.ActivePanel().Close()
 		b.setSizeWithPanels(b.width, b.height)
@@ -147,9 +156,14 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	//nolint:nestif // The complexity is acceptable because Update function
-	// hanldes all the logic
+	// handles all the logic
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		log.Printf("[%s] KeyMsg: key=%q", b.name, keyMsg.String())
+
+		if len(b.panels) > 0 && key.Matches(keyMsg, keys.Keys.Tab) {
+			b.toggleFocus()
+			return nil
+		}
 
 		if len(b.panels) > 0 {
 			if handled, cmd := b.handlePanelKeys(keyMsg); handled {
@@ -175,10 +189,13 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 			}
 		case key.Matches(keyMsg, keys.Keys.Up, keys.Keys.Down):
 			if len(b.panels) > 0 {
+				if b.focus == focusPanel {
+					return b.ActivePanel().Update(keyMsg)
+				}
 				currentPanel := b.ActivePanel()
 				var listCmd tea.Cmd
 				b.List, listCmd = b.List.Update(keyMsg)
-				return tea.Batch(listCmd, currentPanel.Close(), b.UpdateActivePanel())
+				return tea.Batch(listCmd, currentPanel.Close(), b.clearActivePanel())
 			}
 			var listCmd tea.Cmd
 			b.List, listCmd = b.List.Update(keyMsg)
@@ -189,7 +206,11 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	if len(b.panels) > 0 {
-		cmds = append(cmds, b.ActivePanel().Update(msg))
+		_, isKey := msg.(tea.KeyMsg)
+		shouldRouteToPanelOnFallback := !isKey || b.focus == focusPanel
+		if shouldRouteToPanelOnFallback {
+			cmds = append(cmds, b.ActivePanel().Update(msg))
+		}
 	}
 
 	return tea.Batch(cmds...)
@@ -260,8 +281,39 @@ func (b *Section) UpdateActivePanel() tea.Cmd {
 	return b.ActivePanel().Init(id)
 }
 
+// clearActivePanel calls ActivePanelInitFn on the selected list item and
+// set the active panle index to 0
+// Returns nil when no item is selected or ActivePanelInitFn is not set.
+func (b *Section) clearActivePanel() tea.Cmd {
+	if b.ActivePanelInitFn == nil {
+		return nil
+	}
+	selected := b.List.SelectedItem()
+	if selected == nil {
+		return nil
+	}
+	id := b.ActivePanelInitFn(selected)
+	if id == "" {
+		return nil
+	}
+	b.activePanelIdx = 0
+	return b.ActivePanel().Init(id)
+}
+
 func (b *Section) IsFilter() bool {
 	return b.isFilter
+}
+
+func (b *Section) IsPanelFocused() bool {
+	return len(b.panels) > 0 && b.focus == focusPanel
+}
+
+func (b *Section) toggleFocus() {
+	if b.focus == focusList {
+		b.focus = focusPanel
+		return
+	}
+	b.focus = focusList
 }
 
 // handleFilterKey processes keyboard events while filter mode is active.
@@ -377,26 +429,41 @@ func (b *Section) setListSize(width, height int) {
 
 // renderList renders the list content.
 func (b *Section) renderList() string {
+	borderColor := theme.Border
+	if b.focus == focusList {
+		borderColor = theme.BorderActive
+	}
 	return theme.ListStyle.
+		BorderForeground(borderColor).
 		Width(b.List.Width()).
 		Render(b.List.View())
 }
 
 // DetailsMenu renders the tab bar that appears above the active detail panel.
 func (b *Section) detailsMenu() string {
+	activeStyle := theme.HeaderItemStyle
+	if b.focus == focusPanel {
+		activeStyle = theme.HeaderActiveItemStyle
+	}
+
+	sep := theme.HeaderSeparatorStyle.Render("│")
+
 	sectionsMenu := make([]string, 0, len(b.panels))
 	for idx, p := range b.panels {
 		if idx == b.activePanelIdx {
-			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
+			sectionsMenu = append(sectionsMenu, activeStyle.
+				Render(p.Name()))
 		} else {
-			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
+			sectionsMenu = append(sectionsMenu, theme.HeaderItemStyle.Render(p.Name()))
+		}
+
+		if idx < len(b.panels)-1 {
+			sectionsMenu = append(sectionsMenu, sep)
 		}
 	}
 
 	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
-	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, b.panelWidth-lipgloss.Width(detailsMenu))))
-
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
+	return theme.HeaderBarStyle.Width(b.panelWidth).Render(detailsMenu)
 }
 
 // setSizeWithPanels sets dimensions for a section that shows a list alongside
@@ -408,7 +475,7 @@ func (b *Section) setSizeWithPanels(width, height int) {
 
 	// Account for details menu height
 	menuHeight := lipgloss.Height(b.detailsMenu())
-	menuX, menuY := theme.Tab.GetFrameSize()
+	menuX, menuY := theme.HeaderBarStyle.GetFrameSize()
 
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()

@@ -9,7 +9,7 @@ Set Width 1600
 Set Height 1000
 Set Theme "iTerm2 Solarized Dark"
 
-Type "./docker-dash"
+Type "./docker-dash --docker.host ssh://geekom"
 Enter
 Sleep 2
 
@@ -23,12 +23,16 @@ Type "n"
 
 Right@500ms 1
 Sleep 3
-Type "j"
-Type "j"
-Type "j"
-Type "j"
+Tab
 Sleep 2
+Down
+Down
+Down
+Down
+Sleep 2
+Tab
 Type "]"
+Sleep 2
 Type "]"
 Sleep 5
 Type "]"
