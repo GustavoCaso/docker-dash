@@ -24,6 +24,7 @@ Type "n"
 Right@500ms 1
 Sleep 3
 Tab
+Sleep 2
 Down
 Down
 Down
@@ -31,6 +32,7 @@ Down
 Sleep 2
 Tab
 Type "]"
+Sleep 2
 Type "]"
 Sleep 5
 Type "]"
