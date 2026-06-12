@@ -5,7 +5,6 @@ package base
 
 import (
 	"log"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -423,19 +422,29 @@ func (b *Section) renderList() string {
 
 // DetailsMenu renders the tab bar that appears above the active detail panel.
 func (b *Section) detailsMenu() string {
+	activeStyle := theme.HeaderItemStyle
+	if b.focus == focusPanel {
+		activeStyle = theme.HeaderActiveItemStyle
+	}
+
+	sep := theme.HeaderSeparatorStyle.Render("│")
+
 	sectionsMenu := make([]string, 0, len(b.panels))
 	for idx, p := range b.panels {
 		if idx == b.activePanelIdx {
-			sectionsMenu = append(sectionsMenu, theme.ActiveTab.Render(p.Name()))
+			sectionsMenu = append(sectionsMenu, activeStyle.
+				Render(p.Name()))
 		} else {
-			sectionsMenu = append(sectionsMenu, theme.Tab.Render(p.Name()))
+			sectionsMenu = append(sectionsMenu, theme.HeaderItemStyle.Render(p.Name()))
+		}
+
+		if idx < len(b.panels)-1 {
+			sectionsMenu = append(sectionsMenu, sep)
 		}
 	}
 
 	detailsMenu := lipgloss.JoinHorizontal(lipgloss.Top, sectionsMenu...)
-	gap := theme.TabGap.Render(strings.Repeat(" ", max(0, b.panelWidth-lipgloss.Width(detailsMenu))))
-
-	return lipgloss.JoinHorizontal(lipgloss.Bottom, detailsMenu, gap)
+	return theme.HeaderBarStyle.Width(b.panelWidth).Render(detailsMenu)
 }
 
 // setSizeWithPanels sets dimensions for a section that shows a list alongside
@@ -447,13 +456,13 @@ func (b *Section) setSizeWithPanels(width, height int) {
 
 	// Account for details menu height
 	menuHeight := lipgloss.Height(b.detailsMenu())
-	menuX, menuY := theme.Tab.GetFrameSize()
+	menuX, menuY := theme.HeaderBarStyle.GetFrameSize()
 
 	// Account for padding and borders
 	listX, listY := theme.ListStyle.GetFrameSize()
 
 	// Panel Style
-	panelX, panelY := theme.PanelStyle.GetFrameSize()
+	panelX, panelY := theme.NoBorders.GetFrameSize()
 
 	listWidth := int(float64(width) * theme.SplitRatio)
 	detailWidth := width - listWidth
@@ -493,12 +502,7 @@ func (b *Section) renderWithPanels() string {
 
 	detailContent := b.ActivePanel().View()
 
-	panelBorderColor := theme.Border
-	if b.focus == focusPanel {
-		panelBorderColor = theme.BorderActive
-	}
-	details := theme.PanelStyle.
-		BorderForeground(panelBorderColor).
+	details := theme.NoBorders.
 		Width(b.panelWidth).
 		Height(b.panelHeight).
 		Render(detailContent)

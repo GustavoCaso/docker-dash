@@ -31,6 +31,7 @@ var (
 	BorderActive  = lipgloss.Color("#1D63ED")
 	Background    = lipgloss.Color("#0D1117")
 	Highlight     = lipgloss.Color("#1A365D")
+	White         = lipgloss.Color("white")
 )
 
 var SplitRatio = 0.3 // fraction of width used by list in split view
@@ -123,8 +124,6 @@ var (
 var (
 	NoBorders = lipgloss.NewStyle()
 
-	PanelStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
-
 	DetailLabelStyle = lipgloss.NewStyle().
 				Foreground(TextMuted).
 				Width(labelColumnWidth)
@@ -134,40 +133,6 @@ var (
 
 	PanelMenu = lipgloss.NewStyle().
 			MarginRight(panelMenuMarginRight)
-
-	activeTabBorder = lipgloss.Border{
-		Top:         "─",
-		Bottom:      " ",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "┘",
-		BottomRight: "└",
-	}
-
-	tabBorder = lipgloss.Border{
-		Top:         "─",
-		Bottom:      "─",
-		Left:        "│",
-		Right:       "│",
-		TopLeft:     "╭",
-		TopRight:    "╮",
-		BottomLeft:  "┴",
-		BottomRight: "┴",
-	}
-
-	Tab = lipgloss.NewStyle().
-		Border(tabBorder, true).
-		BorderForeground(lipgloss.Color("white")).
-		Padding(0, 0)
-
-	ActiveTab = Tab.Border(activeTabBorder, true)
-
-	TabGap = Tab.
-		BorderTop(false).
-		BorderLeft(false).
-		BorderRight(false)
 )
 
 //
