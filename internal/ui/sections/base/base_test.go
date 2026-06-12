@@ -275,6 +275,8 @@ func TestPanelNextSwitchesActivePanel(t *testing.T) {
 		t.Fatalf("expected activePanelIdx=0 initially, got %d", section.activePanelIdx)
 	}
 
+	// Set focus on panels
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
 	// Press PanelNext (shift+right)
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
 
@@ -302,6 +304,8 @@ func TestPanelNextWrapsAround(t *testing.T) {
 	// Advance to the last panel manually
 	section.activePanelIdx = 1
 
+	// Set focus on panels
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
 	// Press PanelNext — should wrap back to index 0
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
 
@@ -326,6 +330,8 @@ func TestPanelPrevSwitchesActivePanel(t *testing.T) {
 	// Start on panelB (index 1)
 	section.activePanelIdx = 1
 
+	// Set focus on panels
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
 	// Press PanelPrev (shift+left)
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
 
@@ -350,6 +356,8 @@ func TestPanelPrevWrapsAround(t *testing.T) {
 		return i.name
 	}
 
+	// Set focus on panels
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
 	// Start on panelA (index 0) — pressing prev should wrap to last
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
 

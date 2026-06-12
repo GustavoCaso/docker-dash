@@ -83,6 +83,8 @@ func TestContainerListLogsPanel(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Set focus on panels
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	// Navigate to logs panel using shift+right
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 
@@ -97,6 +99,8 @@ func TestContainerReset(t *testing.T) {
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Set focus on panels
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	// Navigate to logs panel
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 
@@ -118,6 +122,8 @@ func TestContainerListPanelNavigation(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
 	// Default is details panel
 	waitFor(t, tm, "Container:")
+	// Set focus on panels
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	// Navigate to logs panel using shift+right
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 	waitFor(t, tm, "Starting application")
@@ -158,6 +164,8 @@ func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	waitFor(t, tm, "nginx-proxy")
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Set focus on panels
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	// Navigate to stats panel (index 2: details=0, logs=1, stats=2)
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
@@ -190,6 +198,8 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
 	section.SetSize(120, 40)
 
+	// Set focus on panels
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
 	// Instead if moving four time to the right, we move one to the left
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
@@ -217,6 +227,8 @@ func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
 	section.SetSize(120, 40)
 
+	// Set focus on panels
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
 	section.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
 	lp := section.ActivePanel().(*logsPanel)

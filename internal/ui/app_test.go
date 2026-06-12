@@ -44,7 +44,8 @@ func TestExecPanel(t *testing.T) {
 
 	// Navigate to first container (should be running)
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-
+	// Set focus on panels
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	// Navigate to exec panel using shift+right (panels: details=0, logs=1, stats=2, filetree=3, exec=4)
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
@@ -67,6 +68,8 @@ func TestContainerSwitchSectionResetsPanel(t *testing.T) {
 	waitForString(t, tm, "nginx-proxy")
 	// Select a container and navigate to logs panel
 	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	// Set focus on panels
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
 	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
 	waitForString(t, tm, "Starting application")
 	// Switch away and back - "Starting application" should disappear as panel is closed
@@ -351,6 +354,8 @@ func TestSpinnerOverlayShowsNestedSpinnerForActivePanel(t *testing.T) {
 
 	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
 	appModel.Update(tea.KeyMsg{Type: tea.KeyRight})
+	// Set focus on panels
+	appModel.Update(tea.KeyMsg{Type: tea.KeyTab})
 	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
 	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
 	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
@@ -452,9 +457,10 @@ func TestArrowKeysStayInContainersWhenLogsPanelFocused(t *testing.T) {
 	}
 
 	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
-	appModel.Update(tea.KeyMsg{Type: tea.KeyRight})      // Images -> Containers
+	appModel.Update(tea.KeyMsg{Type: tea.KeyRight}) // Images -> Containers
+	// Set focus on panels
+	appModel.Update(tea.KeyMsg{Type: tea.KeyTab})
 	appModel.Update(tea.KeyMsg{Type: tea.KeyShiftRight}) // Details -> Logs panel
-	appModel.Update(tea.KeyMsg{Type: tea.KeyTab})        // Focus panel
 
 	section := appModel.activeSection()
 	if section.ActivePanelName() != "Logs" {
