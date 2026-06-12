@@ -42,6 +42,7 @@ const (
 	bannerTimeoutSecs  = 3 // seconds before banner auto-clears
 	bannerOverlayLines = 2 // lines from bottom for banner overlay position
 	spinnerOverlayLine = 2 // lines from bottom for spinner overlay position
+	half               = 2
 )
 
 // clearBannerMsg is sent to clear the banner after a timeout.
@@ -278,6 +279,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case message.ShowFormMsg:
 		log.Print("[app] ShowFormMsg")
 		m.formModel = msg.Form
+		m.formModel.WithWidth(m.width / half)
+		m.formModel.WithHeight(m.height / half)
 		m.showForm = true
 		cmds = append(cmds, m.formModel.Init())
 		return m, tea.Batch(cmds...)
