@@ -1,4 +1,4 @@
-package panel
+package containers
 
 import (
 	"context"
@@ -13,12 +13,12 @@ import (
 )
 
 func newTestFileTreePanel() *filesPanel {
-	return NewFilesPanel(context.Background(), "containers", client.NewMockClient().Containers()).(*filesPanel)
+	return newFilesPanel(context.Background(), client.NewMockClient().Containers()).(*filesPanel)
 }
 
 func TestFileTreePanelInitFetchesTree(t *testing.T) {
 	p := newTestFileTreePanel()
-	cmd := p.Init("abc123def456")
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
 	if cmd == nil {
 		t.Fatal("Init() returned nil cmd")
 	}
@@ -63,7 +63,7 @@ func TestFileTreePanelUpdateSetsContent(t *testing.T) {
 	p := newTestFileTreePanel()
 	p.SetSize(80, 40)
 
-	cmd := p.Init("abc123def456")
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
 	msg := cmd()
 
 	batch, ok := msg.(tea.BatchMsg)
@@ -72,7 +72,6 @@ func TestFileTreePanelUpdateSetsContent(t *testing.T) {
 	}
 
 	for _, cmd := range batch {
-		// Update returns nil on success (no follow-up cmd needed)
 		p.Update(cmd())
 	}
 
@@ -80,8 +79,6 @@ func TestFileTreePanelUpdateSetsContent(t *testing.T) {
 		t.Error("Update() Must set loading state to false. Got true")
 	}
 
-	// MockClient.FileTree returns an empty tree — just ensure no panic and content is set.
-	// An empty tree still renders as some string (possibly empty); what matters is no panic.
 	_ = p.View()
 }
 
@@ -129,7 +126,7 @@ func TestFileTreePanelCloseResets(t *testing.T) {
 func TestFileTreePanelCloseIsIdempotent(t *testing.T) {
 	p := newTestFileTreePanel()
 	p.Close()
-	p.Close() // must not panic
+	p.Close()
 }
 
 func TestFileTreePanelViewReturnsViewPort(t *testing.T) {

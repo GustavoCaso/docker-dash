@@ -13,8 +13,8 @@ import (
 	"github.com/docker/docker/api/types/container"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -67,7 +67,7 @@ type statsPanel struct {
 	height       int
 }
 
-func NewStatsPanel(ctx context.Context, svc client.ContainerService) panel.Panel {
+func NewStatsPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
 	return &statsPanel{
 		ctx:     ctx,
 		service: svc,
@@ -104,7 +104,8 @@ func (s *statsPanel) Name() string {
 	return "Stats"
 }
 
-func (s *statsPanel) Init(containerID string) tea.Cmd {
+func (s *statsPanel) Init(item sections.ListItem) tea.Cmd {
+	containerID := item.ID()
 	log.Printf("[containers][stats-panel] Init: containerID=%q", containerID)
 	return s.startSession(containerID)
 }

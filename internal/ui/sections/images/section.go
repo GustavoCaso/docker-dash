@@ -18,7 +18,6 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -63,8 +62,9 @@ type imageItem struct {
 	hasUpdate bool
 }
 
-func (i imageItem) ID() string    { return i.image.ID }
-func (i imageItem) Title() string { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
+func (i imageItem) ID() string     { return i.image.ID }
+func (i imageItem) InnerItem() any { return i.image }
+func (i imageItem) Title() string  { return fmt.Sprintf("%s:%s", i.image.Repo, i.image.Tag) }
 func (i imageItem) Description() string {
 	stateIcon := theme.GetImageStatusIcon(i.image.Containers)
 	stateStyle := theme.GetImageStatusStyle(i.image.Containers)
@@ -76,6 +76,8 @@ func (i imageItem) Description() string {
 	return desc
 }
 func (i imageItem) FilterValue() string { return i.image.Repo + ":" + i.image.Tag }
+
+var _ sections.ListItem = imageItem{}
 
 // Section wraps bubbles/list.
 type Section struct {
@@ -100,18 +102,11 @@ func New(ctx context.Context, client client.Client, cfg config.UpdateCheckConfig
 		imageUpdates:     make(map[string]bool),
 		Section: base.New(
 			sections.ImagesSection,
-			[]panel.Panel{NewLayersPanel(ctx, client.Images())},
+			[]sections.Panel{NewLayersPanel(ctx, client.Images())},
 		),
 	}
 
 	il.LoadingText = "Loading..."
-	il.ActivePanelInitFn = func(item list.Item) string {
-		ii, ok := item.(imageItem)
-		if !ok {
-			return ""
-		}
-		return ii.ID()
-	}
 	il.RefreshCmd = il.updateImagesCmd
 	il.PruneCmd = il.confirmImagePrune
 	il.HandleMsg = il.handleMsg

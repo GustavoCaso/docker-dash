@@ -580,13 +580,13 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	// Navigate to second image
 	section.List.Select(1)
 	// Initialize the layers panel
-	section.ActivePanel().Init("sha256:image2")
+	section.ActivePanel().Init(imageItem{image: client.Image{ID: "sha256:image2"}})
 
 	// Navigate up to previous image - this should close the current panel
 	section.Update(tea.KeyMsg{Type: tea.KeyUp})
 
 	// Verify the panel can be reinitialized
-	cmd := section.ActivePanel().Init("sha256:image1")
+	cmd := section.ActivePanel().Init(imageItem{image: client.Image{ID: "sha256:image1"}})
 	if cmd == nil {
 		t.Error("Panel should be able to reinitialize after navigation")
 	}

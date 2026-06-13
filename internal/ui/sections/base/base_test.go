@@ -7,7 +7,6 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
@@ -16,7 +15,11 @@ type fakeItem struct {
 	name string
 }
 
+func (i fakeItem) ID() string          { return i.name }
+func (i fakeItem) Title() string       { return i.name }
+func (i fakeItem) Description() string { return "" }
 func (i fakeItem) FilterValue() string { return i.name }
+func (i fakeItem) InnerItem() any      { return i.name }
 
 type fakePanel struct {
 	name          string
@@ -33,8 +36,8 @@ func (f *fakePanel) Name() string {
 	return f.name
 }
 
-func (f *fakePanel) Init(id string) tea.Cmd {
-	f.ids = append(f.ids, id)
+func (f *fakePanel) Init(item sections.ListItem) tea.Cmd {
+	f.ids = append(f.ids, item.ID())
 	return func() tea.Msg {
 		return fakePanelInitCmd{}
 	}
@@ -62,8 +65,8 @@ func (f *fakePanel) SetSize(width, height int) {
 }
 
 // newSectionWithItems creates a Section.
-func newSectionWithItems(items []list.Item, panels []panel.Panel) *Section {
-	s := New(sections.SectionName("test"), panels)
+func newSectionWithItems(items []list.Item, panels []sections.Panel) *Section {
+	s := New("test", panels)
 	s.List.SetItems(items)
 	return s
 }
@@ -72,11 +75,7 @@ func TestRemoveItemAndUpdatePanel(t *testing.T) {
 	fp := &fakePanel{}
 	items := []list.Item{fakeItem{name: "test"}}
 
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	cmd := section.RemoveItemAndUpdatePanel(0)
 	if cmd != nil {
@@ -93,11 +92,7 @@ func TestRemoveItemAndUpdatePanelUpdatesSelection(t *testing.T) {
 		fakeItem{name: "item1"},
 		fakeItem{name: "item2"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	initialCount := len(section.List.Items())
 	section.List.Select(0)
@@ -124,11 +119,7 @@ func TestRemoveItemAndUpdatePanelMiddleItemClampsToLastWhenAtEnd(t *testing.T) {
 		fakeItem{name: "item2"},
 		fakeItem{name: "item3"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	count := len(section.List.Items())
 	// Select and delete the last item — selection should clamp to new last
@@ -154,11 +145,7 @@ func TestRemoveItemUpdatesSelection(t *testing.T) {
 		fakeItem{name: "item2"},
 		fakeItem{name: "item3"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	initialCount := len(section.List.Items())
 
@@ -181,11 +168,7 @@ func TestRemoveItem_LastItemClampsSelection(t *testing.T) {
 		fakeItem{name: "item2"},
 		fakeItem{name: "item3"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	// Delete items until one remains
 	for len(section.List.Items()) > 1 {
@@ -201,7 +184,7 @@ func TestRemoveItem_LastItemClampsSelection(t *testing.T) {
 }
 
 func TestResetClearsFilterFlag(t *testing.T) {
-	section := New(sections.SectionName("test"), []panel.Panel{})
+	section := New("test", []sections.Panel{})
 
 	section.isFilter = true
 
@@ -218,11 +201,7 @@ func TestPanelClosedOnDownNavigation(t *testing.T) {
 		fakeItem{name: "item1"},
 		fakeItem{name: "item2"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	// Navigate down to next container - this should close the current panel
 	section.Update(tea.KeyMsg{Type: tea.KeyDown})
@@ -242,11 +221,7 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 		fakeItem{name: "item1"},
 		fakeItem{name: "item2"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	// Navigate up — selection wraps/stays, panel gets closed and re-inited
 	section.Update(tea.KeyMsg{Type: tea.KeyUp})
@@ -264,11 +239,7 @@ func TestPanelNextSwitchesActivePanel(t *testing.T) {
 	panelA := &fakePanel{name: "panelA"}
 	panelB := &fakePanel{name: "panelB"}
 	items := []list.Item{fakeItem{name: "item1"}}
-	section := newSectionWithItems(items, []panel.Panel{panelA, panelB})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{panelA, panelB})
 
 	// Starts on panelA (index 0)
 	if section.activePanelIdx != 0 {
@@ -295,11 +266,7 @@ func TestPanelNextWrapsAround(t *testing.T) {
 	panelA := &fakePanel{name: "panelA"}
 	panelB := &fakePanel{name: "panelB"}
 	items := []list.Item{fakeItem{name: "item1"}}
-	section := newSectionWithItems(items, []panel.Panel{panelA, panelB})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{panelA, panelB})
 
 	// Advance to the last panel manually
 	section.activePanelIdx = 1
@@ -321,11 +288,7 @@ func TestPanelPrevSwitchesActivePanel(t *testing.T) {
 	panelA := &fakePanel{name: "panelA"}
 	panelB := &fakePanel{name: "panelB"}
 	items := []list.Item{fakeItem{name: "item1"}}
-	section := newSectionWithItems(items, []panel.Panel{panelA, panelB})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{panelA, panelB})
 
 	// Start on panelB (index 1)
 	section.activePanelIdx = 1
@@ -350,11 +313,7 @@ func TestPanelPrevWrapsAround(t *testing.T) {
 	panelA := &fakePanel{name: "panelA"}
 	panelB := &fakePanel{name: "panelB"}
 	items := []list.Item{fakeItem{name: "item1"}}
-	section := newSectionWithItems(items, []panel.Panel{panelA, panelB})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{panelA, panelB})
 
 	// Set focus on panels
 	section.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -401,11 +360,8 @@ func TestFilterEnterResetsFilterAndSelectsItem(t *testing.T) {
 		fakeItem{name: "item1"},
 		fakeItem{name: "item2"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
+
 	section.isFilter = true
 
 	handled, cmds := section.handleFilterKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -463,7 +419,7 @@ func TestFilterInactiveIgnoresMsgs(t *testing.T) {
 
 func TestTabTogglesFocusBetweenListAndPanel(t *testing.T) {
 	fp := &fakePanel{name: "panel"}
-	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, []panel.Panel{fp})
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, []sections.Panel{fp})
 
 	if section.focus != focusList {
 		t.Fatalf("expected initial focus to be list, got %d", section.focus)
@@ -486,7 +442,7 @@ func TestPanelFocusedUpDownIsHandledByPanel(t *testing.T) {
 		fakeItem{name: "item1"},
 		fakeItem{name: "item2"},
 	}
-	section := newSectionWithItems(items, []panel.Panel{fp})
+	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	section.Update(tea.KeyMsg{Type: tea.KeyTab})
 	section.Update(tea.KeyMsg{Type: tea.KeyDown})
@@ -501,11 +457,7 @@ func TestPanelFocusedUpDownIsHandledByPanel(t *testing.T) {
 
 func TestUpdateItemsSetsItems(t *testing.T) {
 	fp := &fakePanel{name: "panel"}
-	section := New(sections.SectionName("test"), []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := New("test", []sections.Panel{fp})
 
 	items := []list.Item{fakeItem{name: "item1"}, fakeItem{name: "item2"}}
 	cmds := section.UpdateItems(items)
@@ -531,11 +483,8 @@ func TestUpdateItemsSetsItems(t *testing.T) {
 func TestUpdateItemsEmptyResetsSection(t *testing.T) {
 	fp := &fakePanel{name: "panel"}
 	items := []list.Item{fakeItem{name: "item1"}}
-	section := newSectionWithItems(items, []panel.Panel{fp})
-	section.ActivePanelInitFn = func(item list.Item) string {
-		i := item.(fakeItem)
-		return i.name
-	}
+	section := newSectionWithItems(items, []sections.Panel{fp})
+
 	section.isFilter = true
 
 	cmds := section.UpdateItems([]list.Item{})

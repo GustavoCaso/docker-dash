@@ -17,7 +17,7 @@ func newTestStatsPanel() *statsPanel {
 
 func TestStatsPanelInitStartsSession(t *testing.T) {
 	p := newTestStatsPanel()
-	cmd := p.Init("abc123def456") // running container in mock
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}}) // running container in mock
 	if cmd == nil {
 		t.Fatal("Init() returned nil cmd")
 	}

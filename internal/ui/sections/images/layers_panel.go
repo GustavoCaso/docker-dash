@@ -10,9 +10,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
 
 type layersPanel struct {
@@ -26,7 +26,7 @@ type layersOutputMsg struct {
 	err    error
 }
 
-func NewLayersPanel(ctx context.Context, client client.ImageService) panel.Panel {
+func NewLayersPanel(ctx context.Context, client client.ImageService) sections.Panel {
 	return &layersPanel{
 		ctx:      ctx,
 		client:   client,
@@ -38,7 +38,8 @@ func (l *layersPanel) Name() string {
 	return "Layers"
 }
 
-func (l *layersPanel) Init(imageID string) tea.Cmd {
+func (l *layersPanel) Init(item sections.ListItem) tea.Cmd {
+	imageID := item.ID()
 	log.Printf("[images][layers-panel] Init: imageID=%q", imageID)
 	return l.fetchCmd(imageID)
 }

@@ -25,7 +25,7 @@ func newTestLogsPanel() *logsPanel {
 
 func TestLogsPanelInitStartsSession(t *testing.T) {
 	p := newTestLogsPanel()
-	cmd := p.Init("abc123def456")
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
 	msg := cmd()
 	batch, ok := msg.(tea.BatchMsg)
 	if !ok {

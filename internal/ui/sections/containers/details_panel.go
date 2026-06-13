@@ -11,9 +11,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -28,8 +28,8 @@ type detailsPanel struct {
 	viewport viewport.Model
 }
 
-// NewDetailsPanel creates a new panel.Panel that fetches and renders container details.
-func NewDetailsPanel(ctx context.Context, svc client.ContainerService) panel.Panel {
+// NewDetailsPanel creates a new sections.Panel that fetches and renders container details.
+func NewDetailsPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
 	return &detailsPanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0)}
 }
 
@@ -37,7 +37,8 @@ func (d *detailsPanel) Name() string {
 	return "Details"
 }
 
-func (d *detailsPanel) Init(containerID string) tea.Cmd {
+func (d *detailsPanel) Init(item sections.ListItem) tea.Cmd {
+	containerID := item.ID()
 	log.Printf("[containers][details-panel] Init: containerID=%q", containerID)
 	return d.fetchCmd(containerID)
 }
