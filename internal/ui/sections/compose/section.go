@@ -14,7 +14,6 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
@@ -39,7 +38,9 @@ type composeItem struct {
 	project client.ComposeProject
 }
 
-func (c composeItem) Title() string { return c.project.Name }
+func (c composeItem) ID() string     { return c.project.Name }
+func (c composeItem) InnerItem() any { return c.project }
+func (c composeItem) Title() string  { return c.project.Name }
 func (c composeItem) Description() string {
 	total := len(c.project.Services)
 	running := 0
@@ -59,6 +60,8 @@ func (c composeItem) Description() string {
 }
 func (c composeItem) FilterValue() string { return c.project.Name }
 
+var _ sections.ListItem = composeItem{}
+
 // Section wraps bubbles/list for displaying Compose projects.
 type Section struct {
 	*base.Section
@@ -71,17 +74,10 @@ func New(ctx context.Context, svc client.ComposeProjectService) *Section {
 	s := &Section{
 		ctx:            ctx,
 		composeService: svc,
-		Section:        base.New(sections.ComposeSection, []panel.Panel{newDetailsPanel()}),
+		Section:        base.New(sections.ComposeSection, []sections.Panel{newDetailsPanel()}),
 	}
 
 	s.LoadingText = "Loading..."
-	s.ActivePanelInitFn = func(item list.Item) string {
-		ci, ok := item.(composeItem)
-		if !ok {
-			return ""
-		}
-		return formatProjectDetails(ci.project)
-	}
 	s.RefreshCmd = s.updateComposeCmd
 	s.HandleMsg = s.handleMsg
 	s.HandleKey = s.handleKey

@@ -3,8 +3,6 @@ package sections
 import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 )
 
 type SectionName string
@@ -14,6 +12,23 @@ var ContainersSection SectionName = "containers"
 var VolumesSection SectionName = "volumes"
 var NetworksSection SectionName = "networks"
 var ComposeSection SectionName = "compose"
+
+type ListItem interface {
+	ID() string
+	InnerItem() any
+	Title() string
+	Description() string
+	FilterValue() string
+}
+
+type Panel interface {
+	Name() string
+	Init(item ListItem) tea.Cmd
+	Update(msg tea.Msg) tea.Cmd
+	View() string
+	Close() tea.Cmd
+	SetSize(width, height int)
+}
 
 type Section interface {
 	// Initialize Section
@@ -27,7 +42,7 @@ type Section interface {
 	// IsFilter returns if the filter is active or nor
 	IsFilter() bool
 	// ActivePanel returns the active panel
-	ActivePanel() panel.Panel
+	ActivePanel() Panel
 	// ActivePanelName returns the active panel name or an empty string when the
 	// section has no panels.
 	ActivePanelName() string

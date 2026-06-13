@@ -1,4 +1,4 @@
-package panel
+package containers
 
 import (
 	"context"
@@ -14,13 +14,14 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
 
 var highlightStyle = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("63")).Foreground(lipgloss.Color("230"))
 var normalStyle = lipgloss.NewStyle()
 var statusBarSpace = 2
 
-// fileNodeLoadedMsg is sent when containers have been loaded asynchronously.
+// fileNodeLoadedMsg is sent when the file tree has been loaded asynchronously.
 type fileNodeLoadedMsg struct {
 	requestID int
 	err       error
@@ -29,30 +30,26 @@ type fileNodeLoadedMsg struct {
 
 type filesPanel struct {
 	ctx           context.Context
-	service       fileService
+	service       client.ContainerService
 	loading       bool
 	width, height int
-	section       string
 	root          *client.FileNode
 	visible       []*client.FileNode
 	cursor        int
 	requestID     int
 }
 
-type fileService interface {
-	FileTree(ctx context.Context, ID string) (*client.FileNode, error)
-}
-
-func NewFilesPanel(ctx context.Context, section string, svc fileService) Panel {
-	return &filesPanel{ctx: ctx, service: svc, section: section, width: 0, height: 0}
+func newFilesPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
+	return &filesPanel{ctx: ctx, service: svc}
 }
 
 func (f *filesPanel) Name() string {
 	return "Files"
 }
 
-func (f *filesPanel) Init(containerID string) tea.Cmd {
-	log.Printf("[files-panel] Init: containerID=%q", containerID)
+func (f *filesPanel) Init(listItem sections.ListItem) tea.Cmd {
+	containerID := listItem.ID()
+	log.Printf("[containers][files-panel] Init: containerID=%q", containerID)
 	f.loading = true
 	f.requestID++
 	requestID := f.requestID
@@ -79,7 +76,7 @@ func computeVisible(root *client.FileNode) []*client.FileNode {
 func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case fileNodeLoadedMsg:
-		log.Printf("[files-panel] fileNodeLoadedMsg: requestID=%d err=%v", msg.requestID, msg.err)
+		log.Printf("[containers][files-panel] fileNodeLoadedMsg: requestID=%d err=%v", msg.requestID, msg.err)
 		if msg.requestID != f.requestID {
 			return nil
 		}
@@ -97,7 +94,7 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 		return f.cancelSpinnerCmd(msg.requestID)
 
 	case tea.KeyMsg:
-		log.Printf("[files-panel] KeyMsg: key=%q", msg.String())
+		log.Printf("[containers][files-panel] KeyMsg: key=%q", msg.String())
 		switch {
 		case key.Matches(msg, keys.Keys.ScrollUp):
 			if f.cursor > 0 {
@@ -138,7 +135,6 @@ func (f *filesPanel) View() string {
 
 	var fileTree strings.Builder
 
-	// Determine scroll window
 	start := 0
 	if f.cursor >= treeLines {
 		start = f.cursor - treeLines + 1
@@ -183,7 +179,6 @@ func (f *filesPanel) View() string {
 		}
 	}
 
-	// Status bar
 	var statusBar strings.Builder
 
 	if len(f.visible) > 0 {
@@ -204,7 +199,7 @@ func (f *filesPanel) View() string {
 }
 
 func (f *filesPanel) Close() tea.Cmd {
-	log.Printf("[files-panel] Close")
+	log.Printf("[containers][files-panel] Close")
 	requestID := f.requestID
 	f.requestID++
 	f.loading = false
@@ -240,7 +235,7 @@ func (f *filesPanel) showSpinnerCmd(requestID int) tea.Cmd {
 			ID:   f.spinnerID(requestID),
 			Text: "Loading files...",
 			Scope: message.SpinnerScope{
-				Section: f.section,
+				Section: string(sections.ContainersSection),
 				Panel:   f.Name(),
 			},
 		}
@@ -254,7 +249,7 @@ func (f *filesPanel) cancelSpinnerCmd(requestID int) tea.Cmd {
 }
 
 func (f *filesPanel) spinnerID(requestID int) string {
-	return fmt.Sprintf("%s.files.%d", f.section, requestID)
+	return fmt.Sprintf("%s.files.%d", string(sections.ContainersSection), requestID)
 }
 
 func (f *filesPanel) extendHelpCmd() tea.Cmd {

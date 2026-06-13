@@ -14,9 +14,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
 
 var noStyle = lipgloss.NewStyle()
@@ -45,7 +45,7 @@ type execPanel struct {
 	width      int
 }
 
-func NewExecPanel(ctx context.Context, svc client.ContainerService) panel.Panel {
+func NewExecPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
 	ti := textinput.New()
 	ti.Prompt = "$ "
 	vp := viewport.New(0, 0)
@@ -58,7 +58,8 @@ func NewExecPanel(ctx context.Context, svc client.ContainerService) panel.Panel 
 	}
 }
 
-func (e *execPanel) Init(containerID string) tea.Cmd {
+func (e *execPanel) Init(item sections.ListItem) tea.Cmd {
+	containerID := item.ID()
 	log.Printf("[containers][exec-panel] Init: containerID=%q", containerID)
 	e.output = ""
 	e.history = []string{}

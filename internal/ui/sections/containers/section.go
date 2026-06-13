@@ -11,7 +11,6 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -45,8 +44,9 @@ type containerItem struct {
 	container client.Container
 }
 
-func (c containerItem) ID() string    { return c.container.ID }
-func (c containerItem) Title() string { return c.container.Name }
+func (c containerItem) ID() string     { return c.container.ID }
+func (c containerItem) InnerItem() any { return c.container }
+func (c containerItem) Title() string  { return c.container.Name }
 func (c containerItem) Description() string {
 	var healthStatus string
 	if c.container.Health != nil {
@@ -60,6 +60,8 @@ func (c containerItem) Description() string {
 	return state + " " + healthStatus + " " + c.container.Image + " " + helper.ShortID(c.ID())
 }
 func (c containerItem) FilterValue() string { return c.container.Name }
+
+var _ sections.ListItem = containerItem{}
 
 const (
 	readBufSize = 4096 // buffer size for reading container output
@@ -77,23 +79,16 @@ func New(ctx context.Context, svc client.ContainerService, logsCfg config.LogsCo
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
-		Section: base.New(sections.ContainersSection, []panel.Panel{
+		Section: base.New(sections.ContainersSection, []sections.Panel{
 			NewDetailsPanel(ctx, svc),
 			NewLogsPanel(ctx, svc, logsCfg),
 			NewStatsPanel(ctx, svc),
-			panel.NewFilesPanel(ctx, string(sections.ContainersSection), svc),
+			newFilesPanel(ctx, svc),
 			NewExecPanel(ctx, svc),
 		}),
 	}
 
 	cl.LoadingText = "Loading..."
-	cl.ActivePanelInitFn = func(item list.Item) string {
-		ci, ok := item.(containerItem)
-		if !ok {
-			return ""
-		}
-		return ci.container.ID
-	}
 	cl.RefreshCmd = cl.updateContainersCmd
 	cl.PruneCmd = cl.confirmContainerPrune
 	cl.HandleMsg = cl.handleMsg

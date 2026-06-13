@@ -14,9 +14,9 @@ import (
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -93,7 +93,7 @@ type logsSessionStartedMsg struct {
 	session *client.LogsSession
 }
 
-func NewLogsPanel(ctx context.Context, client client.ContainerService, logsCfg config.LogsConfig) panel.Panel {
+func NewLogsPanel(ctx context.Context, client client.ContainerService, logsCfg config.LogsConfig) sections.Panel {
 	delegate := newLogDelegate()
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowTitle(false)
@@ -109,7 +109,8 @@ func NewLogsPanel(ctx context.Context, client client.ContainerService, logsCfg c
 	}
 }
 
-func (l *logsPanel) Init(containerID string) tea.Cmd {
+func (l *logsPanel) Init(item sections.ListItem) tea.Cmd {
+	containerID := item.ID()
 	log.Printf("[containers][logs-panel] Init: containerID=%q", containerID)
 	return tea.Batch(l.init(containerID), l.extendHelpCmd())
 }

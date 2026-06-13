@@ -11,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
@@ -24,7 +23,7 @@ import (
 // behaviour to its methods.
 //
 // For sections that display a detail panel alongside the list, populate
-// Panels and ActivePanelInitFn in New() and use the panel-aware helpers
+// Panels and use the panel-aware helpers
 // (RemoveItemAndUpdatePanel)
 //
 // To eliminate per-section boilerplate, set the strategy callbacks
@@ -41,14 +40,10 @@ type Section struct {
 	width    int
 	height   int
 
-	panels         []panel.Panel
+	panels         []sections.Panel
 	activePanelIdx int
 	panelWidth     int
 	panelHeight    int
-
-	// ActivePanelInitFn extracts the string passed to Panel.Init from the
-	// currently-selected list item.  Set this in New() for panel sections.
-	ActivePanelInitFn func(list.Item) string
 
 	LoadingText string
 	RefreshCmd  func() tea.Cmd
@@ -80,7 +75,7 @@ const (
 
 func New(
 	name sections.SectionName,
-	panels []panel.Panel,
+	panels []sections.Panel,
 ) *Section {
 	l := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
 	l.SetShowTitle(false)
@@ -228,7 +223,7 @@ func (b *Section) UpdateItems(items []list.Item) []tea.Cmd {
 }
 
 // ActivePanel returns the currently active detail panel.
-func (b *Section) ActivePanel() panel.Panel {
+func (b *Section) ActivePanel() sections.Panel {
 	return b.panels[b.activePanelIdx]
 }
 
@@ -263,41 +258,42 @@ func (b *Section) RemoveItem(idx int) {
 	}
 }
 
-// UpdateActivePanel calls ActivePanelInitFn on the selected list item and
-// passes the result to the active panel's Init method.
-// Returns nil when no item is selected or ActivePanelInitFn is not set.
+// UpdateActivePanel pass the active selected ListItem to
+// the active panel's Init method.
+// Returns nil when no item is selected or there are no panels.
 func (b *Section) UpdateActivePanel() tea.Cmd {
-	if b.ActivePanelInitFn == nil {
+	if len(b.panels) == 0 {
 		return nil
 	}
 	selected := b.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}
-	id := b.ActivePanelInitFn(selected)
-	if id == "" {
+
+	listItem, ok := selected.(sections.ListItem)
+	if !ok {
 		return nil
 	}
-	return b.ActivePanel().Init(id)
+
+	return b.ActivePanel().Init(listItem)
 }
 
-// clearActivePanel calls ActivePanelInitFn on the selected list item and
-// set the active panle index to 0
-// Returns nil when no item is selected or ActivePanelInitFn is not set.
+// clearActivePanel set the active panel index to 0 and initialize it.
+// Returns nil when no item is selected or there are no panels.
 func (b *Section) clearActivePanel() tea.Cmd {
-	if b.ActivePanelInitFn == nil {
+	if len(b.panels) == 0 {
 		return nil
 	}
 	selected := b.List.SelectedItem()
 	if selected == nil {
 		return nil
 	}
-	id := b.ActivePanelInitFn(selected)
-	if id == "" {
+	listItem, ok := selected.(sections.ListItem)
+	if !ok {
 		return nil
 	}
 	b.activePanelIdx = 0
-	return b.ActivePanel().Init(id)
+	return b.ActivePanel().Init(listItem)
 }
 
 func (b *Section) IsFilter() bool {

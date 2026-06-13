@@ -11,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
@@ -44,7 +43,9 @@ type networkItem struct {
 	network client.Network
 }
 
-func (n networkItem) Title() string { return n.network.Name }
+func (n networkItem) ID() string     { return n.network.ID }
+func (n networkItem) InnerItem() any { return n.network }
+func (n networkItem) Title() string  { return n.network.Name }
 func (n networkItem) Description() string {
 	var parts []string
 	parts = append(parts, n.network.Driver)
@@ -59,6 +60,8 @@ func (n networkItem) Description() string {
 }
 func (n networkItem) FilterValue() string { return n.network.Name }
 
+var _ sections.ListItem = networkItem{}
+
 // Section wraps bubbles/list for displaying networks.
 type Section struct {
 	*base.Section
@@ -71,17 +74,10 @@ func New(ctx context.Context, svc client.NetworkService) *Section {
 	s := &Section{
 		ctx:            ctx,
 		networkService: svc,
-		Section:        base.New(sections.NetworksSection, []panel.Panel{newDetailsPanel()}),
+		Section:        base.New(sections.NetworksSection, []sections.Panel{newDetailsPanel()}),
 	}
 
 	s.LoadingText = "Loading..."
-	s.ActivePanelInitFn = func(item list.Item) string {
-		ni, ok := item.(networkItem)
-		if !ok {
-			return ""
-		}
-		return formatNetworkDetails(ni.network)
-	}
 	s.RefreshCmd = s.updateNetworksCmd
 	s.PruneCmd = s.confirmNetworkPrune
 	s.HandleMsg = s.handleMsg

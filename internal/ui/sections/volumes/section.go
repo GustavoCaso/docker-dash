@@ -11,7 +11,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -44,6 +43,7 @@ type volumeItem struct {
 	volume client.Volume
 }
 
+func (v volumeItem) ID() string    { return v.volume.Name }
 func (v volumeItem) Title() string { return v.volume.Name }
 func (v volumeItem) Description() string {
 	var parts []string
@@ -58,6 +58,9 @@ func (v volumeItem) Description() string {
 	return strings.Join(parts, " ")
 }
 func (v volumeItem) FilterValue() string { return v.volume.Name }
+func (v volumeItem) InnerItem() any      { return v.volume }
+
+var _ sections.ListItem = volumeItem{}
 
 // Section wraps bubbles/list for displaying volumes.
 type Section struct {
@@ -71,7 +74,7 @@ func New(ctx context.Context, svc client.VolumeService) *Section {
 	s := &Section{
 		ctx:           ctx,
 		volumeService: svc,
-		Section:       base.New(sections.VolumesSection, []panel.Panel{}),
+		Section:       base.New(sections.VolumesSection, []sections.Panel{}),
 	}
 
 	s.LoadingText = "Loading..."

@@ -11,7 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/components/panel"
+	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -19,15 +19,19 @@ type detailsPanel struct {
 	viewport viewport.Model
 }
 
-func newDetailsPanel() panel.Panel {
+func newDetailsPanel() *detailsPanel {
 	return &detailsPanel{
 		viewport: viewport.New(0, 0),
 	}
 }
 
-func (d *detailsPanel) Init(content string) tea.Cmd {
+func (d *detailsPanel) Init(item sections.ListItem) tea.Cmd {
 	log.Print("[network][details-panel] Init")
-	d.viewport.SetContent(content)
+	network, ok := item.InnerItem().(client.Network)
+	if !ok {
+		return nil
+	}
+	d.viewport.SetContent(formatNetworkDetails(network))
 	return nil
 }
 

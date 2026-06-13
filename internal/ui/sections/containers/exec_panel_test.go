@@ -19,7 +19,7 @@ func newTestExecPanel() *execPanel {
 
 func TestExecPanelInitStartsSession(t *testing.T) {
 	p := newTestExecPanel()
-	cmd := p.Init("abc123def456")
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
 	if cmd == nil {
 		t.Fatal("Init() returned nil cmd")
 	}

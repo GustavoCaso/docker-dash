@@ -16,7 +16,7 @@ func newTestDetailsPanel() *detailsPanel {
 
 func TestDetailsPanelInitReturnsCmd(t *testing.T) {
 	dp := newTestDetailsPanel()
-	cmd := dp.Init("abc123def456")
+	cmd := dp.Init(containerItem{container: client.Container{ID: "abc123def456"}})
 	if cmd == nil {
 		t.Fatal("Init should return a non-nil command")
 	}
@@ -32,7 +32,7 @@ func TestDetailsPanelUpdateSetsContent(t *testing.T) {
 	dp := newTestDetailsPanel()
 	dp.SetSize(100, 100)
 
-	cmd := dp.Init("abc123def456")
+	cmd := dp.Init(containerItem{container: client.Container{ID: "abc123def456"}})
 	msg := cmd()
 
 	dm, ok := msg.(detailsMsg)
