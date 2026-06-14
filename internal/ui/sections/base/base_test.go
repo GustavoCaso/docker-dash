@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -414,6 +415,63 @@ func TestFilterInactiveIgnoresMsgs(t *testing.T) {
 	}
 	if len(cmds) != 0 {
 		t.Error("handleFilterKey should return no cmds when filter is not active")
+	}
+}
+
+func TestCopyIDSuccessBanner(t *testing.T) {
+	if clipboard.Unsupported {
+		t.Skip("clipboard not available")
+	}
+	items := []list.Item{fakeItem{name: "abc123"}}
+	section := newSectionWithItems(items, nil)
+
+	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if cmd == nil {
+		t.Fatal("CopyID should return a cmd")
+	}
+	msg, ok := cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", cmd())
+	}
+	if msg.IsError {
+		t.Error("expected success banner, got error banner")
+	}
+}
+
+func TestCopyIDNoItemBanner(t *testing.T) {
+	section := newSectionWithItems([]list.Item{}, nil)
+
+	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if cmd == nil {
+		t.Fatal("CopyID with no selection should return a cmd")
+	}
+	msg, ok := cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", cmd())
+	}
+	if !msg.IsError {
+		t.Error("expected error banner when no item selected")
+	}
+}
+
+func TestCopyIDIgnoredWhenPanelFocused(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	items := []list.Item{fakeItem{name: "abc123"}}
+	section := newSectionWithItems(items, []sections.Panel{fp})
+
+	// Move focus to panel
+	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+
+	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+
+	// cmd may be nil or come from the panel — the list should not produce a ShowBannerMsg
+	if cmd != nil {
+		if _, ok := cmd().(message.ShowBannerMsg); ok {
+			t.Error("CopyID should not fire when focus is on panel")
+		}
+	}
+	if !slices.Contains(fp.updatedKeys, "y") {
+		t.Error("panel should receive the 'y' key when panel is focused")
 	}
 }
 

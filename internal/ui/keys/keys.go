@@ -19,6 +19,7 @@ type KeyMap struct {
 	RefreshAll key.Binding
 	Delete     key.Binding
 	Filter     key.Binding
+	CopyID     key.Binding
 
 	CreateAndRunContainer key.Binding
 	PullImage             key.Binding
@@ -125,6 +126,10 @@ var Keys = &KeyMap{
 	Filter: key.NewBinding(
 		key.WithKeys("/"),
 		key.WithHelp("/", "filter"),
+	),
+	CopyID: key.NewBinding(
+		key.WithKeys("y"),
+		key.WithHelp("y", "copy ID"),
 	),
 	CreateAndRunContainer: key.NewBinding(
 		key.WithKeys("c"),
@@ -240,7 +245,7 @@ func (k KeyMap) ImageKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.Tab},
+			{k.Up, k.Down, k.Tab, k.CopyID},
 			{k.Delete, k.CreateAndRunContainer, k.Prune, k.Filter},
 			{k.PullImage, k.PullImageUpdate},
 			{k.Help, k.Quit, k.SystemInfo},
@@ -254,7 +259,7 @@ func (k KeyMap) ContainerKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.Tab},
+			{k.Up, k.Down, k.Tab, k.CopyID},
 			{k.ContainerDelete, k.ContainerStartStop, k.ContainerRestart, k.Prune},
 			{k.ContainerPauseUnpause, k.ContainerKill, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
@@ -268,7 +273,7 @@ func (k KeyMap) VolumeKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.Tab},
+			{k.Up, k.Down, k.Tab, k.CopyID},
 			{k.Delete, k.Prune, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
 		},
@@ -281,7 +286,7 @@ func (k KeyMap) NetworkKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.Tab},
+			{k.Up, k.Down, k.Tab, k.CopyID},
 			{k.NetworkDelete, k.Prune, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
 		},
@@ -294,7 +299,7 @@ func (k KeyMap) ComposeKeyMap() *ViewKeyMap {
 		short: k.navigationKeys(),
 		full: [][]key.Binding{
 			{k.Left, k.Right, k.PanelNext, k.PanelPrev},
-			{k.Up, k.Down, k.Tab},
+			{k.Up, k.Down, k.Tab, k.CopyID},
 			{k.ComposeUp, k.ComposeDown, k.ComposeStartStop, k.ComposeRestart},
 			{k.Refresh, k.Filter},
 			{k.Help, k.Quit, k.SystemInfo},
