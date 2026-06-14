@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/scrolllist"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
-	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
@@ -42,7 +40,7 @@ func (l *layersPanel) Name() string {
 func (l *layersPanel) Init(item sections.ListItem) tea.Cmd {
 	imageID := item.ID()
 	log.Printf("[images][layers-panel] Init: imageID=%q", imageID)
-	return tea.Batch(l.fetchCmd(imageID), l.extendHelpCmd())
+	return l.fetchCmd(imageID)
 }
 
 func (l *layersPanel) Update(msg tea.Msg) tea.Cmd {
@@ -82,28 +80,18 @@ func (l *layersPanel) fetchCmd(imageID string) tea.Cmd {
 	}
 }
 
-func (l *layersPanel) extendHelpCmd() tea.Cmd {
-	return func() tea.Msg {
-		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			keys.Keys.ScrollUp,
-			keys.Keys.ScrollDown,
-			keys.Keys.LogScrollLeft,
-			keys.Keys.LogScrollRight,
-		}}
-	}
-}
-
 func formatLayerLines(layers []client.Layer) []string {
 	if len(layers) == 0 {
 		return []string{"No layer information available"}
 	}
 
-	lines := make([]string, 0, len(layers)*2) //nolint:mnd // 2 lines per layer: header, detail
+	lines := make([]string, 0, len(layers)*3) //nolint:mnd // 3 lines per layer: header, detail, blank line
 	for idx, layer := range layers {
 		lines = append(lines, fmt.Sprintf("%2d. %s", idx+1, helper.StripCommand(layer.Command)))
 		lines = append(lines, fmt.Sprintf("    Size: %-10s  ID: %s",
 			helper.FormatSize(layer.Size),
 			helper.ShortID(layer.ID)))
+		lines = append(lines, "")
 	}
 
 	// Remove trailing blank line.

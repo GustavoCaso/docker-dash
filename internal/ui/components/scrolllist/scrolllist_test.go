@@ -141,6 +141,52 @@ func TestHOffsetResetsOnItemChange(t *testing.T) {
 	}
 }
 
+func TestSkipsEmptyLinesOnNavigateDown(t *testing.T) {
+	m := newModel(80, 20)
+	m.SetLines([]string{"first", "", "second"})
+
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	idx := m.list.Index()
+	if idx != 2 {
+		t.Errorf("expected to skip empty line and land on index 2, got %d", idx)
+	}
+}
+
+func TestSkipsEmptyLinesOnNavigateUp(t *testing.T) {
+	m := newModel(80, 20)
+	m.SetLines([]string{"first", "", "second"})
+	m.list.Select(2)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+
+	idx := m.list.Index()
+	if idx != 0 {
+		t.Errorf("expected to skip empty line and land on index 0, got %d", idx)
+	}
+}
+
+func TestNoLoopWhenLastItemIsEmpty(t *testing.T) {
+	m := newModel(80, 20)
+	m.SetLines([]string{"first", "second", ""})
+	m.list.Select(1)
+
+	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if m.list.Index() != 2 {
+		t.Errorf("expected index 2 (empty last item), got %d", m.list.Index())
+	}
+}
+
+func TestNoLoopWhenFirstItemIsEmpty(t *testing.T) {
+	m := newModel(80, 20)
+	m.SetLines([]string{"", "first", "second"})
+	m.list.Select(1)
+	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if m.list.Index() != 0 {
+		t.Errorf("expected index 0 (empty first item), got %d", m.list.Index())
+	}
+}
+
 func TestDelegateTruncatesNonSelectedLines(t *testing.T) {
 	d := newDelegate()
 	items := []list.Item{

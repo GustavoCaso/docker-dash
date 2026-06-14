@@ -140,9 +140,30 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 
+	prevIdx := m.list.Index()
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	newIndex := m.list.Index()
+
+	// Skip over empty lines: nudge selection in the direction of travel.
+	item := m.list.SelectedItem()
+	if item != nil {
+		if lineItem, ok := item.(line); ok && lineItem.Content == "" {
+			items := m.list.Items()
+			step := 1
+			if newIndex < prevIdx {
+				step = -1
+			}
+			for i := newIndex + step; i >= 0 && i < len(items); i += step {
+				if l, ok := items[i].(line); ok && l.Content != "" {
+					m.list.Select(i)
+					newIndex = i
+					break
+				}
+			}
+		}
+	}
+
 	if newIndex != m.prevIndex {
 		m.delegate.hOffset = 0
 		m.prevIndex = newIndex
