@@ -1,13 +1,20 @@
 package helper
 
 import (
+	"archive/tar"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"golang.org/x/exp/constraints"
 )
+
+const maxCopySize = 1 * 1024 * 1024 // 1MB
 
 const shortIDLength = 12 // length of shortened container/image IDs
 
@@ -98,4 +105,54 @@ func TruncateCommand(cmd string, maxLen int) string {
 		return cmd[:maxLen-3] + "..."
 	}
 	return cmd
+}
+func ExtractTarToWorkingDir(dst string, r io.Reader) error {
+	tr := tar.NewReader(r)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		// dir/file where it should be created
+		target := filepath.Join(dst, hdr.Name) //nolint:gosec //  path traversal prevented by HasPrefix
+		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(dst)+string(os.PathSeparator)) {
+			return fmt.Errorf("invalid path: %s", hdr.Name)
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if _, err = os.Stat(target); err != nil {
+				if err = os.MkdirAll(target, 0750); err != nil {
+					return err
+				}
+			}
+
+		case tar.TypeReg:
+			var f *os.File
+			//nolint:gosec // hdr.Mode max value 0777 fits safely in uint32
+			f, err = os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(hdr.Mode))
+			if err != nil {
+				return err
+			}
+
+			for {
+				_, err = io.CopyN(f, tr, maxCopySize)
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						break
+					}
+
+					return err
+				}
+			}
+			_ = f.Close()
+		}
+	}
+
+	return nil
 }
