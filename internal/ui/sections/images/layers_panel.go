@@ -4,33 +4,32 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/scrolllist"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
 
 type layersPanel struct {
-	ctx      context.Context
-	client   client.ImageService
-	viewport viewport.Model
+	ctx    context.Context
+	client client.ImageService
+	list   scrolllist.Model
 }
 
 type layersOutputMsg struct {
-	output string
-	err    error
+	lines []string
+	err   error
 }
 
 func NewLayersPanel(ctx context.Context, client client.ImageService) sections.Panel {
 	return &layersPanel{
-		ctx:      ctx,
-		client:   client,
-		viewport: viewport.New(0, 0),
+		ctx:    ctx,
+		client: client,
+		list:   scrolllist.New(),
 	}
 }
 
@@ -45,36 +44,31 @@ func (l *layersPanel) Init(item sections.ListItem) tea.Cmd {
 }
 
 func (l *layersPanel) Update(msg tea.Msg) tea.Cmd {
-	dm, ok := msg.(layersOutputMsg)
-	if ok {
-		log.Printf("[images][layers-panel] layersOutputMsg: count=%d err=%v", len(dm.output), dm.err)
+	if dm, ok := msg.(layersOutputMsg); ok {
+		log.Printf("[images][layers-panel] layersOutputMsg: count=%d err=%v", len(dm.lines), dm.err)
 		if dm.err != nil {
 			return func() tea.Msg {
 				return message.ShowBannerMsg{Message: dm.err.Error(), IsError: true}
 			}
 		}
-		l.viewport.SetContent(dm.output)
+		l.list.SetLines(dm.lines)
 		return nil
 	}
 
-	var cmd tea.Cmd
-	l.viewport, cmd = l.viewport.Update(msg)
-
-	return cmd
+	return l.list.Update(msg)
 }
 
 func (l *layersPanel) View() string {
-	return l.viewport.View()
+	return l.list.View()
 }
 
 func (l *layersPanel) Close() tea.Cmd {
-	l.viewport.SetContent("")
+	l.list.Reset()
 	return nil
 }
 
 func (l *layersPanel) SetSize(width, height int) {
-	l.viewport.Width = width
-	l.viewport.Height = height
+	l.list.SetSize(width, height)
 }
 
 func (l *layersPanel) fetchCmd(imageID string) tea.Cmd {
@@ -82,25 +76,28 @@ func (l *layersPanel) fetchCmd(imageID string) tea.Cmd {
 	svc := l.client
 	return func() tea.Msg {
 		layers := svc.FetchLayers(ctx, imageID)
-		return layersOutputMsg{output: formatDetails(layers)}
+		return layersOutputMsg{lines: formatLayerLines(layers)}
 	}
 }
 
-func formatDetails(layers []client.Layer) string {
-	var content strings.Builder
-
-	const maxLayerCmdLen = 50 // max chars to show for a layer command
+func formatLayerLines(layers []client.Layer) []string {
 	if len(layers) == 0 {
-		content.WriteString("No layer information available\n")
-	} else {
-		for idx, layer := range layers {
-			cmd := helper.TruncateCommand(layer.Command, maxLayerCmdLen)
-			fmt.Fprintf(&content, "%2d. %s\n", idx+1, cmd)
-			fmt.Fprintf(&content, "    Size: %-10s  ID: %s\n\n",
-				helper.FormatSize(layer.Size),
-				helper.ShortID(layer.ID))
-		}
+		return []string{"No layer information available"}
 	}
 
-	return content.String()
+	lines := make([]string, 0, len(layers)*3) //nolint:mnd // 3 lines per layer: header, detail, blank line
+	for idx, layer := range layers {
+		lines = append(lines, fmt.Sprintf("%2d. %s", idx+1, helper.StripCommand(layer.Command)))
+		lines = append(lines, fmt.Sprintf("    Size: %-10s  ID: %s",
+			helper.FormatSize(layer.Size),
+			helper.ShortID(layer.ID)))
+		lines = append(lines, "")
+	}
+
+	// Remove trailing blank line.
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+
+	return lines
 }
