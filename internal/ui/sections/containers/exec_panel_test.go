@@ -18,8 +18,13 @@ func newTestExecPanel() *execPanel {
 }
 
 func TestExecPanelInitStartsSession(t *testing.T) {
+	client := client.NewMockClient()
+	containers, err := client.Containers().List(t.Context())
+	if err != nil {
+		t.Errorf("List failed, got %v", err)
+	}
 	p := newTestExecPanel()
-	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
+	cmd := p.Init(containerItem{container: containers[0]})
 	if cmd == nil {
 		t.Fatal("Init() returned nil cmd")
 	}
@@ -49,6 +54,35 @@ func TestExecPanelInitStartsSession(t *testing.T) {
 
 	if !extendCmd {
 		t.Fatal("Init() not returned AddContextualKeyBindingsMsg msg")
+	}
+}
+
+func TestExecPanelInitErrorWhenContainerIsNotRunning(t *testing.T) {
+	mockClient := client.NewMockClient()
+	containers, err := mockClient.Containers().List(t.Context())
+	if err != nil {
+		t.Errorf("List failed, got %v", err)
+	}
+	c := containers[0]
+	c.State = client.StateStopped
+	p := newTestExecPanel()
+	cmd := p.Init(containerItem{container: c})
+	if cmd == nil {
+		t.Fatal("Init() returned nil cmd")
+	}
+	msg := cmd()
+
+	execMsg, ok := msg.(execOutputMsg)
+	if !ok {
+		t.Fatal("Init() not returned execOutputMsg")
+	}
+
+	if execMsg.err == nil {
+		t.Fatal("expected execOutputMsg to include error")
+	}
+
+	if !strings.Contains(execMsg.err.Error(), "container is not running") {
+		t.Errorf("error message does not match, expected 'container is not running' got %q", execMsg.err.Error())
 	}
 }
 

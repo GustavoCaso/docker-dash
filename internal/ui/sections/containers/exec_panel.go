@@ -59,15 +59,27 @@ func NewExecPanel(ctx context.Context, svc client.ContainerService) sections.Pan
 }
 
 func (e *execPanel) Init(item sections.ListItem) tea.Cmd {
-	containerID := item.ID()
-	log.Printf("[containers][exec-panel] Init: containerID=%q", containerID)
+	container, ok := item.InnerItem().(client.Container)
+	if !ok {
+		return func() tea.Msg {
+			return execOutputMsg{err: errors.New("error getting exec container. Item not a container")}
+		}
+	}
+
+	if container.State != client.StateRunning {
+		return func() tea.Msg {
+			return execOutputMsg{err: errors.New("container is not running")}
+		}
+	}
+
+	log.Printf("[containers][exec-panel] Init: containerID=%q", item.ID())
 	e.output = ""
 	e.history = []string{}
 	e.historyIdx = 0
 	e.input.Focus()
 	return tea.Batch(
 		textinput.Blink,
-		e.startSession(containerID),
+		e.startSession(container),
 		e.extendHelpCmd(),
 	)
 }
@@ -195,21 +207,11 @@ func (e *execPanel) handleKeyInput(msg tea.KeyMsg) tea.Cmd {
 	}
 }
 
-func (e *execPanel) startSession(containerID string) tea.Cmd {
+func (e *execPanel) startSession(container client.Container) tea.Cmd {
 	ctx := e.ctx
 	svc := e.service
 	return func() tea.Msg {
-		container, err := svc.Get(ctx, containerID)
-
-		if err != nil {
-			return execOutputMsg{err: err}
-		}
-
-		if container.State != client.StateRunning {
-			return execOutputMsg{err: errors.New("container is not running")}
-		}
-
-		session, err := svc.Exec(ctx, containerID)
+		session, err := svc.Exec(ctx, container.ID)
 		if err != nil {
 			return execOutputMsg{err: err}
 		}

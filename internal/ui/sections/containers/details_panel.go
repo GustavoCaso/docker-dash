@@ -2,6 +2,7 @@ package containers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -38,9 +39,16 @@ func (d *detailsPanel) Name() string {
 }
 
 func (d *detailsPanel) Init(item sections.ListItem) tea.Cmd {
-	containerID := item.ID()
-	log.Printf("[containers][details-panel] Init: containerID=%q", containerID)
-	return d.fetchCmd(containerID)
+	container, ok := item.InnerItem().(client.Container)
+	if !ok {
+		return func() tea.Msg {
+			return detailsMsg{err: errors.New("error getting container details. Item not a container")}
+		}
+	}
+	log.Printf("[containers][details-panel] Init: containerID=%q", item.ID())
+	return func() tea.Msg {
+		return detailsMsg{output: formatDetails(container)}
+	}
 }
 
 func (d *detailsPanel) Update(msg tea.Msg) tea.Cmd {
@@ -74,18 +82,6 @@ func (d *detailsPanel) Close() tea.Cmd {
 func (d *detailsPanel) SetSize(width, height int) {
 	d.viewport.Width = width
 	d.viewport.Height = height
-}
-
-func (d *detailsPanel) fetchCmd(containerID string) tea.Cmd {
-	ctx := d.ctx
-	svc := d.service
-	return func() tea.Msg {
-		container, err := svc.Get(ctx, containerID)
-		if err != nil {
-			return detailsMsg{err: fmt.Errorf("error getting container details: %w", err)}
-		}
-		return detailsMsg{output: formatDetails(container)}
-	}
 }
 
 func formatDetails(c client.Container) string {
