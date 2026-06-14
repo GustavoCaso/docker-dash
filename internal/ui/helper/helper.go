@@ -87,15 +87,10 @@ func FormatSize[T constraints.Integer](bytes T) string {
 	}
 }
 
-// TruncateCommand shortens a command string.
-func TruncateCommand(cmd string, maxLen int) string {
-	// Clean up common prefixes
+// StripCommand strips common Docker prefixes and collapses whitespace
+// (newlines, tabs, repeated spaces) into single spaces.
+func StripCommand(cmd string) string {
 	cmd = strings.TrimPrefix(cmd, "/bin/sh -c ")
 	cmd = strings.TrimPrefix(cmd, "#(nop) ")
-	cmd = strings.TrimSpace(cmd)
-
-	if len(cmd) > maxLen {
-		return cmd[:maxLen-3] + "..."
-	}
-	return cmd
+	return strings.Join(strings.Fields(cmd), " ")
 }

@@ -236,24 +236,25 @@ func TestFormatSizeUint64(t *testing.T) {
 	}
 }
 
-func TestTruncateCommand(t *testing.T) {
+func TestStripCommand(t *testing.T) {
 	tests := []struct {
-		name   string
-		cmd    string
-		maxLen int
-		want   string
+		name string
+		cmd  string
+		want string
 	}{
-		{"strips /bin/sh -c prefix", "/bin/sh -c echo hello", 50, "echo hello"},
-		{"strips #(nop) prefix", "#(nop) CMD [\"nginx\"]", 50, "CMD [\"nginx\"]"},
-		{"truncates long string", "this is a very long command that exceeds the limit", 20, "this is a very lo..."},
-		{"short command unchanged", "ls", 50, "ls"},
+		{"strips /bin/sh -c prefix", "/bin/sh -c echo hello", "echo hello"},
+		{"strips #(nop) prefix", "#(nop) CMD [\"nginx\"]", "CMD [\"nginx\"]"},
+		{"short command unchanged", "ls", "ls"},
+		{"collapses newlines", "RUN apt-get install\n    curl\n    wget", "RUN apt-get install curl wget"},
+		{"collapses tabs", "RUN\tapt-get\tupdate", "RUN apt-get update"},
+		{"collapses multiple spaces", "RUN  apt-get   update", "RUN apt-get update"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := TruncateCommand(tt.cmd, tt.maxLen)
+			got := StripCommand(tt.cmd)
 			if got != tt.want {
-				t.Errorf("truncateCommand(%q, %d) = %q, want %q", tt.cmd, tt.maxLen, got, tt.want)
+				t.Errorf("StripCommand(%q) = %q, want %q", tt.cmd, got, tt.want)
 			}
 		})
 	}

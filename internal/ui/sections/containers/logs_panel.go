@@ -9,76 +9,21 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
+	"github.com/GustavoCaso/docker-dash/internal/ui/components/scrolllist"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
-	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
-
-const (
-	ellipsisWidth = 1
-	hScrollStep   = 10
-)
-
-type logLine struct {
-	content string
-}
-
-func (l logLine) Title() string       { return l.content }
-func (l logLine) Description() string { return "" }
-func (l logLine) FilterValue() string { return l.content }
-
-type logDelegate struct {
-	hOffset int
-}
-
-func newLogDelegate() *logDelegate {
-	return &logDelegate{}
-}
-
-func (d *logDelegate) Height() int                             { return 1 }
-func (d *logDelegate) Spacing() int                            { return 0 }
-func (d *logDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d *logDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	line, ok := item.(logLine)
-	if !ok {
-		return
-	}
-	width := m.Width()
-	if width < 2 { //nolint:mnd // minimum width for content + ellipsis
-		return
-	}
-	content := line.content
-	if index == m.Index() {
-		runes := []rune(content)
-		start := min(d.hOffset, max(0, len(runes)-1))
-		visible := string(runes[start:])
-		if len([]rune(visible)) > width {
-			visible = string([]rune(visible)[:width])
-		}
-		fmt.Fprint(w, theme.SelectedLogLine.Render(visible))
-	} else {
-		runes := []rune(content)
-		if len(runes) > width-ellipsisWidth {
-			content = string(runes[:width-ellipsisWidth]) + "…"
-		}
-		fmt.Fprint(w, content)
-	}
-}
 
 type logsPanel struct {
 	ctx         context.Context
 	logsSession *client.LogsSession
-	list        list.Model
+	list        scrolllist.Model
 	lineBuffer  string
-	prevIndex   int
-	delegate    *logDelegate
 	client      client.ContainerService
 	logsCfg     config.LogsConfig
 }
@@ -94,18 +39,11 @@ type logsSessionStartedMsg struct {
 }
 
 func NewLogsPanel(ctx context.Context, client client.ContainerService, logsCfg config.LogsConfig) sections.Panel {
-	delegate := newLogDelegate()
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowStatusBar(false)
-	l.SetShowHelp(false)
-	l.SetFilteringEnabled(false)
 	return &logsPanel{
-		ctx:      ctx,
-		client:   client,
-		list:     l,
-		delegate: delegate,
-		logsCfg:  logsCfg,
+		ctx:     ctx,
+		client:  client,
+		list:    scrolllist.New(),
+		logsCfg: logsCfg,
 	}
 }
 
@@ -146,32 +84,9 @@ func (l *logsPanel) Update(msg tea.Msg) tea.Cmd {
 		log.Printf("[containers][logs-panel] output chunk: bytes=%d", len(msg.output))
 		l.appendLines(msg.output)
 		return l.readLogsOutput()
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, keys.Keys.LogScrollLeft):
-			l.delegate.hOffset = max(0, l.delegate.hOffset-hScrollStep)
-			return nil
-		case key.Matches(msg, keys.Keys.LogScrollRight):
-			selected := l.list.SelectedItem()
-			if selected != nil {
-				line, ok := selected.(logLine)
-				if ok {
-					maxOffset := max(0, len([]rune(line.content))-l.list.Width())
-					l.delegate.hOffset = min(l.delegate.hOffset+hScrollStep, maxOffset)
-				}
-			}
-			return nil
-		}
 	}
 
-	var cmd tea.Cmd
-	l.list, cmd = l.list.Update(msg)
-	newIndex := l.list.Index()
-	if newIndex != l.prevIndex {
-		l.delegate.hOffset = 0
-		l.prevIndex = newIndex
-	}
-	return cmd
+	return l.list.Update(msg)
 }
 
 func (l *logsPanel) appendLines(chunk string) {
@@ -179,12 +94,8 @@ func (l *logsPanel) appendLines(chunk string) {
 	parts := strings.Split(combined, "\n")
 	l.lineBuffer = parts[len(parts)-1]
 	complete := parts[:len(parts)-1]
-	wasEmpty := len(l.list.Items()) == 0
 	for _, line := range complete {
-		l.list.InsertItem(len(l.list.Items()), logLine{content: line})
-	}
-	if wasEmpty && len(l.list.Items()) > 0 {
-		l.list.Select(0)
+		l.list.AppendLine(line)
 	}
 }
 
@@ -198,10 +109,8 @@ func (l *logsPanel) Close() tea.Cmd {
 		l.logsSession.Close()
 		l.logsSession = nil
 	}
-	l.list.SetItems([]list.Item{})
+	l.list.Reset()
 	l.lineBuffer = ""
-	l.delegate.hOffset = 0
-	l.prevIndex = 0
 	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
 

@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -107,20 +106,6 @@ func TestLogsPanelAccumulatesOutput(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("expected 2 items, got %d", len(items))
 	}
-	line0, ok := items[0].(logLine)
-	if !ok {
-		t.Fatal("item[0] is not logLine")
-	}
-	if line0.content != "first line" {
-		t.Errorf("item[0] = %q, want 'first line'", line0.content)
-	}
-	line1, ok := items[1].(logLine)
-	if !ok {
-		t.Fatal("item[1] is not logLine")
-	}
-	if line1.content != "second line" {
-		t.Errorf("item[1] = %q, want 'second line'", line1.content)
-	}
 }
 
 func TestLogsPanelClose(t *testing.T) {
@@ -141,12 +126,6 @@ func TestLogsPanelClose(t *testing.T) {
 	if p.lineBuffer != "" {
 		t.Errorf("Close() should clear lineBuffer, got %q", p.lineBuffer)
 	}
-	if p.delegate.hOffset != 0 {
-		t.Errorf("Close() should reset hOffset, got %d", p.delegate.hOffset)
-	}
-	if p.prevIndex != 0 {
-		t.Errorf("Close() should reset prevIndex, got %d", p.prevIndex)
-	}
 }
 
 func TestLogsPanelCloseIsIdempotent(t *testing.T) {
@@ -154,45 +133,6 @@ func TestLogsPanelCloseIsIdempotent(t *testing.T) {
 	// Call Close with no session — should not panic.
 	p.Close()
 	p.Close()
-}
-
-func TestLogDelegateTruncatesNonSelectedLines(t *testing.T) {
-	d := newLogDelegate()
-	d.hOffset = 0
-
-	items := []list.Item{
-		logLine{content: strings.Repeat("x", 200)},
-		logLine{content: "short"},
-	}
-	m := list.New(items, d, 50, 10)
-	m.Select(1) // second item selected
-
-	var buf strings.Builder
-	d.Render(&buf, m, 0, items[0])
-	rendered := buf.String()
-	if len(rendered) > 55 { // 50 width + some style overhead
-		t.Errorf("non-selected long line not truncated, len=%d", len(rendered))
-	}
-	if !strings.Contains(rendered, "…") {
-		t.Errorf("expected ellipsis in truncated line, got %q", rendered)
-	}
-}
-
-func TestLogDelegateAppliesHOffsetOnSelectedLine(t *testing.T) {
-	d := newLogDelegate()
-	d.hOffset = 5
-
-	content := "0123456789abcdef"
-	items := []list.Item{logLine{content: content}}
-	m := list.New(items, d, 50, 10)
-	m.Select(0)
-
-	var buf strings.Builder
-	d.Render(&buf, m, 0, items[0])
-	rendered := buf.String()
-	if strings.Contains(rendered, "01234") {
-		t.Errorf("hOffset not applied: first 5 chars still visible in %q", rendered)
-	}
 }
 
 func TestLogsPanelLineBuffering(t *testing.T) {
@@ -215,36 +155,6 @@ func TestLogsPanelLineBuffering(t *testing.T) {
 	}
 	if p.lineBuffer != "" {
 		t.Errorf("lineBuffer should be empty, got %q", p.lineBuffer)
-	}
-}
-
-func TestLogsPanelHScrollClamping(t *testing.T) {
-	p := newTestLogsPanel()
-	p.SetSize(10, 10)
-	p.Update(logsOutputMsg{output: "0123456789abcdef\n"}) // 16 chars, width=10
-
-	selected, ok := p.list.SelectedItem().(logLine)
-	if !ok {
-		t.Fatal("selected item is not logLine")
-	}
-	maxOffset := max(0, len([]rune(selected.content))-p.list.Width())
-
-	// scroll right past max — hOffset must clamp at maxOffset
-	scrollRight := tea.KeyMsg{Type: tea.KeyRight}
-	for range 20 {
-		p.Update(scrollRight)
-	}
-	if p.delegate.hOffset > maxOffset {
-		t.Errorf("hOffset %d exceeds maxOffset %d", p.delegate.hOffset, maxOffset)
-	}
-
-	// scroll left past zero — hOffset must not go negative
-	scrollLeft := tea.KeyMsg{Type: tea.KeyLeft}
-	for range 20 {
-		p.Update(scrollLeft)
-	}
-	if p.delegate.hOffset != 0 {
-		t.Errorf("hOffset should not go below 0, got %d", p.delegate.hOffset)
 	}
 }
 
