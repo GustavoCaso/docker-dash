@@ -147,7 +147,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 
 	// Skip over empty lines: nudge selection in the direction of travel.
 	item := m.list.SelectedItem()
-	if item != nil {
+	if item != nil { //nolint:nestif // complexity is acceptable
 		if lineItem, ok := item.(line); ok && lineItem.Content == "" {
 			items := m.list.Items()
 			step := 1
@@ -155,7 +155,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 				step = -1
 			}
 			for i := newIndex + step; i >= 0 && i < len(items); i += step {
-				if l, ok := items[i].(line); ok && l.Content != "" {
+				if l, lineOk := items[i].(line); lineOk && l.Content != "" {
 					m.list.Select(i)
 					newIndex = i
 					break
