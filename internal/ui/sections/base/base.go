@@ -4,8 +4,11 @@
 package base
 
 import (
+	"fmt"
 	"log"
+	"time"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -178,6 +181,43 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 			if b.RefreshCmd != nil {
 				return b.WithSpinner(b.RefreshCmd())
 			}
+
+		case key.Matches(keyMsg, keys.Keys.CopyID) && b.focus == focusList:
+			messageDuration := time.Second * 1
+			selected := b.List.SelectedItem()
+			if selected == nil {
+				return func() tea.Msg {
+					return message.NewShowBannerMsg("No item selected", true, messageDuration)
+				}
+			}
+
+			listItem, itemOk := selected.(sections.ListItem)
+			if !itemOk {
+				return func() tea.Msg {
+					return message.NewShowBannerMsg("invalid item", true, messageDuration)
+				}
+			}
+
+			err := clipboard.WriteAll(listItem.ID())
+
+			if err != nil {
+				return func() tea.Msg {
+					return message.NewShowBannerMsg(
+						fmt.Sprintf("fail to copy ID %s", err.Error()),
+						true,
+						messageDuration,
+					)
+				}
+			}
+
+			return func() tea.Msg {
+				return message.NewShowBannerMsg(
+					"ID copy to clipboard",
+					false,
+					messageDuration,
+				)
+			}
+
 		case key.Matches(keyMsg, keys.Keys.Prune):
 			if b.PruneCmd != nil {
 				return b.PruneCmd()

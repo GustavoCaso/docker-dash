@@ -159,6 +159,7 @@ Press `?` in the app to see the full keymap. The most commonly used bindings are
 | `↑ / ↓` | Move in focused area (list or panel) |
 | `tab` | Toggle focus between list and panel |
 | `shift+← / shift+→` | Switch panels |
+| `y` | Copy ID to clipboard |
 | `/` | Filter |
 | `r / ctrl+r` | Refresh current view / refresh all |
 | `?` | Toggle help |
