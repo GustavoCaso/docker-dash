@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -33,6 +34,7 @@ type filesPanel struct {
 	service       client.ContainerService
 	loading       bool
 	width, height int
+	containerID   string
 	root          *client.FileNode
 	visible       []*client.FileNode
 	cursor        int
@@ -47,12 +49,13 @@ func (f *filesPanel) Name() string {
 	return "Files"
 }
 
-func (f *filesPanel) Init(item sections.ListItem) tea.Cmd {
-	log.Printf("[containers][files-panel] Init: containerID=%q", item.ID())
+func (f *filesPanel) Init(listItem sections.ListItem) tea.Cmd {
+	f.containerID = listItem.ID()
+	log.Printf("[containers][files-panel] Init: containerID=%q", f.containerID)
 	f.loading = true
 	f.requestID++
 	requestID := f.requestID
-	return tea.Batch(f.showSpinnerCmd(requestID), f.fetchCmd(item.ID(), requestID), f.extendHelpCmd())
+	return tea.Batch(f.showSpinnerCmd(requestID), f.fetchCmd(f.containerID, requestID), f.extendHelpCmd())
 }
 
 func computeVisible(root *client.FileNode) []*client.FileNode {
@@ -114,6 +117,9 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 					}
 				}
 			}
+		case key.Matches(msg, keys.Keys.CpFromContainerToHost):
+			node := f.visible[f.cursor]
+			return tea.Batch(f.copyFromContainerCmd(node))
 		}
 	}
 
@@ -225,6 +231,44 @@ func (f *filesPanel) fetchCmd(containerID string, requestID int) tea.Cmd {
 			return fileNodeLoadedMsg{requestID: requestID, err: fmt.Errorf("error getting the file tree: %w", err)}
 		}
 		return fileNodeLoadedMsg{requestID: requestID, fileNode: fileNode}
+	}
+}
+
+func (f *filesPanel) copyFromContainerCmd(node *client.FileNode) tea.Cmd {
+	ctx := f.ctx
+	svc := f.service
+	containerID := f.containerID
+	srcPath := node.Path
+
+	return func() tea.Msg {
+		rc, err := svc.CopyFromContainer(ctx, containerID, srcPath)
+		if err != nil {
+			return message.ShowBannerMsg{
+				Message: fmt.Sprintf("error copying %q from container %q: %v", srcPath, containerID, err),
+				IsError: true,
+			}
+		}
+		defer rc.Close()
+
+		dstDir, err := os.Getwd()
+		if err != nil {
+			return message.ShowBannerMsg{
+				Message: fmt.Sprintf("error getting current dir: %v", err),
+				IsError: true,
+			}
+		}
+
+		if err = helper.ExtractTarToWorkingDir(dstDir, rc); err != nil {
+			return message.ShowBannerMsg{
+				Message: fmt.Sprintf("error extracting tar to %q: %v", srcPath, err),
+				IsError: true,
+			}
+		}
+
+		return message.ShowBannerMsg{
+			Message: fmt.Sprintf("%s got copied to host succesfully", srcPath),
+			IsError: false,
+		}
 	}
 }
 
