@@ -29,10 +29,15 @@ func TestDetailsPanelInitReturnsCmd(t *testing.T) {
 }
 
 func TestDetailsPanelUpdateSetsContent(t *testing.T) {
+	client := client.NewMockClient()
+	containers, err := client.Containers().List(t.Context())
+	if err != nil {
+		t.Errorf("List failed, got %v", err)
+	}
 	dp := newTestDetailsPanel()
 	dp.SetSize(100, 100)
 
-	cmd := dp.Init(containerItem{container: client.Container{ID: "abc123def456"}})
+	cmd := dp.Init(containerItem{container: containers[0]})
 	msg := cmd()
 
 	dm, ok := msg.(detailsMsg)

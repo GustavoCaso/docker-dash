@@ -47,13 +47,12 @@ func (f *filesPanel) Name() string {
 	return "Files"
 }
 
-func (f *filesPanel) Init(listItem sections.ListItem) tea.Cmd {
-	containerID := listItem.ID()
-	log.Printf("[containers][files-panel] Init: containerID=%q", containerID)
+func (f *filesPanel) Init(item sections.ListItem) tea.Cmd {
+	log.Printf("[containers][files-panel] Init: containerID=%q", item.ID())
 	f.loading = true
 	f.requestID++
 	requestID := f.requestID
-	return tea.Batch(f.showSpinnerCmd(requestID), f.fetchCmd(containerID, requestID), f.extendHelpCmd())
+	return tea.Batch(f.showSpinnerCmd(requestID), f.fetchCmd(item.ID(), requestID), f.extendHelpCmd())
 }
 
 func computeVisible(root *client.FileNode) []*client.FileNode {
