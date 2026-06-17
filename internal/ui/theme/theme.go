@@ -3,7 +3,7 @@
 package theme
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Docker Desktop inspired color palette.

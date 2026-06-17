@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -159,9 +159,9 @@ func TestExecPanelClearClearsOutput(t *testing.T) {
 	p.output = "old output"
 	p.input.Focus()
 
-	runes := []rune("clear")
-	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: runes})
-	p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// Set the value directly and then send Enter to trigger the command
+	p.input.SetValue("clear")
+	p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if p.output != "" {
 		t.Errorf("output should be cleared, got %q", p.output)
@@ -177,9 +177,9 @@ func TestExecPanelClearWithExtraSpaceClearsOutput(t *testing.T) {
 	p.output = "old output"
 	p.input.Focus()
 
-	runes := []rune(" clear ")
-	p.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: runes})
-	p.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	// Set the value directly and then send Enter to trigger the command
+	p.input.SetValue(" clear ")
+	p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if p.output != "" {
 		t.Errorf("output should be cleared, got %q", p.output)
@@ -197,19 +197,19 @@ func TestExecPanelHistoryNavigation(t *testing.T) {
 	p.input.Focus()
 
 	// Press Up: should show "pwd" (most recent)
-	p.Update(tea.KeyMsg{Type: tea.KeyUp})
+	p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if p.input.Value() != "pwd" {
 		t.Errorf("after Up: input = %q, want 'pwd'", p.input.Value())
 	}
 
 	// Press Up again: should show "ls"
-	p.Update(tea.KeyMsg{Type: tea.KeyUp})
+	p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if p.input.Value() != "ls" {
 		t.Errorf("after second Up: input = %q, want 'ls'", p.input.Value())
 	}
 
 	// Press Down: should go back to "pwd"
-	p.Update(tea.KeyMsg{Type: tea.KeyDown})
+	p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if p.input.Value() != "pwd" {
 		t.Errorf("after Down: input = %q, want 'pwd'", p.input.Value())
 	}
@@ -246,7 +246,7 @@ func TestExecPanelSetSizeSizesViewport(t *testing.T) {
 	if p.width != 100 {
 		t.Errorf("width = %d, want 100", p.width)
 	}
-	if p.viewport.Height != 29 { // height - 1 for input
-		t.Errorf("viewport.Height = %d, want 29", p.viewport.Height)
+	if p.viewport.Height() != 29 { // height - 1 for input
+		t.Errorf("viewport.Height = %d, want 29", p.viewport.Height())
 	}
 }

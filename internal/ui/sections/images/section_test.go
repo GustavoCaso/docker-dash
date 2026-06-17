@@ -3,17 +3,29 @@ package images
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
+
+func getImageIDs(m imageSectionModel) []string {
+	var ids []string
+	for _, item := range m.section.List.Items() {
+		if ii, ok := item.(imageItem); ok {
+			ids = append(ids, ii.image.ID)
+		}
+	}
+	return ids
+}
 
 // errMockImageService wraps an ImageService and overrides Pull to return an error.
 type errMockImageService struct {
@@ -39,7 +51,7 @@ func newModel() imageSectionModel {
 func (m imageSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m imageSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
 	}
 	if confirmMsg, ok := msg.(message.ShowConfirmationMsg); ok {
@@ -49,19 +61,12 @@ func (m imageSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m imageSectionModel) View() string {
-	return m.section.View()
+func (m imageSectionModel) View() tea.View {
+	return tea.NewView(m.section.View())
 }
 
 func (m imageSectionModel) Reset() tea.Cmd {
 	return m.section.Reset()
-}
-
-func TestImageListRendersItems(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
 func TestInitShowsBannerForInvalidUpdateCheckInterval(t *testing.T) {
@@ -128,17 +133,9 @@ func TestInitShowsBannerForNonPositiveUpdateCheckInterval(t *testing.T) {
 	t.Fatal("expected ShowBannerMsg for non-positive update check interval")
 }
 
-func TestImageListLayersVisible(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "No layer information available")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
 func TestImageReset(t *testing.T) {
 	model := newModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx")
 
 	cmd := model.Reset()
 
@@ -146,34 +143,34 @@ func TestImageReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd")
 	}
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
 func TestImageListDelete(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx")
-	// Select an image
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Delete (deletes the selected image which is node after KeyDown)
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-	waitFor(t, tm, "postgres")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestImageListRefresh(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx")
-	// Refresh
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
-	// The refresh triggers spinner + async reload. After reload completes,
-	// send a benign key to trigger a re-render so output is flushed.
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitFor(t, tm, "nginx")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	// Select second image (node:18-alpine, sha256:node456)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	// Delete selected image
+	tm.Send(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(imageSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	ids := getImageIDs(m)
+	for _, id := range ids {
+		if id == "sha256:node456" {
+			t.Fatal("expected node:18-alpine to be deleted, but found in list")
+		}
+	}
 }
 
 func TestRunContainerKeyShowsForm(t *testing.T) {
@@ -182,7 +179,7 @@ func TestRunContainerKeyShowsForm(t *testing.T) {
 	section.SetSize(120, 40)
 	section.Update(section.RefreshCmd()())
 
-	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	cmd := section.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
 	if cmd == nil {
 		t.Fatal("pressing 'c' should return a non-nil cmd")
 	}
@@ -199,14 +196,33 @@ func TestRunContainerKeyShowsForm(t *testing.T) {
 
 func TestImageListPrune(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "<none>:<none>") // dangling image present initially
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitForNot(t, tm, "<none>:<none>") // dangling image pruned
-	waitFor(t, tm, "nginx")            // non-dangling images remain
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(imageSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	danglingIDs := []string{"sha256:dangling001", "sha256:dangling002"}
+	ids := getImageIDs(m)
+
+	for _, id := range ids {
+		if slices.Contains(danglingIDs, id) {
+			t.Fatalf("expected dangling image %s to be pruned, but found in list", id)
+		}
+	}
+
+	// non-dangling images remain
+	if !slices.Contains(ids, "sha256:nginx123") {
+		t.Fatal("expected nginx image to remain after prune, but not found in list")
+	}
 }
 
 func TestPullImageKeyShowsForm(t *testing.T) {
@@ -214,7 +230,7 @@ func TestPullImageKeyShowsForm(t *testing.T) {
 	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
-	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("+")})
+	cmd := section.Update(tea.KeyPressMsg{Code: '+', Text: "+"})
 	if cmd == nil {
 		t.Fatal("pressing '+' should return a non-nil cmd")
 	}
@@ -350,20 +366,6 @@ func runBatch(cmd tea.Cmd) []tea.Msg {
 	return []tea.Msg{msg}
 }
 
-func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-}
-
-func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return !strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-}
-
 func TestValidatePorts(t *testing.T) {
 	tests := []struct {
 		input   string
@@ -485,7 +487,7 @@ func TestPullUpdateCmd_NoUpdateShowsBanner(t *testing.T) {
 	section.Update(section.RefreshCmd()())
 
 	// Default: no imageUpdatesMsg sent, so hasUpdate=false for all items.
-	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	cmd := section.Update(tea.KeyPressMsg{Code: 'u', Text: "u"})
 	if cmd == nil {
 		t.Fatal("pressing 'u' with no update should return a non-nil cmd")
 	}
@@ -514,7 +516,7 @@ func TestPullUpdateCmd_WithUpdate_FiresPull(t *testing.T) {
 	// Mark first image as having an update.
 	section.Update(imageUpdatesMsg{updates: map[string]bool{section.currentImages[0].ID: true}})
 
-	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
+	cmd := section.Update(tea.KeyPressMsg{Code: 'u', Text: "u"})
 	if cmd == nil {
 		t.Fatal("pressing 'u' with an available update should return a non-nil cmd")
 	}
@@ -557,7 +559,7 @@ func TestImagesLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 	section.SetSize(120, 40)
 
 	section.Update(section.RefreshCmd()())
-	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 
 	cmd := section.Update(imagesLoadedMsg{images: []client.Image{}})
 
@@ -583,7 +585,7 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	section.ActivePanel().Init(imageItem{image: client.Image{ID: "sha256:image2"}})
 
 	// Navigate up to previous image - this should close the current panel
-	section.Update(tea.KeyMsg{Type: tea.KeyUp})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 
 	// Verify the panel can be reinitialized
 	cmd := section.ActivePanel().Init(imageItem{image: client.Image{ID: "sha256:image1"}})

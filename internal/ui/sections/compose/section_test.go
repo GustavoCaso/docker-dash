@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -31,15 +32,15 @@ func newModel() composeSectionModel {
 func (m composeSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m composeSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
 	}
 	cmd := m.section.Update(msg)
 	return m, cmd
 }
 
-func (m composeSectionModel) View() string {
-	return m.section.View()
+func (m composeSectionModel) View() tea.View {
+	return tea.NewView(m.section.View())
 }
 
 // TestComposeViewRendersItems verifies that the section view directly contains
@@ -74,7 +75,7 @@ func TestComposeReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd for compose section")
 	}
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -83,7 +84,7 @@ func TestComposeRefresh(t *testing.T) {
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
 
 	// Trigger a refresh
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	tm.Send(tea.KeyPressMsg{Code: 'r', Text: "r"})
 
 	// After async reload, check that the model still renders without errors
 	time.Sleep(300 * time.Millisecond)
@@ -93,7 +94,7 @@ func TestComposeRefresh(t *testing.T) {
 		t.Error("expected View() to still contain 'web-app' after refresh")
 	}
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -150,7 +151,7 @@ func TestComposeLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 	section.SetSize(120, 40)
 
 	section.Update(section.RefreshCmd()())
-	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 
 	cmd := section.Update(composeLoadedMsg{items: []list.Item{}})
 
@@ -168,11 +169,11 @@ func TestComposeLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 func TestComposeKeyShowsForm(t *testing.T) {
 	tests := []struct {
 		name   string
-		keyMsg tea.KeyMsg
+		keyMsg tea.KeyPressMsg
 	}{
-		{"up", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")}},
-		{"down", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")}},
-		{"restart", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")}},
+		{"up", tea.KeyPressMsg{Code: 'u', Text: "u"}},
+		{"down", tea.KeyPressMsg{Code: 'D', Text: "D"}},
+		{"restart", tea.KeyPressMsg{Code: 'R', Text: "R"}},
 	}
 
 	for _, tt := range tests {
@@ -197,7 +198,7 @@ func TestComposeKeyShowsForm(t *testing.T) {
 func TestComposeStartStopShowsConfirmation(t *testing.T) {
 	model := newModel()
 
-	cmd := model.section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	cmd := model.section.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
 	if cmd == nil {
 		t.Fatal("expected confirmation command, got nil")
 	}
@@ -430,10 +431,10 @@ func TestComposeFormKeysReturnNilOnEmptyList(t *testing.T) {
 	// Do NOT load items — list is empty, selectedProject() returns false.
 
 	for _, key := range []tea.Msg{
-		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")},
-		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")},
-		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")},
-		tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")},
+		tea.KeyPressMsg{Code: 'u', Text: "u"},
+		tea.KeyPressMsg{Code: 'D', Text: "D"},
+		tea.KeyPressMsg{Code: 'R', Text: "R"},
+		tea.KeyPressMsg{Code: 's', Text: "s"},
 	} {
 		cmd := section.Update(key)
 		if cmd != nil {

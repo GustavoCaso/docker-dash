@@ -7,11 +7,11 @@ import (
 	"log"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
@@ -48,7 +48,7 @@ type execPanel struct {
 func NewExecPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
 	ti := textinput.New()
 	ti.Prompt = "$ "
-	vp := viewport.New(0, 0)
+	vp := viewport.New()
 	return &execPanel{
 		ctx:      ctx,
 		service:  svc,
@@ -110,7 +110,7 @@ func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 		e.viewport.SetContent(noStyle.Width(e.width).Render(e.output))
 		e.viewport.GotoBottom()
 		return e.readOutput()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return e.handleKeyInput(msg)
 	default:
 		// Mouse Scroll messages
@@ -144,11 +144,11 @@ func (e *execPanel) Close() tea.Cmd {
 
 func (e *execPanel) SetSize(width, height int) {
 	e.width = width
-	e.viewport.Width = width
-	e.viewport.Height = height - 1 // reserve 1 line for input
+	e.viewport.SetWidth(width)
+	e.viewport.SetHeight(height - 1) // reserve 1 line for input
 }
 
-func (e *execPanel) handleKeyInput(msg tea.KeyMsg) tea.Cmd {
+func (e *execPanel) handleKeyInput(msg tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.Keys.Enter):
 		if e.session == nil {

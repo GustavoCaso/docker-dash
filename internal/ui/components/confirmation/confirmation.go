@@ -3,7 +3,7 @@ package confirmation
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )

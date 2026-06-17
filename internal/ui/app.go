@@ -6,11 +6,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
@@ -163,15 +163,13 @@ func (m *model) Init() tea.Cmd {
 }
 
 func (m *model) handleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if km, ok := msg.(tea.KeyMsg); ok && km.String() == "esc" {
+	if km, ok := msg.(tea.KeyPressMsg); ok && km.String() == "esc" {
 		m.showForm = false
 		m.formModel = nil
 		return m, nil
 	}
 	updatedForm, cmd := m.formModel.Update(msg)
-	if f, ok := updatedForm.(*form.Model); ok {
-		m.formModel = f
-	}
+	m.formModel = updatedForm
 	if m.formModel.State() == huh.StateCompleted {
 		m.showForm = false
 		m.formModel = nil
@@ -180,7 +178,7 @@ func (m *model) handleFormUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleConfirmationUpdate(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
-	km, ok := msg.(tea.KeyMsg)
+	km, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil, false
 	}
@@ -232,7 +230,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.showSystemInfo {
-		km, ok := msg.(tea.KeyMsg)
+		km, ok := msg.(tea.KeyPressMsg)
 		if ok {
 			switch {
 			case key.Matches(km, m.keys.Esc), key.Matches(km, keys.Keys.SystemInfo):
@@ -325,12 +323,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		model, cmd := m.systemInfo.Update(msg)
-		systemModel, ok := model.(systeminfo.Model)
-		if !ok {
-			return m, nil
-		}
-		m.systemInfo = systemModel
+		updatedSystemInfo, cmd := m.systemInfo.Update(msg)
+		m.systemInfo = updatedSystemInfo
 		m.showSystemInfo = true
 		if cmd != nil {
 			cmds = append(cmds, cmd)
@@ -369,13 +363,13 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case autoRefreshMsg:
 		log.Printf("[app] autoRefreshMsg")
-		_, cmd := m.forwardMessageToAll(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+		_, cmd := m.forwardMessageToAll(tea.KeyPressMsg{Code: 'r', Text: "r"})
 		cmds = append(cmds, cmd, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
 			return autoRefreshMsg{}
 		}))
 		return m, tea.Batch(cmds...)
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		log.Printf("[app] KeyMsg: key=%q", msg.String())
 		switch {
 		case key.Matches(msg, m.keys.Quit):
@@ -408,9 +402,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			return model, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.RefreshAll):
-			model, cmd := m.forwardMessageToAll(tea.KeyMsg{
-				Type:  tea.KeyRunes,
-				Runes: []rune{'r'},
+			model, cmd := m.forwardMessageToAll(tea.KeyPressMsg{
+				Code: 'r',
+				Text: "r",
 			})
 			cmds = append(cmds, cmd)
 			return model, tea.Batch(cmds...)
@@ -427,7 +421,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Forward key messages to focused component only
-	if _, ok := msg.(tea.KeyMsg); ok {
+	if _, ok := msg.(tea.KeyPressMsg); ok {
 		model, cmd := m.forwardMessageToActive(msg)
 		cmds = append(cmds, cmd)
 		return model, tea.Batch(cmds...)
@@ -439,33 +433,42 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, tea.Batch(cmds...)
 }
 
-func (m *model) View() string {
+func (m *model) View() tea.View {
 	if m.width == 0 {
-		return "Loading..."
+		return tea.NewView("Loading...")
 	}
 
 	if m.showForm {
-		return lipgloss.Place(
+		v := tea.NewView(lipgloss.Place(
 			m.width, m.height,
 			lipgloss.Center, lipgloss.Center,
 			m.formModel.View(),
-		)
+		))
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
+		return v
 	}
 
 	if m.showConfirmation {
-		return lipgloss.Place(
+		v := tea.NewView(lipgloss.Place(
 			m.width, m.height,
 			lipgloss.Center, lipgloss.Center,
 			m.confirmation.View(),
-		)
+		))
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
+		return v
 	}
 
 	if m.showSystemInfo {
-		return lipgloss.Place(
+		v := tea.NewView(lipgloss.Place(
 			m.width, m.height,
 			lipgloss.Center, lipgloss.Center,
 			m.systemInfo.View(),
-		)
+		))
+		v.AltScreen = true
+		v.MouseMode = tea.MouseModeCellMotion
+		return v
 	}
 
 	var listView string
@@ -513,7 +516,10 @@ func (m *model) View() string {
 		content = helper.OverlayBottomRight(offset, content, m.spinner.View()+" "+spinnerText, m.width)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())
+	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View()))
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
 }
 
 func (m *model) updateSpinner(msg tea.Msg) tea.Cmd {

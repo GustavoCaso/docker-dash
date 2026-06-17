@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log"
 
+	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/NimbleMarkets/ntcharts/canvas/runes"
 	"github.com/NimbleMarkets/ntcharts/linechart/streamlinechart"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	oldlipgloss "github.com/charmbracelet/lipgloss"
 	"github.com/docker/docker/api/types/container"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -24,6 +25,14 @@ const (
 	cpuPercentFactor = 100.0 // multiplier to convert CPU ratio to percentage
 )
 
+// Chart color hex values mirroring theme constants, for use with ntcharts (old lipgloss).
+const (
+	chartColorBlue   = "#1D63ED" // theme.DockerBlue
+	chartColorGreen  = "#2ECC71" // theme.StatusRunning
+	chartColorOrange = "#F39C12" // theme.StatusPaused
+	chartColorRed    = "#E74C3C" // theme.StatusError
+)
+
 func formatBytes(b uint64) string {
 	const unit = 1024
 	if b < unit {
@@ -35,6 +44,11 @@ func formatBytes(b uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// chartStyle builds an old lipgloss.Style for use with ntcharts given a hex color string.
+func chartStyle(hex string) oldlipgloss.Style {
+	return oldlipgloss.NewStyle().Foreground(oldlipgloss.Color(hex))
 }
 
 // statsOutputMsg is sent when stats output is received.
@@ -73,28 +87,28 @@ func NewStatsPanel(ctx context.Context, svc client.ContainerService) sections.Pa
 		service: svc,
 		cpuChart: streamlinechart.New(
 			1, 1,
-			streamlinechart.WithStyles(runes.ArcLineStyle, noStyle.Foreground(theme.DockerBlue)),
+			streamlinechart.WithStyles(runes.ArcLineStyle, chartStyle(chartColorBlue)),
 		),
 		memChart: streamlinechart.New(
 			1, 1,
-			streamlinechart.WithStyles(runes.ArcLineStyle, noStyle.Foreground(theme.StatusRunning)),
+			streamlinechart.WithStyles(runes.ArcLineStyle, chartStyle(chartColorGreen)),
 		),
 		networkChart: streamlinechart.New(
 			1, 1,
-			streamlinechart.WithStyles(runes.ArcLineStyle, noStyle.Foreground(theme.StatusRunning)),
+			streamlinechart.WithStyles(runes.ArcLineStyle, chartStyle(chartColorGreen)),
 			streamlinechart.WithDataSetStyles(
 				"write",
 				runes.ArcLineStyle,
-				noStyle.Foreground(theme.StatusPaused),
+				chartStyle(chartColorOrange),
 			),
 		),
 		ioChart: streamlinechart.New(
 			1, 1,
-			streamlinechart.WithStyles(runes.ArcLineStyle, noStyle.Foreground(theme.DockerBlue)),
+			streamlinechart.WithStyles(runes.ArcLineStyle, chartStyle(chartColorBlue)),
 			streamlinechart.WithDataSetStyles(
 				"write",
 				runes.ArcLineStyle,
-				noStyle.Foreground(theme.StatusError),
+				chartStyle(chartColorRed),
 			),
 		),
 	}

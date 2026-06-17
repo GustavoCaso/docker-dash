@@ -6,9 +6,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -92,7 +92,7 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 		f.visible = computeVisible(f.root)
 		return f.cancelSpinnerCmd(msg.requestID)
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		log.Printf("[containers][files-panel] KeyMsg: key=%q", msg.String())
 		switch {
 		case key.Matches(msg, keys.Keys.ScrollUp):

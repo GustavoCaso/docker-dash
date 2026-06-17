@@ -8,11 +8,11 @@ import (
 	"log"
 	"time"
 
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -58,7 +58,7 @@ type Section struct {
 	// It is called before the shared filter/refresh/prune/navigation keys, so it
 	// can intercept any key (e.g. exec-panel routing in the containers section).
 	// Return Handled=true when the key was consumed.
-	HandleKey func(msg tea.KeyMsg) UpdateResult
+	HandleKey func(msg tea.KeyPressMsg) UpdateResult
 }
 
 // UpdateResult describes the outcome of a section-specific handler.
@@ -155,7 +155,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 
 	//nolint:nestif // The complexity is acceptable because Update function
 	// handles all the logic
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		log.Printf("[%s] KeyMsg: key=%q", b.name, keyMsg.String())
 
 		if len(b.panels) > 0 && key.Matches(keyMsg, keys.Keys.Tab) {
@@ -241,7 +241,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 	}
 
 	if len(b.panels) > 0 {
-		_, isKey := msg.(tea.KeyMsg)
+		_, isKey := msg.(tea.KeyPressMsg)
 		shouldRouteToPanelOnFallback := !isKey || b.focus == focusPanel
 		if shouldRouteToPanelOnFallback {
 			cmds = append(cmds, b.ActivePanel().Update(msg))
@@ -367,7 +367,7 @@ func (b *Section) handleFilterKey(msg tea.Msg) (bool, []tea.Cmd) {
 	b.List, listCmd = b.List.Update(msg)
 	cmds = append(cmds, listCmd)
 
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch {
 		case key.Matches(keyMsg, keys.Keys.Esc):
 			b.isFilter = false
@@ -391,7 +391,7 @@ func (b *Section) handleFilterKey(msg tea.Msg) (bool, []tea.Cmd) {
 // toggleFilter enables filter mode, forwards the triggering key to the list,
 // and appends the contextual Esc key binding.  Call this when handling the
 // Filter key binding in a section's Update method.
-func (b *Section) toggleFilter(msg tea.KeyMsg) []tea.Cmd {
+func (b *Section) toggleFilter(msg tea.KeyPressMsg) []tea.Cmd {
 	b.isFilter = !b.isFilter
 	var listCmd tea.Cmd
 	b.List, listCmd = b.List.Update(msg)
@@ -532,7 +532,7 @@ func (b *Section) setSizeWithPanels(width, height int) {
 // handlePanelKeys handles PanelNext and PanelPrev key bindings, cycling through
 // b.panels.  b.name is used for log output.
 // Returns (true, cmd) when a panel key was matched, (false, nil) otherwise.
-func (b *Section) handlePanelKeys(msg tea.KeyMsg) (bool, tea.Cmd) {
+func (b *Section) handlePanelKeys(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	switch {
 	case key.Matches(msg, keys.Keys.PanelNext):
 		currentPanel := b.ActivePanel()

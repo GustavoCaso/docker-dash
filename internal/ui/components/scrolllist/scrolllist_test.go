@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 )
 
 func newModel(width, height int) *Model {
@@ -42,7 +42,7 @@ func TestSetLinesResetsScrollState(t *testing.T) {
 	m.SetLines([]string{strings.Repeat("x", 50)})
 	// Scroll right
 	for range 5 {
-		m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 	if m.delegate.hOffset == 0 {
 		t.Fatal("expected non-zero hOffset after scrolling right")
@@ -74,7 +74,7 @@ func TestReset(t *testing.T) {
 	m := newModel(10, 10)
 	m.SetLines([]string{strings.Repeat("x", 50)})
 	for range 3 {
-		m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 
 	m.Reset()
@@ -96,7 +96,7 @@ func TestScrollRightClampsAtMax(t *testing.T) {
 	m.SetLines([]string{content})
 
 	for range 20 {
-		m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 
 	selected, ok := m.list.SelectedItem().(line)
@@ -114,11 +114,11 @@ func TestScrollLeftClampsAtZero(t *testing.T) {
 	m.SetLines([]string{strings.Repeat("x", 50)})
 	// Scroll right first
 	for range 5 {
-		m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 	// Then scroll left past zero
 	for range 20 {
-		m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	}
 	if m.delegate.hOffset != 0 {
 		t.Errorf("hOffset should not go below 0, got %d", m.delegate.hOffset)
@@ -129,13 +129,13 @@ func TestHOffsetResetsOnItemChange(t *testing.T) {
 	m := newModel(10, 20)
 	m.SetLines([]string{strings.Repeat("x", 50), strings.Repeat("y", 50)})
 	for range 3 {
-		m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
 	}
 	if m.delegate.hOffset == 0 {
 		t.Fatal("expected non-zero hOffset")
 	}
 	// Move selection down — hOffset should reset
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if m.delegate.hOffset != 0 {
 		t.Errorf("hOffset should reset on index change, got %d", m.delegate.hOffset)
 	}
@@ -145,7 +145,7 @@ func TestSkipsEmptyLinesOnNavigateDown(t *testing.T) {
 	m := newModel(80, 20)
 	m.SetLines([]string{"first", "", "second"})
 
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 
 	idx := m.list.Index()
 	if idx != 2 {
@@ -158,7 +158,7 @@ func TestSkipsEmptyLinesOnNavigateUp(t *testing.T) {
 	m.SetLines([]string{"first", "", "second"})
 	m.list.Select(2)
 
-	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 
 	idx := m.list.Index()
 	if idx != 0 {
@@ -171,7 +171,7 @@ func TestNoLoopWhenLastItemIsEmpty(t *testing.T) {
 	m.SetLines([]string{"first", "second", ""})
 	m.list.Select(1)
 
-	m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if m.list.Index() != 2 {
 		t.Errorf("expected index 2 (empty last item), got %d", m.list.Index())
 	}
@@ -181,7 +181,7 @@ func TestNoLoopWhenFirstItemIsEmpty(t *testing.T) {
 	m := newModel(80, 20)
 	m.SetLines([]string{"", "first", "second"})
 	m.list.Select(1)
-	m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if m.list.Index() != 0 {
 		t.Errorf("expected index 0 (empty first item), got %d", m.list.Index())
 	}

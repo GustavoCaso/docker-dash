@@ -105,10 +105,10 @@ func TestDetailsPanelViewReturnsViewportContent(t *testing.T) {
 func TestDetailsPanelSetSizeViewport(t *testing.T) {
 	dp := newTestDetailsPanel()
 	dp.SetSize(100, 30)
-	if dp.viewport.Width != 100 {
-		t.Errorf("viewport.Width = %d, want 100", dp.viewport.Width)
+	if dp.viewport.Width() != 100 {
+		t.Errorf("viewport.Width = %d, want 100", dp.viewport.Width())
 	}
-	if dp.viewport.Height != 30 {
-		t.Errorf("viewport.Height = %d, want 29", dp.viewport.Height)
+	if dp.viewport.Height() != 30 {
+		t.Errorf("viewport.Height = %d, want 29", dp.viewport.Height())
 	}
 }

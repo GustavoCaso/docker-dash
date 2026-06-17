@@ -3,8 +3,8 @@ package message
 import (
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"
@@ -50,7 +50,7 @@ type CancelSpinnerMsg struct {
 // refresh
 // OnlyActive false propagates message to all components.
 type BubbleUpMsg struct {
-	KeyMsg     tea.KeyMsg
+	KeyMsg     tea.KeyPressMsg
 	OnlyActive bool
 }
 

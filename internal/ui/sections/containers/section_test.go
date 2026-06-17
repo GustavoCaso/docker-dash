@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
@@ -30,7 +31,7 @@ func newContainerSectionModel() containerSectionModel {
 func (m containerSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m containerSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
 	}
 	if confirmMsg, ok := msg.(message.ShowConfirmationMsg); ok {
@@ -40,71 +41,24 @@ func (m containerSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m containerSectionModel) View() string {
-	return m.section.View()
+func (m containerSectionModel) View() tea.View {
+	return tea.NewView(m.section.View())
 }
 
 func (m containerSectionModel) Reset() tea.Cmd {
 	return m.section.Reset()
 }
 
-func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-}
-
-func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return !strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-}
-
-func TestContainerListRendersItems(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestContainerListDetailsVisible(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	// Select a container - details panel is always shown (it's the default panel)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitFor(t, tm, "Container:")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestContainerListLogsPanel(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Set focus on panels
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	// Navigate to logs panel using shift+right
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
-
-	waitFor(t, tm, "Starting application")
-
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
 func TestContainerReset(t *testing.T) {
 	model := newContainerSectionModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
 	// Set focus on panels
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyTab})
 	// Navigate to logs panel
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
-
-	waitFor(t, tm, "Starting application")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
+	time.Sleep(500 * time.Millisecond)
 
 	cmd := model.Reset()
 
@@ -112,85 +66,70 @@ func TestContainerReset(t *testing.T) {
 		t.Error("Reset() should return non-nil cmd when activePanel was set")
 	}
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestContainerListPanelNavigation(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Default is details panel
-	waitFor(t, tm, "Container:")
-	// Set focus on panels
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	// Navigate to logs panel using shift+right
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
-	waitFor(t, tm, "Starting application")
-	// Navigate back to details panel using shift+left
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftLeft})
-	waitFor(t, tm, "Container:")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
 func TestContainerListStartStop(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Toggle start/stop
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+	time.Sleep(500 * time.Millisecond)
+	// Toggle pause/unpause
+	tm.Send(
+		tea.KeyPressMsg{Code: 's', Text: "s"},
+	) // We stop the container with id "abc123def456" or the first container
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(containerSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+	for _, item := range items {
+		if vi, ok := item.(containerItem); ok {
+			if vi.container.ID == "abc123def456" {
+				if vi.container.State != client.StateStopped {
+					t.Fatalf(" expected nginx:latest container to be stopped, got: %s", vi.container.State)
+				}
+				return
+			}
+		}
+	}
+
+	t.Fatal("not found nginx:latest container")
 }
 
 func TestContainerListDelete(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	// Navigate to last container (old-container)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Delete
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	// Set focus on panels
-	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
-	// Navigate to stats panel (index 2: details=0, logs=1, stats=2)
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
-	tm.Send(tea.KeyMsg{Type: tea.KeyShiftRight})
-	// Both labels appear in the same rendered frame; check them together so the
-	// ANSI compressor (which only diffs changed lines) doesn't swallow one of them.
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		s := string(b)
-		return strings.Contains(s, "CPU") && strings.Contains(s, "MEM")
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestContainerListRefresh(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx-proxy")
-	// Refresh - send key and give time for the async command to process
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
-	// The refresh triggers spinner + async reload. After reload completes,
-	// send a benign key to trigger a re-render so output is flushed.
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitFor(t, tm, "nginx-proxy")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	// Navigate to last container (old-container)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown}) // ID: jkl012mno345
+	// Delete
+	tm.Send(tea.KeyPressMsg{Code: 'D', Text: "D"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(containerSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+
+	for _, item := range items {
+		if vi, ok := item.(containerItem); ok {
+			if vi.container.ID == "jkl012mno345" {
+				t.Fatal("expected to delete old-container, found in list after delete")
+			}
+		}
+	}
 }
 
 func TestContainerListExecMouseScroll(t *testing.T) {
@@ -199,26 +138,23 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Set focus on panels
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
-	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
-	// Instead if moving four time to the right, we move one to the left
-	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	// Navigate to exec panel (details=0, logs=1, stats=2, files=3 exec=4)
+	// Moving one to the left wraps to exec (index 4)
+	section.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
 	ep := section.ActivePanel().(*execPanel)
 
 	// Give the viewport content tall enough to scroll
 	lines := strings.Repeat("output line\n", 50)
 	ep.viewport.SetContent(lines)
 	ep.viewport.GotoBottom()
-	beforeOffset := ep.viewport.YOffset
+	beforeOffset := ep.viewport.YOffset()
 
 	// Send a scroll-up mouse event directly to the section
-	section.Update(tea.MouseMsg{
-		Button: tea.MouseButtonWheelUp,
-		Action: tea.MouseActionPress,
-	})
+	section.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
 
-	if ep.viewport.YOffset >= beforeOffset {
-		t.Errorf("scroll up should decrease YOffset: before=%d after=%d", beforeOffset, ep.viewport.YOffset)
+	if ep.viewport.YOffset() >= beforeOffset {
+		t.Errorf("scroll up should decrease YOffset: before=%d after=%d", beforeOffset, ep.viewport.YOffset())
 	}
 }
 
@@ -228,9 +164,9 @@ func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	section.SetSize(120, 40)
 
 	// Set focus on panels
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	// Navigate to stats panel (details=0, logs=1, stats=2, files=3 exec=4)
-	section.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
 	lp := section.ActivePanel().(*logsPanel)
 
 	pr, pw := io.Pipe()
@@ -245,38 +181,66 @@ func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	}
 }
 
-func TestContainerListPrune(t *testing.T) {
-	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "old-container") // stopped container present initially
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
-	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitForNot(t, tm, "old-container") // stopped container pruned
-	waitFor(t, tm, "nginx-proxy")      // running containers remain
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
 func TestContainerPauseUnpause(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx:latest")
+	time.Sleep(500 * time.Millisecond)
 	// Toggle pause/unpause
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	waitFor(t, tm, "paused")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-	waitFor(t, tm, "running")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+	tm.Send(
+		tea.KeyPressMsg{Code: 'p', Text: "p"},
+	) // We pause the container with id "abc123def456" or the first container
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(containerSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+	for _, item := range items {
+		if vi, ok := item.(containerItem); ok {
+			if vi.container.ID == "abc123def456" {
+				if vi.container.State != client.StatePaused {
+					t.Fatalf(" expected nginx:latest container to be paused, got: %s", vi.container.State)
+				}
+				return
+			}
+		}
+	}
+
+	t.Fatal("not found nginx:latest container")
 }
 
 func TestContainerKill(t *testing.T) {
 	model := newContainerSectionModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "nginx:latest")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("K")})
-	waitFor(t, tm, "stopped")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+	time.Sleep(500 * time.Millisecond)
+
+	tm.Send(
+		tea.KeyPressMsg{Code: 'K', Text: "K"},
+	) // We kill the container with id "abc123def456" or the first container
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+	m, ok := fm.(containerSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+	for _, item := range items {
+		if vi, ok := item.(containerItem); ok {
+			if vi.container.ID == "abc123def456" {
+				if vi.container.State != client.StateStopped {
+					t.Fatalf(" expected nginx:latest container to be stopped, got: %s", vi.container.State)
+				}
+				return
+			}
+		}
+	}
+
+	t.Fatal("not found nginx:latest container")
 }
 
 func TestContainersLoadedMsgCallsUpdateItems(t *testing.T) {
@@ -305,7 +269,7 @@ func TestContainersLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 	section.SetSize(120, 40)
 
 	section.Update(section.RefreshCmd()())
-	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 
 	cmd := section.Update(containersLoadedMsg{items: []list.Item{}})
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
@@ -31,7 +31,7 @@ type detailsPanel struct {
 
 // NewDetailsPanel creates a new sections.Panel that fetches and renders container details.
 func NewDetailsPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
-	return &detailsPanel{ctx: ctx, service: svc, viewport: viewport.New(0, 0)}
+	return &detailsPanel{ctx: ctx, service: svc, viewport: viewport.New()}
 }
 
 func (d *detailsPanel) Name() string {
@@ -80,8 +80,8 @@ func (d *detailsPanel) Close() tea.Cmd {
 }
 
 func (d *detailsPanel) SetSize(width, height int) {
-	d.viewport.Width = width
-	d.viewport.Height = height
+	d.viewport.SetWidth(width)
+	d.viewport.SetHeight(height)
 }
 
 func formatDetails(c client.Container) string {

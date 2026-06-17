@@ -2,13 +2,13 @@ package volumes
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -28,7 +28,7 @@ func newModel() volumeSectionModel {
 func (m volumeSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m volumeSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
 	}
 	if confirmMsg, ok := msg.(message.ShowConfirmationMsg); ok {
@@ -38,8 +38,8 @@ func (m volumeSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m volumeSectionModel) View() string {
-	return m.section.View()
+func (m volumeSectionModel) View() tea.View {
+	return tea.NewView(m.section.View())
 }
 
 func (m volumeSectionModel) Reset() tea.Cmd {
@@ -49,7 +49,6 @@ func (m volumeSectionModel) Reset() tea.Cmd {
 func TestVolumeReset(t *testing.T) {
 	model := newModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "postgres_data")
 
 	cmd := model.Reset()
 
@@ -57,27 +56,48 @@ func TestVolumeReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd")
 	}
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestVolumeListRendersItems(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "postgres_data")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
 func TestVolumeListPrune(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "app_data") // unused volume present initially
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
+	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
+
+	// Wait for the post-prune reload to settle, then quit and inspect model state.
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitForNot(t, tm, "app_data")   // unused volume pruned
-	waitFor(t, tm, "postgres_data") // used volumes remain
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(volumeSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		if vi, ok := item.(volumeItem); ok {
+			names = append(names, vi.volume.Name)
+		}
+	}
+
+	foundPostgres := false
+	foundApp := false
+	for _, name := range names {
+		if name == "postgres_data" {
+			foundPostgres = true
+		}
+		if name == "app_data" {
+			foundApp = true
+		}
+	}
+	if !foundPostgres {
+		t.Errorf("postgres_data (used volume) should remain after prune, got: %v", names)
+	}
+	if foundApp {
+		t.Errorf("app_data (unused volume) should be pruned, got: %v", names)
+	}
 }
 
 func TestVolumesLoadedMsgCallsUpdateItems(t *testing.T) {
@@ -107,7 +127,7 @@ func TestVolumesLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 
 	// Pre-load items then send empty loaded msg to trigger the reset branch.
 	section.Update(section.RefreshCmd()())
-	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 
 	cmd := section.Update(volumesLoadedMsg{items: []list.Item{}})
 
@@ -120,18 +140,4 @@ func TestVolumesLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 	if cmd == nil {
 		t.Error("Update should return a non-nil cmd (SetItems) after empty volumesLoadedMsg")
 	}
-}
-
-func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-}
-
-func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return !strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }

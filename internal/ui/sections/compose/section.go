@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/huh"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
@@ -137,7 +137,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	return base.UpdateResult{}
 }
 
-func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
+func (s *Section) handleKey(msg tea.KeyPressMsg) base.UpdateResult {
 	switch {
 	case key.Matches(msg, keys.Keys.ComposeUp):
 		return base.UpdateResult{Cmd: s.showUpForm(), Handled: true}
