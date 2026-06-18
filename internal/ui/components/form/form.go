@@ -4,12 +4,10 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 )
 
-// Model wraps a huh.Form with a v2 callback that fires when the form completes.
-// Note: huh internally uses the old charmbracelet/bubbletea, so cross-module
-// message passing is handled via the v2 message loop in app.go.
+// Model wraps a huh.Form.
 type Model struct {
 	title         string
 	form          *huh.Form
@@ -27,24 +25,23 @@ func New(title string, form *huh.Form, callback func(*huh.Form) tea.Cmd) *Model 
 
 // Init initialises the form.
 func (m *Model) Init() tea.Cmd {
-	oldCmd := m.form.Init()
-	if oldCmd == nil {
+	cmd := m.form.Init()
+	if cmd == nil {
 		return nil
 	}
-	return func() tea.Msg { return oldCmd() }
+	return cmd
 }
 
-// Update advances the form state. It bridges old-bubbletea messages from huh
-// into the v2 message loop.
+// Update advances the form state.
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
-	form, oldCmd := m.form.Update(msg)
+	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
 		m.form = f
 	}
 
 	var cmds []tea.Cmd
-	if oldCmd != nil {
-		cmds = append(cmds, func() tea.Msg { return oldCmd() })
+	if cmd != nil {
+		cmds = append(cmds, cmd)
 	}
 
 	if m.form.State == huh.StateCompleted && !m.callbackFired {

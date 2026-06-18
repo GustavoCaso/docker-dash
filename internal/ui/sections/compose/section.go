@@ -10,7 +10,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/huh"
+	"charm.land/huh/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/form"

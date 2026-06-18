@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	charm.land/bubbles/v2 v2.1.0
 	charm.land/bubbletea/v2 v2.0.7
+	charm.land/huh/v2 v2.0.3
 	charm.land/lipgloss/v2 v2.0.4
 	github.com/BurntSushi/toml v1.6.0
 	github.com/NimbleMarkets/ntcharts v0.4.0
@@ -57,11 +58,11 @@ require (
 	github.com/charmbracelet/ultraviolet v0.0.0-20260525132238-948f4557a654 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.15 // indirect
 	github.com/charmbracelet/x/exp/golden v0.0.0-20251109135125-8916d276318f // indirect
+	github.com/charmbracelet/x/exp/ordered v0.1.0 // indirect
 	github.com/charmbracelet/x/exp/strings v0.0.0-20240722160745-212f7b056ed0 // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
 	github.com/charmbracelet/x/termios v0.1.1 // indirect
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
-	github.com/charmbracelet/x/xpty v0.1.3 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/containerd/console v1.0.5 // indirect
