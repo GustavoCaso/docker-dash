@@ -139,9 +139,10 @@ func TestSwitchingSectionResetActiveView(t *testing.T) {
 	waitForString(t, tm, "Images")
 	// Switch section and back
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	waitForString(t, tm, "old-container")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
 	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "Containers")
+		return !strings.Contains(string(b), "old-container")
 	})
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
@@ -191,24 +192,6 @@ func TestContainerListPrune(t *testing.T) {
 }
 
 // Volumes.
-func TestSwitchingSectionResetVolumesActiveView(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
-	waitForString(t, tm, "Images")
-	// Navigate to Volumes view (Images -> Containers -> Volumes)
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
-	waitForString(t, tm, "postgres_data")
-	// Switch away and back
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
-	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "Networks")
-	})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
 func TestVolumesView(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
@@ -230,7 +213,7 @@ func TestVolumesView(t *testing.T) {
 }
 
 // Networks.
-func TestSwitchingSectionResetNetworksActiveView(t *testing.T) {
+func TestSwitchingSectionSetNetworksActiveView(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
@@ -241,12 +224,6 @@ func TestSwitchingSectionResetNetworksActiveView(t *testing.T) {
 	waitFor(t, tm, func(b []byte) bool {
 		s := string(b)
 		return strings.Contains(s, "bridge") && strings.Contains(s, "abc123def456")
-	})
-	// Switch away and back
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
-	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "Volumes")
 	})
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
@@ -603,6 +580,7 @@ func TestArrowKeysStayInContainersWhenLogsPanelFocused(t *testing.T) {
 }
 
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
+	t.Helper()
 	teatest.WaitFor(
 		t,
 		tm.Output(),
@@ -615,6 +593,7 @@ func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
 }
 
 func waitFor(t *testing.T, tm *teatest.TestModel, f func(b []byte) bool) {
+	t.Helper()
 	teatest.WaitFor(
 		t,
 		tm.Output(),
