@@ -141,7 +141,7 @@ func TestContainerListDetailsVisible(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
+func TestContainerListStatsShowsLabels(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")

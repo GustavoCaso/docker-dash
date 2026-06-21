@@ -538,7 +538,7 @@ func TestImagesLoadedMsgError(t *testing.T) {
 	section := New(context.Background(), c, config.UpdateCheckConfig{})
 	section.SetSize(120, 40)
 
-	// imagesLoadedMsg has an `err` field — check the field name in section.go
+	// imagesLoadedMsg has an `error` field — check the field name in section.go
 	cmd := section.Update(imagesLoadedMsg{error: errors.New("connection refused")})
 	if cmd == nil {
 		t.Fatal("expected a non-nil cmd for imagesLoadedMsg error")

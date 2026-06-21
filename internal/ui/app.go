@@ -435,7 +435,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m *model) View() tea.View {
 	if m.width == 0 {
-		return tea.NewView("Loading...")
+		v := tea.NewView("Loading...")
+		v.AltScreen = true
+		return v
 	}
 
 	if m.showForm {

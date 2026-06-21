@@ -74,7 +74,7 @@ func TestContainerReset(t *testing.T) {
 func TestContainerListStartStop(t *testing.T) {
 	tm := teatest.NewTestModel(t, newContainerSectionModel(), teatest.WithInitialTermSize(120, 40))
 	time.Sleep(500 * time.Millisecond)
-	// Toggle pause/unpause
+	// Toggle start/stop
 	tm.Send(
 		tea.KeyPressMsg{Code: 's', Text: "s"},
 	) // We stop the container with id "abc123def456" or the first container
