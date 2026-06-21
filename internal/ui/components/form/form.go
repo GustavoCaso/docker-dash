@@ -25,24 +25,18 @@ func New(title string, form *huh.Form, callback func(*huh.Form) tea.Cmd) *Model 
 
 // Init initialises the form.
 func (m *Model) Init() tea.Cmd {
-	cmd := m.form.Init()
-	if cmd == nil {
-		return nil
-	}
-	return cmd
+	return m.form.Init()
 }
 
 // Update advances the form state.
 func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
 		m.form = f
 	}
 
-	var cmds []tea.Cmd
-	if cmd != nil {
-		cmds = append(cmds, cmd)
-	}
+	cmds = append(cmds, cmd)
 
 	if m.form.State == huh.StateCompleted && !m.callbackFired {
 		m.callbackFired = true
