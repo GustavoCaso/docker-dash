@@ -37,11 +37,12 @@ import (
 type Section struct {
 	name sections.SectionName
 
-	List     list.Model
-	isFilter bool
-	focus    focusTarget
-	width    int
-	height   int
+	List           list.Model
+	isFilter       bool
+	focus          focusTarget
+	width          int
+	height         int
+	listOuterWidth int
 
 	panels         []sections.Panel
 	activePanelIdx int
@@ -460,6 +461,7 @@ func (b *Section) setListSize(width, height int) {
 	b.width = width
 	b.height = height
 	listX, listY := theme.ListStyle.GetFrameSize()
+	b.listOuterWidth = width
 	b.List.SetSize(width-listX, height-listY)
 }
 
@@ -469,9 +471,12 @@ func (b *Section) renderList() string {
 	if b.focus == focusList {
 		borderColor = theme.BorderActive
 	}
+	// Width() on ListStyle is the total outer width (border included). Passing
+	// b.List.Width() (inner) would make lipgloss compute a wrapAt 2 chars too
+	// narrow, wrapping lines that exactly fill the list.
 	return theme.ListStyle.
 		BorderForeground(borderColor).
-		Width(b.List.Width()).
+		Width(b.listOuterWidth).
 		Render(b.List.View())
 }
 
@@ -522,6 +527,7 @@ func (b *Section) setSizeWithPanels(width, height int) {
 	listWidth := int(float64(width) * theme.SplitRatio)
 	detailWidth := width - listWidth
 
+	b.listOuterWidth = listWidth
 	b.List.SetSize(listWidth-listX, height-listY)
 	b.panelWidth = detailWidth - panelX - menuX
 	// TODO: Figure out the + 1
