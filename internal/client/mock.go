@@ -444,8 +444,22 @@ func (w *mockExecWriter) Close() error {
 	return w.pw.Close()
 }
 
-func (s *mockContainerService) FileTree(ctx context.Context, id string) (*FileNode, error) {
-	return &FileNode{}, nil
+func (s *mockContainerService) FileTree(_ context.Context, _ string) (*FileNode, error) {
+	root := &FileNode{Name: ".", Path: ".", IsDir: true, Depth: 0}
+
+	etc := &FileNode{Name: "etc", Path: "/etc", IsDir: true, Depth: 1, Parent: root}
+	nginxConf := &FileNode{
+		Name: "nginx.conf", Path: "/etc/nginx.conf",
+		IsDir: false, Depth: 2, Size: 1024, Parent: etc,
+	}
+	etc.Children = []*FileNode{nginxConf}
+
+	usr := &FileNode{Name: "usr", Path: "/usr", IsDir: true, Depth: 1, Parent: root}
+	bin := &FileNode{Name: "bin", Path: "/usr/bin", IsDir: true, Depth: 2, Parent: usr}
+	usr.Children = []*FileNode{bin}
+
+	root.Children = []*FileNode{etc, usr}
+	return root, nil
 }
 
 func (s *mockContainerService) Prune(_ context.Context, _ PruneOptions) (PruneReport, error) {
@@ -543,6 +557,23 @@ func (s *mockImageService) List(ctx context.Context) ([]Image, error) {
 }
 
 func (s *mockImageService) FetchLayers(ctx context.Context, id string) []Layer {
+	if id == "sha256:node456" {
+		return []Layer{
+			{
+				ID:      "3db9c44f45209632d6050b35958829c3a2aa256d81b9a7be45b362ff85c54710",
+				Command: "/bin/sh -c #(nop) ADD file:eb15dbd63394e063b805a3c32ca7bf0266ef64676d5a6fab4801f2e81e2a5148 in /",
+				Size:    182964289,
+				Created: timeFromUnix(1398108230),
+			},
+			{
+				ID:      "6cfa4d1f33fb861d4d114f43b25abd0ac737509268065cdfd69d544a59c85ab8",
+				Command: "/bin/sh -c #(nop) MAINTAINER Tianon Gravi <admwiggin@gmail.com> - mkimage-debootstrap.sh -i iproute,iputils-ping,ubuntu-minimal -t lucid.tar.xz lucid http://archive.ubuntu.com/ubuntu/",
+				Size:    0,
+				Created: timeFromUnix(1398108222),
+			},
+		}
+	}
+
 	return []Layer{}
 }
 

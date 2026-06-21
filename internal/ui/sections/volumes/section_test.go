@@ -2,6 +2,7 @@ package volumes
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -97,6 +98,102 @@ func TestVolumeListPrune(t *testing.T) {
 	}
 	if foundApp {
 		t.Errorf("app_data (unused volume) should be pruned, got: %v", names)
+	}
+}
+
+func TestVolumeDelete(t *testing.T) {
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
+	time.Sleep(500 * time.Millisecond)
+	// Navigate to app_data (index 3, unused volume)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	// Delete key for volumes is 'd'
+	tm.Send(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(volumeSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+	for _, item := range items {
+		if vi, ok := item.(volumeItem); ok {
+			if vi.volume.Name == "app_data" {
+				t.Fatal("expected app_data to be deleted, but found in list after delete")
+			}
+		}
+	}
+}
+
+func TestVolumesLoadedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Volumes())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(volumesLoadedMsg{error: errors.New("connection refused")})
+
+	if !result.Handled {
+		t.Fatal("expected volumesLoadedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on load error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for load error")
+	}
+}
+
+func TestVolumesPrunedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Volumes())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(volumesPrunedMsg{err: errors.New("prune failed")})
+
+	if !result.Handled {
+		t.Fatal("expected volumesPrunedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on prune error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for prune error")
+	}
+}
+
+func TestVolumeRemovedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Volumes())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(volumeRemovedMsg{Name: "postgres_data", Idx: 0, Error: errors.New("volume in use")})
+
+	if !result.Handled {
+		t.Fatal("expected volumeRemovedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on remove error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for remove error")
 	}
 }
 

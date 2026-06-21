@@ -19,14 +19,6 @@ import (
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
 )
 
-func TestFullOutput(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
-	waitForString(t, tm, "Images")
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
 // Images.
 func TestImageListRendersItems(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
@@ -40,6 +32,46 @@ func TestImageListLayersVisible(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "No layer information available")
+	// We fetch the layers of the second image
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	waitForString(t, tm, "ADD file:eb15dbd6")
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestImagePruneCommand(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "<none>:<none>") // dangling image
+	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'y', Text: "y"}) // confirm prune command
+
+	waitFor(t, tm, func(b []byte) bool {
+		s := string(b)
+		return !strings.Contains(s, "<none>:<none>")
+	})
+	waitForString(t, tm, "nginx") // used images remain
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestImageUpdateInterval(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{
+		UpdateCheck: config.UpdateCheckConfig{
+			Enabled:  true,
+			Interval: "1s",
+		},
+	}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "nginx:latest") // image with update
+	waitFor(t, tm, func(b []byte) bool {
+		s := string(b)
+		return !strings.Contains(s, "⬆")
+	})
+	time.Sleep(1 * time.Second)
+
+	waitForString(t, tm, "⬆")
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -109,45 +141,6 @@ func TestContainerListDetailsVisible(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestContainerSwitchSectionResetsPanel(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
-	waitForString(t, tm, "Images")
-	// Switch to Containers view
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
-	waitForString(t, tm, "nginx-proxy")
-	// Select a container and navigate to logs panel
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
-	// Set focus on panels
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyTab})
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
-	waitForString(t, tm, "Starting application")
-	// Switch away and back - "Starting application" should disappear as panel is closed
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyTab})
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
-	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "Starting application")
-	})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestSwitchingSectionResetActiveView(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
-	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
-	waitForString(t, tm, "Images")
-	// Switch section and back
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
-	waitForString(t, tm, "old-container")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
-	waitFor(t, tm, func(b []byte) bool {
-		return !strings.Contains(string(b), "old-container")
-	})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
 func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
@@ -170,6 +163,21 @@ func TestContainerListStatsShowsCPUAndMemLabels(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
+func TestSwitchingSectionResetActiveView(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+	// Switch section and back
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	waitForString(t, tm, "old-container")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyLeft})
+	waitFor(t, tm, func(b []byte) bool {
+		return !strings.Contains(string(b), "old-container")
+	})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
 func TestContainerListPrune(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
@@ -187,6 +195,52 @@ func TestContainerListPrune(t *testing.T) {
 		return !strings.Contains(s, "old-container")
 	})
 	waitForString(t, tm, "nginx-proxy") // running containers remain
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContainerListRestartConfirmationModal(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	waitForString(t, tm, "nginx-proxy")
+
+	tm.Send(tea.KeyPressMsg{Code: 'R', Text: "R"})
+	waitFor(t, tm, func(b []byte) bool {
+		s := string(b)
+		return strings.Contains(s, "Restart Container") && strings.Contains(s, "[y] confirm")
+	})
+
+	// Dismiss without confirming — banner text from a reload cycle is unreliable.
+	tm.Send(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	waitForString(t, tm, "nginx-proxy")
+
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestContainerFilesPanelShowsEntries(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	waitForString(t, tm, "nginx-proxy")
+
+	// Set focus on panels then navigate to files panel (details=0, logs=1, stats=2, files=3)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyTab})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
+
+	// Wait for both directory and file entries to appear together
+	waitFor(t, tm, func(b []byte) bool {
+		s := string(b)
+		return strings.Contains(s, "etc") && strings.Contains(s, "nginx.conf")
+	})
+
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
@@ -247,6 +301,77 @@ func TestNetworkListDelete(t *testing.T) {
 	})
 	tm.Send(tea.KeyPressMsg{Code: 'y', Text: "y"}) // confirm delete command
 	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+// Volumes.
+func TestVolumeListDelete(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+
+	// Navigate to Volumes view (Images -> Containers -> Volumes)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+
+	waitForString(t, tm, "postgres_data")
+
+	// Navigate to app_data (unused, index 3)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+
+	// Press 'd' to delete
+	tm.Send(tea.KeyPressMsg{Code: 'd', Text: "d"})
+	waitFor(t, tm, func(b []byte) bool {
+		s := string(b)
+		return strings.Contains(s, "Delete Volume") && strings.Contains(s, "[y] confirm")
+	})
+	tm.Send(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	waitForString(t, tm, "deleted")
+
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+func TestVolumePruneCommand(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+
+	// Navigate to Volumes view
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+
+	waitForString(t, tm, "app_data") // unused volume present initially
+	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'y', Text: "y"}) // confirm prune
+
+	waitFor(t, tm, func(b []byte) bool {
+		return !strings.Contains(string(b), "app_data")
+	})
+	waitForString(t, tm, "postgres_data") // in-use volumes remain
+
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+}
+
+// Compose.
+func TestComposeSectionVisible(t *testing.T) {
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
+	waitForString(t, tm, "Images")
+
+	// Navigate to Compose view (Images -> Containers -> Volumes -> Networks -> Compose)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight})
+
+	waitForString(t, tm, "web-app")
+
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }

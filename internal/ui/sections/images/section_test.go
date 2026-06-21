@@ -533,6 +533,33 @@ func TestPullUpdateCmd_WithUpdate_FiresPull(t *testing.T) {
 	}
 }
 
+func TestImagesLoadedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c, config.UpdateCheckConfig{})
+	section.SetSize(120, 40)
+
+	// imagesLoadedMsg has an `err` field — check the field name in section.go
+	cmd := section.Update(imagesLoadedMsg{error: errors.New("connection refused")})
+	if cmd == nil {
+		t.Fatal("expected a non-nil cmd for imagesLoadedMsg error")
+	}
+	msgs := runBatch(cmd)
+	found := false
+	for _, m := range msgs {
+		banner, ok := m.(message.ShowBannerMsg)
+		if !ok {
+			continue
+		}
+		if !banner.IsError {
+			t.Error("expected IsError=true for load error")
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("expected ShowBannerMsg for imagesLoadedMsg error")
+	}
+}
+
 func TestImagesLoadedMsgCallsUpdateItems(t *testing.T) {
 	c := client.NewMockClient()
 	section := New(context.Background(), c, config.UpdateCheckConfig{})

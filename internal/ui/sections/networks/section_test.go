@@ -2,6 +2,7 @@ package networks
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -119,6 +120,77 @@ func TestNetworkDelete(t *testing.T) {
 				t.Fatal("expected to delete bridge, found in list after delete")
 			}
 		}
+	}
+}
+
+func TestNetworksLoadedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(networksLoadedMsg{error: errors.New("connection refused")})
+
+	if !result.Handled {
+		t.Fatal("expected networksLoadedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on load error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for load error")
+	}
+}
+
+func TestNetworksPrunedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(networksPrunedMsg{err: errors.New("prune failed")})
+
+	if !result.Handled {
+		t.Fatal("expected networksPrunedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on prune error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for prune error")
+	}
+}
+
+func TestNetworkRemovedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(networkRemovedMsg{
+		ID:    "abc123def456abc1",
+		Name:  "bridge",
+		Idx:   0,
+		Error: errors.New("network in use"),
+	})
+
+	if !result.Handled {
+		t.Fatal("expected networkRemovedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on remove error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for remove error")
 	}
 }
 

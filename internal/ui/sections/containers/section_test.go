@@ -2,6 +2,7 @@ package containers
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -281,6 +282,150 @@ func TestContainersLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Error("Update should return a non-nil cmd (SetItems) after empty containersLoadedMsg")
+	}
+}
+
+func TestContainerRestart(t *testing.T) {
+	model := newContainerSectionModel()
+	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
+	time.Sleep(500 * time.Millisecond)
+
+	tm.Send(tea.KeyPressMsg{Code: 'R', Text: "R"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(containerSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+	for _, item := range items {
+		if vi, ok := item.(containerItem); ok {
+			if vi.container.ID == "abc123def456" {
+				// After restart the mock sets state to running
+				if vi.container.State != client.StateRunning {
+					t.Fatalf("expected nginx-proxy container to be running after restart, got: %s", vi.container.State)
+				}
+				return
+			}
+		}
+	}
+	t.Fatal("nginx-proxy container not found")
+}
+
+func TestContainerDeleteConfirmationMsg(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+	section.Update(section.RefreshCmd()())
+
+	cmd := section.confirmContainerDelete()
+	if cmd == nil {
+		t.Fatal("confirmContainerDelete should return non-nil cmd")
+	}
+	msg := cmd()
+	confirm, ok := msg.(message.ShowConfirmationMsg)
+	if !ok {
+		t.Fatalf("expected ShowConfirmationMsg, got %T", msg)
+	}
+	if confirm.Title != "Delete Container" {
+		t.Errorf("unexpected title: %q", confirm.Title)
+	}
+	if confirm.OnConfirm == nil {
+		t.Error("OnConfirm should not be nil")
+	}
+}
+
+func TestContainerRestartConfirmationMsg(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+	section.Update(section.RefreshCmd()())
+
+	cmd := section.confirmContainerRestart()
+	if cmd == nil {
+		t.Fatal("confirmContainerRestart should return non-nil cmd")
+	}
+	msg := cmd()
+	confirm, ok := msg.(message.ShowConfirmationMsg)
+	if !ok {
+		t.Fatalf("expected ShowConfirmationMsg, got %T", msg)
+	}
+	if confirm.Title != "Restart Container" {
+		t.Errorf("unexpected title: %q", confirm.Title)
+	}
+}
+
+func TestContainerActionMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(containerActionMsg{
+		ID:     "abc123def456",
+		Action: "stopping",
+		Idx:    0,
+		Error:  errors.New("permission denied"),
+	})
+
+	if !result.Handled {
+		t.Fatal("expected containerActionMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for action error")
+	}
+}
+
+func TestContainersPrunedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(containersPrunedMsg{err: errors.New("prune failed")})
+
+	if !result.Handled {
+		t.Fatal("expected containersPrunedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on prune error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for prune error")
+	}
+}
+
+func TestContainersLoadedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(containersLoadedMsg{error: errors.New("connection refused")})
+
+	if !result.Handled {
+		t.Fatal("expected containersLoadedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on load error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for load error")
 	}
 }
 

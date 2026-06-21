@@ -108,7 +108,7 @@ var Keys = &KeyMap{
 		key.WithHelp("↓", "scroll down"),
 	),
 	Space: key.NewBinding(
-		key.WithKeys(" "),
+		key.WithKeys("space"),
 		key.WithHelp("space", "toggle"),
 	),
 	Refresh: key.NewBinding(
