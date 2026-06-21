@@ -156,7 +156,6 @@ func TestImageListDelete(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'd', Text: "d"})
 	time.Sleep(500 * time.Millisecond)
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
@@ -201,7 +200,6 @@ func TestImageListPrune(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 

@@ -113,7 +113,6 @@ func TestContainerListDelete(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'D', Text: "D"})
 	time.Sleep(500 * time.Millisecond)
 	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
