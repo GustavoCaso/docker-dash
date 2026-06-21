@@ -25,11 +25,7 @@ func TestSystemInfoView(t *testing.T) {
 		t.Fatalf("msg.Info got= %v, expected= %v", msg.Info, m.systemInfo)
 	}
 
-	model, _ := m.Update(msg)
-	systemM, ok := model.(Model)
-	if !ok {
-		t.Fatalf("unexpected model got= %T, expected= %T", model, Model{})
-	}
+	systemM, _ := m.Update(msg)
 
 	view := systemM.View()
 	if !strings.Contains(view, "[i/esc]") {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
@@ -201,7 +201,7 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 	return base.UpdateResult{}
 }
 
-func (s *Section) handleKey(msg tea.KeyMsg) base.UpdateResult {
+func (s *Section) handleKey(msg tea.KeyPressMsg) base.UpdateResult {
 	// When exec panel is active, route ALL keys directly to it.
 	if s.IsPanelFocused() {
 		if ep, ok := s.ActivePanel().(*execPanel); ok {

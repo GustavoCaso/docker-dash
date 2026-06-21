@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
@@ -92,8 +92,6 @@ func main() {
 
 	p := tea.NewProgram(
 		ui.New(ctx, Version, cfg, dockerClient),
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
 	)
 
 	_, runErr := p.Run()

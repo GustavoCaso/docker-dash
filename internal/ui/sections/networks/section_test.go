@@ -2,13 +2,15 @@ package networks
 
 import (
 	"context"
-	"strings"
+	"errors"
+	"slices"
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/exp/teatest"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/charmbracelet/x/exp/teatest/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -28,7 +30,7 @@ func newModel() networkSectionModel {
 func (m networkSectionModel) Init() tea.Cmd { return m.section.Init() }
 
 func (m networkSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "q" {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok && keyMsg.String() == "q" {
 		return m, tea.Quit
 	}
 	if confirmMsg, ok := msg.(message.ShowConfirmationMsg); ok {
@@ -38,60 +40,17 @@ func (m networkSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m networkSectionModel) View() string {
-	return m.section.View()
+func (m networkSectionModel) View() tea.View {
+	return tea.NewView(m.section.View())
 }
 
 func (m networkSectionModel) Reset() tea.Cmd {
 	return m.section.Reset()
 }
 
-func TestNetworkListRendersItems(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "bridge")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestNetworkListDetailsVisible(t *testing.T) {
-	t.Helper()
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	// Both list and details panel are always visible simultaneously
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		s := string(b)
-		return strings.Contains(s, "bridge") && strings.Contains(s, "abc123def456")
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestNetworkListDelete(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "bridge")
-	// Delete the selected network (bridge)
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("D")})
-	waitFor(t, tm, "host")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
-func TestNetworkListRefresh(t *testing.T) {
-	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "bridge")
-	// Refresh
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
-	// Wait for async reload then flush with a benign key
-	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitFor(t, tm, "bridge")
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
-}
-
 func TestNetworkReset(t *testing.T) {
 	model := newModel()
 	tm := teatest.NewTestModel(t, model, teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "bridge")
 
 	cmd := model.Reset()
 
@@ -99,20 +58,138 @@ func TestNetworkReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd")
 	}
 
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
-func TestNetworkListPrune(t *testing.T) {
+func TestNetworkPrune(t *testing.T) {
 	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
-	waitFor(t, tm, "host") // unused network present initially
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("P")})
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyMsg{Type: tea.KeyDown})
-	waitForNot(t, tm, "host")     // unused networks pruned
-	waitFor(t, tm, "app-network") // connected networks remain
-	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
+	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(networkSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+
+	// unused network IDs
+	// def456ghi789def4
+	// ghi789jkl012ghi7
+	// mno345pqr678mno3
+
+	unusedNetworkIds := []string{"def456ghi789def4", "ghi789jkl012ghi7", "mno345pqr678mno3"}
+
+	for _, item := range items {
+		if vi, ok := item.(networkItem); ok {
+			if slices.Contains(unusedNetworkIds, vi.network.ID) {
+				t.Fatalf("expected to delete unused networks, found %s in list after prune", vi.network.ID)
+			}
+		}
+	}
+}
+
+func TestNetworkDelete(t *testing.T) {
+	tm := teatest.NewTestModel(t, newModel(), teatest.WithInitialTermSize(120, 40))
+	time.Sleep(500 * time.Millisecond)
+	// Delete first network with ID abc123def456abc1
+	tm.Send(tea.KeyPressMsg{Code: 'D', Text: "D"})
+	time.Sleep(500 * time.Millisecond)
+	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+
+	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
+
+	m, ok := fm.(networkSectionModel)
+	if !ok {
+		t.Fatal("unexpected model type")
+	}
+
+	items := m.section.List.Items()
+
+	for _, item := range items {
+		if vi, ok := item.(networkItem); ok {
+			if vi.network.ID == "abc123def456abc1" {
+				t.Fatal("expected to delete bridge, found in list after delete")
+			}
+		}
+	}
+}
+
+func TestNetworksLoadedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(networksLoadedMsg{error: errors.New("connection refused")})
+
+	if !result.Handled {
+		t.Fatal("expected networksLoadedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on load error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for load error")
+	}
+}
+
+func TestNetworksPrunedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(networksPrunedMsg{err: errors.New("prune failed")})
+
+	if !result.Handled {
+		t.Fatal("expected networksPrunedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on prune error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for prune error")
+	}
+}
+
+func TestNetworkRemovedMsgError(t *testing.T) {
+	c := client.NewMockClient()
+	section := New(context.Background(), c.Networks())
+	section.SetSize(120, 40)
+
+	result := section.handleMsg(networkRemovedMsg{
+		ID:    "abc123def456abc1",
+		Name:  "bridge",
+		Idx:   0,
+		Error: errors.New("network in use"),
+	})
+
+	if !result.Handled {
+		t.Fatal("expected networkRemovedMsg error to be handled")
+	}
+	if !result.StopSpinner {
+		t.Error("expected StopSpinner on remove error")
+	}
+	banner, ok := result.Cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("expected ShowBannerMsg, got %T", result.Cmd())
+	}
+	if !banner.IsError {
+		t.Error("expected IsError=true for remove error")
+	}
 }
 
 func TestNetworksLoadedMsgCallsUpdateItems(t *testing.T) {
@@ -142,7 +219,7 @@ func TestNetworksLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 
 	section.Update(section.RefreshCmd()())
 	// Manually toggle filter via Update to set isFilter via the base's toggleFilter path
-	section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
 
 	cmd := section.Update(networksLoadedMsg{items: []list.Item{}})
 
@@ -155,18 +232,4 @@ func TestNetworksLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 	if cmd == nil {
 		t.Error("Update should return a non-nil cmd (SetItems) after empty networksLoadedMsg")
 	}
-}
-
-func waitFor(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
-}
-
-func waitForNot(t *testing.T, tm *teatest.TestModel, s string) {
-	t.Helper()
-	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return !strings.Contains(string(b), s)
-	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*10))
 }

@@ -1,7 +1,7 @@
 package statusbar
 
 import (
-	"github.com/charmbracelet/bubbles/help"
+	"charm.land/bubbles/v2/help"
 
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
@@ -23,7 +23,7 @@ func New() *StatusBar {
 // SetSize sets the status bar size.
 func (s *StatusBar) SetSize(width, height int) {
 	s.width = width
-	s.help.Width = width
+	s.help.SetWidth(width)
 	s.height = height
 }
 

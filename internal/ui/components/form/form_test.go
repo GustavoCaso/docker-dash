@@ -3,8 +3,8 @@ package form
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 )
 
 func newTestForm(t *testing.T) *Model {
@@ -87,9 +87,9 @@ func TestCallbackFiredOnlyOnce(t *testing.T) {
 	// Simulate completion state and call Update multiple times.
 	m.form.State = huh.StateCompleted
 
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if callCount != 1 {
 		t.Errorf("callback should fire exactly once, fired %d times", callCount)

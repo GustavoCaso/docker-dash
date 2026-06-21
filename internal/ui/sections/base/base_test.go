@@ -4,9 +4,9 @@ import (
 	"slices"
 	"testing"
 
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
@@ -45,7 +45,7 @@ func (f *fakePanel) Init(item sections.ListItem) tea.Cmd {
 }
 
 func (f *fakePanel) Update(msg tea.Msg) tea.Cmd {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		f.updatedKeys = append(f.updatedKeys, keyMsg.String())
 	}
 	return nil
@@ -205,7 +205,7 @@ func TestPanelClosedOnDownNavigation(t *testing.T) {
 	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	// Navigate down to next container - this should close the current panel
-	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 
 	// Verify the fake panel was closed and receive the new id
 	if !fp.closed {
@@ -225,7 +225,7 @@ func TestPanelClosedOnUpNavigation(t *testing.T) {
 	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	// Navigate up — selection wraps/stays, panel gets closed and re-inited
-	section.Update(tea.KeyMsg{Type: tea.KeyUp})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 
 	// Verify the fake panel was closed and receive the new id
 	if !fp.closed {
@@ -248,9 +248,9 @@ func TestPanelNextSwitchesActivePanel(t *testing.T) {
 	}
 
 	// Set focus on panels
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	// Press PanelNext (shift+right)
-	section.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
 
 	if !panelA.closed {
 		t.Error("PanelNext should close the previous active panel")
@@ -273,9 +273,9 @@ func TestPanelNextWrapsAround(t *testing.T) {
 	section.activePanelIdx = 1
 
 	// Set focus on panels
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	// Press PanelNext — should wrap back to index 0
-	section.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
 
 	if section.activePanelIdx != 0 {
 		t.Errorf("expected activePanelIdx=0 after wrapping, got %d", section.activePanelIdx)
@@ -295,9 +295,9 @@ func TestPanelPrevSwitchesActivePanel(t *testing.T) {
 	section.activePanelIdx = 1
 
 	// Set focus on panels
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	// Press PanelPrev (shift+left)
-	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
 
 	if !panelB.closed {
 		t.Error("PanelPrev should close the previous active panel")
@@ -317,9 +317,9 @@ func TestPanelPrevWrapsAround(t *testing.T) {
 	section := newSectionWithItems(items, []sections.Panel{panelA, panelB})
 
 	// Set focus on panels
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	// Start on panelA (index 0) — pressing prev should wrap to last
-	section.Update(tea.KeyMsg{Type: tea.KeyShiftLeft})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
 
 	if section.activePanelIdx != 1 {
 		t.Errorf("expected activePanelIdx=1 after wrapping back, got %d", section.activePanelIdx)
@@ -333,7 +333,7 @@ func TestFilterEscClearsFilterMode(t *testing.T) {
 	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
 	section.isFilter = true
 
-	handled, cmds := section.handleFilterKey(tea.KeyMsg{Type: tea.KeyEsc})
+	handled, cmds := section.handleFilterKey(tea.KeyPressMsg{Code: tea.KeyEscape})
 
 	if !handled {
 		t.Error("handleFilterKey should return handled=true when filter is active")
@@ -365,7 +365,7 @@ func TestFilterEnterResetsFilterAndSelectsItem(t *testing.T) {
 
 	section.isFilter = true
 
-	handled, cmds := section.handleFilterKey(tea.KeyMsg{Type: tea.KeyEnter})
+	handled, cmds := section.handleFilterKey(tea.KeyPressMsg{Code: tea.KeyEnter})
 
 	if !handled {
 		t.Error("handleFilterKey should return handled=true when filter is active")
@@ -408,7 +408,7 @@ func TestFilterHandlesNonKeyMsg(t *testing.T) {
 func TestFilterInactiveIgnoresMsgs(t *testing.T) {
 	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
 
-	handled, cmds := section.handleFilterKey(tea.KeyMsg{Type: tea.KeyEsc})
+	handled, cmds := section.handleFilterKey(tea.KeyPressMsg{Code: tea.KeyEscape})
 
 	if handled {
 		t.Error("handleFilterKey should return handled=false when filter is not active")
@@ -425,7 +425,7 @@ func TestCopyIDSuccessBanner(t *testing.T) {
 	items := []list.Item{fakeItem{name: "abc123"}}
 	section := newSectionWithItems(items, nil)
 
-	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	cmd := section.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	if cmd == nil {
 		t.Fatal("CopyID should return a cmd")
 	}
@@ -441,7 +441,7 @@ func TestCopyIDSuccessBanner(t *testing.T) {
 func TestCopyIDNoItemBanner(t *testing.T) {
 	section := newSectionWithItems([]list.Item{}, nil)
 
-	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	cmd := section.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	if cmd == nil {
 		t.Fatal("CopyID with no selection should return a cmd")
 	}
@@ -460,9 +460,9 @@ func TestCopyIDIgnoredWhenPanelFocused(t *testing.T) {
 	section := newSectionWithItems(items, []sections.Panel{fp})
 
 	// Move focus to panel
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 
-	cmd := section.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	cmd := section.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 
 	// cmd may be nil or come from the panel — the list should not produce a ShowBannerMsg
 	if cmd != nil {
@@ -483,12 +483,12 @@ func TestTabTogglesFocusBetweenListAndPanel(t *testing.T) {
 		t.Fatalf("expected initial focus to be list, got %d", section.focus)
 	}
 
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if section.focus != focusPanel {
 		t.Fatalf("expected focus to switch to panel, got %d", section.focus)
 	}
 
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if section.focus != focusList {
 		t.Fatalf("expected focus to switch back to list, got %d", section.focus)
 	}
@@ -502,8 +502,8 @@ func TestPanelFocusedUpDownIsHandledByPanel(t *testing.T) {
 	}
 	section := newSectionWithItems(items, []sections.Panel{fp})
 
-	section.Update(tea.KeyMsg{Type: tea.KeyTab})
-	section.Update(tea.KeyMsg{Type: tea.KeyDown})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 
 	if section.List.Index() != 0 {
 		t.Fatalf("expected list selection to remain unchanged when panel is focused, got %d", section.List.Index())

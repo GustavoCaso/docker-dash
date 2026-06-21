@@ -1,7 +1,7 @@
 package keys
 
 import (
-	"github.com/charmbracelet/bubbles/key"
+	"charm.land/bubbles/v2/key"
 )
 
 type KeyMap struct {
@@ -108,7 +108,7 @@ var Keys = &KeyMap{
 		key.WithHelp("↓", "scroll down"),
 	),
 	Space: key.NewBinding(
-		key.WithKeys(" "),
+		key.WithKeys("space"),
 		key.WithHelp("space", "toggle"),
 	),
 	Refresh: key.NewBinding(

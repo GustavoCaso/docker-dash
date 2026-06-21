@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -203,5 +203,97 @@ func TestFileTreePanelSetSizeStoresWidth(t *testing.T) {
 
 	if p.height != 50 {
 		t.Errorf("SetSize should store height=50, got %d", p.height)
+	}
+}
+
+func TestFileTreePanelShowsMockEntries(t *testing.T) {
+	p := newTestFileTreePanel()
+	p.SetSize(80, 40)
+
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init() cmd returned %T, want tea.BatchMsg", cmd())
+	}
+	for _, c := range batch {
+		p.Update(c())
+	}
+
+	view := p.View()
+	if !strings.Contains(view, "etc") {
+		t.Errorf("View() should show mock directory 'etc', got: %q", view)
+	}
+	if !strings.Contains(view, "nginx.conf") {
+		t.Errorf("View() should show mock file 'nginx.conf', got: %q", view)
+	}
+}
+
+func TestFileTreePanelDirectoryToggle(t *testing.T) {
+	p := newTestFileTreePanel()
+	p.SetSize(80, 40)
+
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init() cmd returned %T, want tea.BatchMsg", cmd())
+	}
+	for _, c := range batch {
+		p.Update(c())
+	}
+
+	// cursor starts at 0 (first visible node); toggle collapse via Space
+	if len(p.visible) == 0 {
+		t.Fatal("expected visible nodes after loading mock file tree")
+	}
+	firstNode := p.visible[0]
+	if !firstNode.IsDir {
+		t.Skip("first visible node is not a directory; skip toggle test")
+	}
+
+	before := len(p.visible)
+	p.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	after := len(p.visible)
+
+	if after >= before {
+		t.Errorf("Space on expanded dir should collapse it: before=%d after=%d", before, after)
+	}
+
+	// Toggle again to expand
+	p.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	expanded := len(p.visible)
+	if expanded != before {
+		t.Errorf("Second Space should expand dir back: want=%d got=%d", before, expanded)
+	}
+}
+
+func TestFileTreePanelCursorNavigation(t *testing.T) {
+	p := newTestFileTreePanel()
+	p.SetSize(80, 40)
+
+	cmd := p.Init(containerItem{container: client.Container{ID: "abc123def456"}})
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init() cmd returned %T, want tea.BatchMsg", cmd())
+	}
+	for _, c := range batch {
+		p.Update(c())
+	}
+
+	if len(p.visible) < 2 {
+		t.Skip("need at least 2 visible nodes for cursor navigation test")
+	}
+
+	if p.cursor != 0 {
+		t.Fatalf("cursor should start at 0, got %d", p.cursor)
+	}
+
+	p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if p.cursor != 1 {
+		t.Errorf("down arrow should move cursor to 1, got %d", p.cursor)
+	}
+
+	p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	if p.cursor != 0 {
+		t.Errorf("up arrow should move cursor back to 0, got %d", p.cursor)
 	}
 }

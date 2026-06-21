@@ -3,10 +3,11 @@ package form
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/huh"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/huh/v2"
 )
 
+// Model wraps a huh.Form.
 type Model struct {
 	title         string
 	form          *huh.Form
@@ -22,12 +23,14 @@ func New(title string, form *huh.Form, callback func(*huh.Form) tea.Cmd) *Model 
 	}
 }
 
+// Init initialises the form.
 func (m *Model) Init() tea.Cmd {
 	return m.form.Init()
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmds := []tea.Cmd{}
+// Update advances the form state.
+func (m *Model) Update(msg tea.Msg) (*Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
 		m.form = f

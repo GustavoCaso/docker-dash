@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/sections"
@@ -21,7 +21,7 @@ type detailsPanel struct {
 
 func newDetailsPanel() *detailsPanel {
 	return &detailsPanel{
-		viewport: viewport.New(0, 0),
+		viewport: viewport.New(),
 	}
 }
 
@@ -55,8 +55,8 @@ func (d *detailsPanel) Close() tea.Cmd {
 }
 
 func (d *detailsPanel) SetSize(width, height int) {
-	d.viewport.Width = width
-	d.viewport.Height = height
+	d.viewport.SetWidth(width)
+	d.viewport.SetHeight(height)
 }
 
 const shortIDLen = 12
