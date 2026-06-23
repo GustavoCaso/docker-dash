@@ -212,7 +212,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 
 			return func() tea.Msg {
 				return message.NewShowBannerMsg(
-					"ID copy to clipboard",
+					"ID copied to clipboard",
 					false,
 					messageDuration,
 				)
