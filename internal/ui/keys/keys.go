@@ -44,6 +44,8 @@ type KeyMap struct {
 	LogScrollLeft  key.Binding
 	LogScrollRight key.Binding
 
+	CpFromContainerToHost key.Binding
+
 	Prune key.Binding
 
 	SystemInfo key.Binding
@@ -202,6 +204,10 @@ var Keys = &KeyMap{
 	Prune: key.NewBinding(
 		key.WithKeys("P"),
 		key.WithHelp("P", "prune"),
+	),
+	CpFromContainerToHost: key.NewBinding(
+		key.WithKeys("c"),
+		key.WithHelp("c", "copy from container to host"),
 	),
 	SystemInfo: key.NewBinding(
 		key.WithKeys("alt+i"),

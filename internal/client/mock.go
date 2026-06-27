@@ -310,6 +310,20 @@ func (s *mockContainerService) Unpause(ctx context.Context, containerID string) 
 	return fmt.Errorf("container not found: %s", containerID)
 }
 
+func (s *mockContainerService) CopyFromContainer(
+	ctx context.Context,
+	containerID, srcPath string,
+) (io.ReadCloser, error) {
+	for _, c := range s.containers {
+		if c.ID == containerID || c.Name == containerID {
+			//nolint:nilnil // we need a FileTree to use this
+			return nil, nil
+		}
+	}
+
+	return nil, fmt.Errorf("container not found: %s", containerID)
+}
+
 func (s *mockContainerService) Restart(ctx context.Context, id string) error {
 	for i, c := range s.containers {
 		if c.ID == id || c.Name == id {
