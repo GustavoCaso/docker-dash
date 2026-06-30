@@ -1,6 +1,8 @@
 package client
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -314,14 +316,83 @@ func (s *mockContainerService) CopyFromContainer(
 	ctx context.Context,
 	containerID, srcPath string,
 ) (io.ReadCloser, error) {
+	var containerExists bool
+
 	for _, c := range s.containers {
 		if c.ID == containerID || c.Name == containerID {
-			//nolint:nilnil // we need a FileTree to use this
-			return nil, nil
+			containerExists = true
+			break
 		}
 	}
 
-	return nil, fmt.Errorf("container not found: %s", containerID)
+	if !containerExists {
+		return nil, fmt.Errorf("container not found: %s", containerID)
+	}
+
+	switch srcPath {
+	case "/etc":
+		return mockReaderCloser([]mockTarEntry{
+			{name: "etc", isDir: true},
+			{name: "etc/nginx.conf", isDir: false, content: "worker_processes 2;"},
+		})
+	case "/usr":
+		return mockReaderCloser([]mockTarEntry{
+			{name: "usr", isDir: true},
+			{name: "usr/bin", isDir: true},
+			{name: "usr/bin/cat", isDir: false, content: "cat binary"},
+		})
+	case "/etc/nginx.conf":
+		return mockReaderCloser([]mockTarEntry{
+			{name: "nginx.conf", isDir: false, content: "worker_processes 2;"},
+		})
+	case "/usr/bin":
+		return mockReaderCloser([]mockTarEntry{
+			{name: "bin", isDir: true},
+			{name: "bin/cat", isDir: false, content: "cat binary"},
+		})
+	default:
+		return nil, fmt.Errorf("no source path found %q in container %s", srcPath, containerID)
+	}
+}
+
+type mockTarEntry struct {
+	name    string
+	content string
+	isDir   bool
+}
+
+func mockReaderCloser(entries []mockTarEntry) (io.ReadCloser, error) {
+	var buf bytes.Buffer
+
+	tw := tar.NewWriter(&buf)
+	for _, entry := range entries {
+		hdr := &tar.Header{Name: entry.name}
+		if entry.isDir {
+			hdr.Typeflag = tar.TypeDir
+			hdr.Mode = 0o755
+			hdr.Size = 0
+		} else {
+			hdr.Typeflag = tar.TypeReg
+			hdr.Mode = 0o644
+			hdr.Size = int64(len(entry.content))
+		}
+
+		err := tw.WriteHeader(hdr)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = tw.Write([]byte(entry.content))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+
+	return io.NopCloser(bytes.NewReader(buf.Bytes())), nil
 }
 
 func (s *mockContainerService) Restart(ctx context.Context, id string) error {
