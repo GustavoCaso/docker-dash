@@ -119,7 +119,7 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 			}
 		case key.Matches(msg, keys.Keys.CpFromContainerToHost):
 			node := f.visible[f.cursor]
-			return tea.Batch(f.copyFromContainerCmd(node))
+			return f.copyFromContainerCmd(node)
 		}
 	}
 

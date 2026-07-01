@@ -297,3 +297,45 @@ func TestFileTreePanelCursorNavigation(t *testing.T) {
 		t.Errorf("up arrow should move cursor back to 0, got %d", p.cursor)
 	}
 }
+
+func TestCopyFromContainer(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Chdir(tmpDir)
+
+	p := newTestFileTreePanel()
+	p.SetSize(80, 40)
+
+	containerID := "abc123def456"
+	cmd := p.Init(containerItem{container: client.Container{ID: containerID}})
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init() cmd returned %T, want tea.BatchMsg", cmd())
+	}
+	for _, c := range batch {
+		p.Update(c())
+	}
+
+	if len(p.visible) < 2 {
+		t.Skip("need at least 2 visible nodes for cursor navigation test")
+	}
+
+	if p.cursor != 0 {
+		t.Fatalf("cursor should start at 0, got %d", p.cursor)
+	}
+
+	p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	if p.cursor != 1 {
+		t.Errorf("down arrow should move cursor to 1, got %d", p.cursor)
+	}
+
+	cpFromContainerKey := rune('c')
+	cmd = p.Update(tea.KeyPressMsg{Code: cpFromContainerKey})
+	showBannerMsg, ok := cmd().(message.ShowBannerMsg)
+	if !ok {
+		t.Fatalf("copyFromContainerCmd() returned %T, want message.ShowBannerMsg", cmd())
+	}
+
+	if showBannerMsg.IsError {
+		t.Errorf("unexpected error copying from container %s", containerID)
+	}
+}
