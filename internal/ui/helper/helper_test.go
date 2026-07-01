@@ -1,6 +1,10 @@
 package helper
 
 import (
+	"archive/tar"
+	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -257,5 +261,61 @@ func TestStripCommand(t *testing.T) {
 				t.Errorf("StripCommand(%q) = %q, want %q", tt.cmd, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestExtractTarToWorkingDir(t *testing.T) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	entries := []struct {
+		hdr  *tar.Header
+		body string
+	}{
+		{&tar.Header{Name: "mydir/", Typeflag: tar.TypeDir, Mode: 0755}, ""},
+		{&tar.Header{Name: "mydir/docker.txt", Typeflag: tar.TypeReg, Mode: 0600, Size: 6}, "helloo"},
+		{&tar.Header{Name: "mydir/dash.txt", Typeflag: tar.TypeReg, Mode: 0600, Size: 5}, "world"},
+	}
+
+	for _, e := range entries {
+		if err := tw.WriteHeader(e.hdr); err != nil {
+			t.Fatal(err)
+		}
+		if e.body != "" {
+			if _, err := tw.Write([]byte(e.body)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	tw.Close()
+
+	destDir := t.TempDir()
+	if err := ExtractTarToWorkingDir(destDir, &buf); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(destDir, "mydir"))
+	if err != nil {
+		t.Fatalf("dir not created: %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatal("expected a directory")
+	}
+
+	cases := []struct{ name, want string }{
+		{"mydir/docker.txt", "helloo"},
+		{"mydir/dash.txt", "world"},
+	}
+
+	for _, c := range cases {
+		b, err := os.ReadFile(filepath.Join(destDir, c.name))
+		if err != nil {
+			t.Errorf("file %q not found: %v", c.name, err)
+			continue
+		}
+
+		if string(b) != c.want {
+			t.Errorf("file %q: got %q, want %q", c.name, string(b), c.want)
+		}
 	}
 }
