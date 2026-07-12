@@ -248,6 +248,14 @@ func (e *execPanel) handleKeyInput(msg tea.KeyPressMsg) tea.Cmd {
 func (e *execPanel) execResize(width, height int) tea.Cmd {
 	svc := e.service
 	execID := e.session.ID
+
+	if width < 0 {
+		width = 0
+	}
+	if height < 0 {
+		height = 0
+	}
+
 	vpWidth := uint(width)
 	vpHeight := uint(height)
 
