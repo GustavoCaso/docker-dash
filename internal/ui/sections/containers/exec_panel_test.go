@@ -89,7 +89,7 @@ func TestExecPanelInitErrorWhenContainerIsNotRunning(t *testing.T) {
 func TestExecPanelUpdateOnSessionStartedStoresSession(t *testing.T) {
 	p := newTestExecPanel()
 	pr, pw := io.Pipe()
-	session := client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
+	session := client.NewExecSession("32421ash53ab", io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
 
 	go func() {
 		pw.Write([]byte("output\n"))
@@ -124,7 +124,7 @@ func TestExecPanelAccumulatesOutput(t *testing.T) {
 func TestExecPanelErrorEmitsBanner(t *testing.T) {
 	p := newTestExecPanel()
 	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
+	p.session = client.NewExecSession("32421ash53ab", io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
 
 	cmd := p.Update(execOutputMsg{err: errors.New("pipe broken")})
 
@@ -155,7 +155,7 @@ func TestExecPanelErrorEmitsBanner(t *testing.T) {
 func TestExecPanelClearClearsOutput(t *testing.T) {
 	p := newTestExecPanel()
 	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
+	p.session = client.NewExecSession("32421ash53ab", io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
 	p.output = "old output"
 	p.input.Focus()
 
@@ -173,7 +173,7 @@ func TestExecPanelClearClearsOutput(t *testing.T) {
 func TestExecPanelClearWithExtraSpaceClearsOutput(t *testing.T) {
 	p := newTestExecPanel()
 	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
+	p.session = client.NewExecSession("32421ash53ab", io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
 	p.output = "old output"
 	p.input.Focus()
 
@@ -191,7 +191,7 @@ func TestExecPanelClearWithExtraSpaceClearsOutput(t *testing.T) {
 func TestExecPanelHistoryNavigation(t *testing.T) {
 	p := newTestExecPanel()
 	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
+	p.session = client.NewExecSession("32421ash53ab", io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
 	p.history = []string{"ls", "pwd"}
 	p.historyIdx = len(p.history)
 	p.input.Focus()
@@ -220,7 +220,7 @@ func TestExecPanelHistoryNavigation(t *testing.T) {
 func TestExecPanelCloseNilsSession(t *testing.T) {
 	p := newTestExecPanel()
 	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
+	p.session = client.NewExecSession("32421ash53ab", io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
 	p.output = "some output"
 
 	p.Close()

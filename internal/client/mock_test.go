@@ -67,7 +67,7 @@ func TestMockClient_ContainerExec(t *testing.T) {
 	}
 
 	// Use the first running container
-	session, err := client.Containers().Exec(context.Background(), containers[0].ID)
+	session, err := client.Containers().Exec(context.Background(), containers[0].ID, 80, 40)
 	if err != nil {
 		t.Fatalf("Exec() error = %v", err)
 	}

@@ -30,7 +30,6 @@ func (s *containerService) List(ctx context.Context) ([]Container, error) {
 	du, err := s.cli.DiskUsage(ctx, dockertypes.DiskUsageOptions{
 		Types: []dockertypes.DiskUsageObject{dockertypes.ContainerObject},
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +324,6 @@ func (s *containerService) Logs(ctx context.Context, id string, opts LogOptions)
 		Timestamps: opts.Timestamps,
 		Since:      sinceUnix(opts.Since),
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -368,13 +366,14 @@ func copyStream(w io.Writer, r io.Reader) error {
 	return err
 }
 
-func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
+func (s *containerService) Exec(ctx context.Context, id string, width, height uint) (*ExecSession, error) {
 	log.Printf("[docker] ContainerExecCreate+Attach: id=%q", id)
 	execConfig := container.ExecOptions{
 		AttachStdin:  true,
 		AttachStdout: true,
 		AttachStderr: true,
-		Tty:          false,
+		Tty:          true,
+		ConsoleSize:  &[2]uint{width, height},
 		Cmd:          []string{"/bin/sh"},
 	}
 
@@ -383,29 +382,45 @@ func (s *containerService) Exec(ctx context.Context, id string) (*ExecSession, e
 		return nil, err
 	}
 
-	attachResp, err := s.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecStartOptions{})
+	attachResp, err := s.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecStartOptions{
+		Tty:         true,
+		ConsoleSize: &[2]uint{width, height},
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	pr, pw := io.Pipe()
 	go func() {
-		_, copyErr := stdcopy.StdCopy(pw, pw, attachResp.Reader)
+		_, copyErr := io.Copy(pw, attachResp.Reader)
 		pw.CloseWithError(copyErr)
 	}()
 
 	log.Printf("[docker] ContainerExecCreate+Attach: done")
 	return NewExecSession(
+		execResp.ID,
 		io.NopCloser(pr),
 		attachResp.Conn,
 		func() { attachResp.Close() },
 	), nil
 }
 
+func (s *containerService) ExecResize(ctx context.Context, execID string, width, height uint) error {
+	log.Printf("[docker] ContainerExecResize: execID=%q, width=%d, height=%d", execID, width, height)
+	err := s.cli.ContainerExecResize(ctx, execID, container.ResizeOptions{
+		Width:  width,
+		Height: height,
+	})
+	if err != nil {
+		return err
+	}
+	log.Printf("[docker] ContainerExecResize: done")
+	return nil
+}
+
 func (s *containerService) Stats(ctx context.Context, id string) (*StatsSession, error) {
 	log.Printf("[docker] ContainerStats: id=%q stream=true", id)
 	reader, err := s.cli.ContainerStats(ctx, id, true)
-
 	if err != nil {
 		return nil, err
 	}

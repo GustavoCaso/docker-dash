@@ -13,6 +13,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/charmbracelet/x/vt"
+
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -20,6 +22,13 @@ import (
 )
 
 var noStyle = lipgloss.NewStyle()
+
+const (
+	defaultVtWidth  = 120
+	defaultVtHeight = 30
+	minimumVpWidth  = 30 // check if this values could be correct
+	minimumVpHeight = 10
+)
 
 // execOutputMsg is sent when exec output is received from the background reader.
 type execOutputMsg struct {
@@ -38,6 +47,7 @@ type execPanel struct {
 	service    client.ContainerService
 	session    *client.ExecSession
 	viewport   viewport.Model
+	vterm      *vt.Emulator
 	input      textinput.Model
 	output     string
 	history    []string
@@ -55,6 +65,7 @@ func NewExecPanel(ctx context.Context, svc client.ContainerService) sections.Pan
 		input:    ti,
 		viewport: vp,
 		history:  []string{},
+		vterm:    vt.NewEmulator(defaultVtWidth, defaultVtHeight),
 	}
 }
 
@@ -92,10 +103,17 @@ func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 	var viewportCmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		if e.vterm != nil {
+			e.vterm.Resize(e.viewport.Width(), e.viewport.Height())
+		}
+
+		return e.execResize(e.viewport.Width(), e.viewport.Height())
 	case execSessionStartedMsg:
 		log.Printf("[containers][exec-panel] session started")
+		e.vterm = vt.NewEmulator(e.viewport.Width(), e.viewport.Height())
 		e.session = msg.session
-		return e.readOutput()
+		return tea.Batch(e.readOutput(), e.execResize(e.viewport.Width(), e.viewport.Height()))
 	case execOutputMsg:
 		if msg.err != nil {
 			return tea.Batch(e.Close(), func() tea.Msg {
@@ -107,7 +125,18 @@ func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 		}
 		log.Printf("[containers][exec-panel] output chunk: bytes=%d", len(msg.output))
 		e.output += msg.output
-		e.viewport.SetContent(noStyle.Width(e.width).Render(e.output))
+		_, err := e.vterm.Write([]byte(msg.output))
+		if err != nil {
+			return func() tea.Msg {
+				return tea.Batch(e.Close(), func() tea.Msg {
+					return message.ShowBannerMsg{
+						Message: fmt.Sprintf("Exec session error. Err: %s", err),
+						IsError: true,
+					}
+				})
+			}
+		}
+		e.viewport.SetContent(e.vterm.Render())
 		e.viewport.GotoBottom()
 		return e.readOutput()
 	case tea.KeyPressMsg:
@@ -134,6 +163,12 @@ func (e *execPanel) Close() tea.Cmd {
 		e.session.Close()
 		e.session = nil
 	}
+
+	if e.vterm != nil {
+		_ = e.vterm.Close()
+		e.vterm = nil
+	}
+
 	e.output = ""
 	e.history = []string{}
 	e.historyIdx = 0
@@ -159,6 +194,9 @@ func (e *execPanel) handleKeyInput(msg tea.KeyPressMsg) tea.Cmd {
 			return nil
 		}
 		if strings.TrimSpace(cmd) == "clear" {
+			if e.vterm != nil {
+				e.vterm = vt.NewEmulator(e.viewport.Width(), e.viewport.Height())
+			}
 			e.input.Reset()
 			e.output = ""
 			e.viewport.SetContent("")
@@ -207,11 +245,36 @@ func (e *execPanel) handleKeyInput(msg tea.KeyPressMsg) tea.Cmd {
 	}
 }
 
+func (e *execPanel) execResize(width, height int) tea.Cmd {
+	svc := e.service
+	execID := e.session.ID
+	vpWidth := uint(width)
+	vpHeight := uint(height)
+
+	if vpWidth < minimumVpWidth {
+		vpWidth = minimumVpWidth
+	}
+
+	if vpHeight < minimumVpHeight {
+		vpHeight = minimumVpHeight
+	}
+
+	return func() tea.Msg {
+		err := svc.ExecResize(e.ctx, execID, vpWidth, vpHeight)
+		if err != nil {
+			return execOutputMsg{err: err}
+		}
+
+		return nil
+	}
+}
+
 func (e *execPanel) startSession(container client.Container) tea.Cmd {
 	ctx := e.ctx
 	svc := e.service
+
 	return func() tea.Msg {
-		session, err := svc.Exec(ctx, container.ID)
+		session, err := svc.Exec(ctx, container.ID, defaultVtWidth, defaultVtHeight)
 		if err != nil {
 			return execOutputMsg{err: err}
 		}
