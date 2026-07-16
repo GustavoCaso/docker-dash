@@ -1,7 +1,12 @@
 package helper
 
 import (
+	"archive/tar"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -93,4 +98,62 @@ func StripCommand(cmd string) string {
 	cmd = strings.TrimPrefix(cmd, "/bin/sh -c ")
 	cmd = strings.TrimPrefix(cmd, "#(nop) ")
 	return strings.Join(strings.Fields(cmd), " ")
+}
+
+const extractDirPerm = 0750 // rwxr-x--- for directories created during tar extraction
+
+func ExtractTarToWorkingDir(dst string, r io.Reader) error {
+	// os.Root confines all operations to dst; escapes via ".." or symlinks fail.
+	root, err := os.OpenRoot(dst)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	tr := tar.NewReader(r)
+	for {
+		var hdr *tar.Header
+		hdr, err = tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		// Clean drops trailing separators ("mydir/" -> "mydir"); os.Root's
+		// mkdirat on Linux rejects paths with a trailing slash.
+		name := filepath.Clean(hdr.Name)
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err = root.MkdirAll(name, extractDirPerm); err != nil {
+				return err
+			}
+
+		case tar.TypeReg:
+			if dir := filepath.Dir(name); dir != "." {
+				if err = root.MkdirAll(dir, extractDirPerm); err != nil {
+					return err
+				}
+			}
+			var f *os.File
+			//nolint:gosec // hdr.Mode max value 0777 fits safely in uint32
+			f, err = root.OpenFile(name, os.O_CREATE|os.O_RDWR, os.FileMode(hdr.Mode))
+			if err != nil {
+				return err
+			}
+			//nolint:gosec // DoS vulnerability for containers running by users is not necessary a concern here
+			_, err = io.Copy(f, tr)
+			if err != nil {
+				_ = f.Close()
+				return err
+			}
+			if err = f.Close(); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

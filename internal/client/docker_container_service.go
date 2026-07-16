@@ -302,6 +302,13 @@ func (s *containerService) Unpause(ctx context.Context, id string) error {
 	return err
 }
 
+func (s *containerService) CopyFromContainer(ctx context.Context, containerID, srcPath string) (io.ReadCloser, error) {
+	log.Printf("[docker] CopyFromContainer: id=%q", containerID)
+	rc, _, err := s.cli.CopyFromContainer(ctx, containerID, srcPath)
+	log.Printf("[docker]  CopyFromContainer: done err=%v", containerID)
+	return rc, err
+}
+
 // sinceUnix converts a duration string (e.g. "2h", "10m") to a Unix timestamp
 // string as required by the Docker API. Returns empty string if since is empty.
 func sinceUnix(since string) string {

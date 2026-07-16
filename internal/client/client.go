@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
@@ -104,6 +105,7 @@ type ContainerService interface {
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)
 	Pause(ctx context.Context, id string) error
 	Unpause(ctx context.Context, id string) error
+	CopyFromContainer(ctx context.Context, containerID, srcPath string) (io.ReadCloser, error)
 }
 
 // ImageService manages Docker images.
