@@ -266,7 +266,7 @@ func (f *filesPanel) copyFromContainerCmd(node *client.FileNode) tea.Cmd {
 		}
 
 		return message.ShowBannerMsg{
-			Message: fmt.Sprintf("%s got copied to host succesfully", srcPath),
+			Message: fmt.Sprintf("%s got copied to host succesfully at %s", srcPath, dstDir),
 			IsError: false,
 		}
 	}
@@ -301,6 +301,7 @@ func (f *filesPanel) extendHelpCmd() tea.Cmd {
 			keys.Keys.ScrollUp,
 			keys.Keys.ScrollDown,
 			keys.Keys.Space,
+			keys.Keys.CpFromContainerToHost,
 		}}
 	}
 }

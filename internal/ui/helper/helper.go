@@ -14,8 +14,6 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-const maxCopySize = 1 * 1024 * 1024 // 1MB
-
 const shortIDLength = 12 // length of shortened container/image IDs
 
 // OverlayBottomRight places text in the bottom right corner of content.
@@ -101,10 +99,21 @@ func StripCommand(cmd string) string {
 	cmd = strings.TrimPrefix(cmd, "#(nop) ")
 	return strings.Join(strings.Fields(cmd), " ")
 }
+
+const extractDirPerm = 0750 // rwxr-x--- for directories created during tar extraction
+
 func ExtractTarToWorkingDir(dst string, r io.Reader) error {
+	// os.Root confines all operations to dst; escapes via ".." or symlinks fail.
+	root, err := os.OpenRoot(dst)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
 	tr := tar.NewReader(r)
 	for {
-		hdr, err := tr.Next()
+		var hdr *tar.Header
+		hdr, err = tr.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -113,39 +122,36 @@ func ExtractTarToWorkingDir(dst string, r io.Reader) error {
 			return err
 		}
 
-		// dir/file where it should be created
-		target := filepath.Join(dst, hdr.Name) //nolint:gosec //  path traversal prevented by HasPrefix
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(dst)+string(os.PathSeparator)) {
-			return fmt.Errorf("invalid path: %s", hdr.Name)
-		}
-
+		// Clean drops trailing separators ("mydir/" -> "mydir"); os.Root's
+		// mkdirat on Linux rejects paths with a trailing slash.
+		name := filepath.Clean(hdr.Name)
 		switch hdr.Typeflag {
 		case tar.TypeDir:
-			if _, err = os.Stat(target); err != nil {
-				if err = os.MkdirAll(target, 0750); err != nil {
-					return err
-				}
-			}
-
-		case tar.TypeReg:
-			var f *os.File
-			//nolint:gosec // hdr.Mode max value 0777 fits safely in uint32
-			f, err = os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(hdr.Mode))
-			if err != nil {
+			if err = root.MkdirAll(name, extractDirPerm); err != nil {
 				return err
 			}
 
-			for {
-				_, err = io.CopyN(f, tr, maxCopySize)
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						break
-					}
-
+		case tar.TypeReg:
+			if dir := filepath.Dir(name); dir != "." {
+				if err = root.MkdirAll(dir, extractDirPerm); err != nil {
 					return err
 				}
 			}
-			_ = f.Close()
+			var f *os.File
+			//nolint:gosec // hdr.Mode max value 0777 fits safely in uint32
+			f, err = root.OpenFile(name, os.O_CREATE|os.O_RDWR, os.FileMode(hdr.Mode))
+			if err != nil {
+				return err
+			}
+			//nolint:gosec // DoS vulnerability for containers running by users is not necessary a concern here
+			_, err = io.Copy(f, tr)
+			if err != nil {
+				_ = f.Close()
+				return err
+			}
+			if err = f.Close(); err != nil {
+				return err
+			}
 		}
 	}
 
