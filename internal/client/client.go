@@ -100,7 +100,8 @@ type ContainerService interface {
 	Kill(ctx context.Context, id string, signal string) error
 	FileTree(ctx context.Context, id string) (*FileNode, error)
 	Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error)
-	Exec(ctx context.Context, id string) (*ExecSession, error)
+	Exec(ctx context.Context, id string, width, height uint) (*ExecSession, error)
+	ExecResize(ctx context.Context, execID string, width, height uint) error
 	Stats(ctx context.Context, is string) (*StatsSession, error)
 	Prune(ctx context.Context, opts PruneOptions) (PruneReport, error)
 	Pause(ctx context.Context, id string) error
