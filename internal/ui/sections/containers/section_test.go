@@ -38,6 +38,10 @@ func (m containerSectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if confirmMsg, ok := msg.(message.ShowConfirmationMsg); ok {
 		return m, confirmMsg.OnConfirm
 	}
+	// Mirror the app's BubbleUpMsg handling: forward the key to the section.
+	if bubbleMsg, ok := msg.(message.BubbleUpMsg); ok {
+		return m, m.section.Update(bubbleMsg.KeyMsg)
+	}
 	cmd := m.section.Update(msg)
 	return m, cmd
 }

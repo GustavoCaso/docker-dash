@@ -704,6 +704,123 @@ func TestArrowKeysStayInContainersWhenLogsPanelFocused(t *testing.T) {
 	}
 }
 
+// collectStaggerMsgs runs a command tree and returns every staggeredRefreshMsg
+// it produces. Tick commands block until their boundary (staggerRefreshDelay),
+// so callers pay real time per chain link.
+func collectStaggerMsgs(cmd tea.Cmd) []staggeredRefreshMsg {
+	if cmd == nil {
+		return nil
+	}
+	switch msg := cmd().(type) {
+	case tea.BatchMsg:
+		var out []staggeredRefreshMsg
+		for _, c := range msg {
+			out = append(out, collectStaggerMsgs(c)...)
+		}
+		return out
+	case staggeredRefreshMsg:
+		return []staggeredRefreshMsg{msg}
+	default:
+		return nil
+	}
+}
+
+func newStaggerTestModel(t *testing.T) *model {
+	t.Helper()
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	if !ok {
+		t.Fatal("New should return *model")
+	}
+	appModel.Update(tea.WindowSizeMsg{Width: 300, Height: 100})
+	return appModel
+}
+
+func TestForwardMessageStaggeredStartsNewGeneration(t *testing.T) {
+	appModel := newStaggerTestModel(t)
+
+	_, cmd := appModel.forwardMessageStaggered(tea.KeyPressMsg{Code: 'r', Text: "r"})
+
+	if appModel.refreshGeneration != 1 {
+		t.Fatalf("refreshGeneration = %d, want 1", appModel.refreshGeneration)
+	}
+
+	msgs := collectStaggerMsgs(cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("got %d staggeredRefreshMsg, want 1", len(msgs))
+	}
+	tick := msgs[0]
+	if tick.generation != 1 {
+		t.Errorf("tick generation = %d, want 1", tick.generation)
+	}
+	wantPending := len(appModel.allSections()) - 1
+	if len(tick.pending) != wantPending {
+		t.Errorf("pending sections = %d, want %d", len(tick.pending), wantPending)
+	}
+	active := appModel.activeSection()
+	for _, section := range tick.pending {
+		if section == active {
+			t.Error("active section should not be in pending; it refreshes immediately")
+		}
+	}
+}
+
+func TestStaggeredRefreshChainAdvances(t *testing.T) {
+	appModel := newStaggerTestModel(t)
+
+	_, cmd := appModel.forwardMessageStaggered(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	msgs := collectStaggerMsgs(cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("got %d staggeredRefreshMsg, want 1", len(msgs))
+	}
+
+	// Feed ticks back into Update until the chain ends; each link must drop
+	// exactly one pending section and keep the same generation.
+	tick := msgs[0]
+	for len(tick.pending) > 1 {
+		_, nextCmd := appModel.Update(tick)
+		next := collectStaggerMsgs(nextCmd)
+		if len(next) != 1 {
+			t.Fatalf("with %d pending sections: got %d follow-up ticks, want 1", len(tick.pending), len(next))
+		}
+		if len(next[0].pending) != len(tick.pending)-1 {
+			t.Fatalf("follow-up tick pending = %d, want %d", len(next[0].pending), len(tick.pending)-1)
+		}
+		if next[0].generation != tick.generation {
+			t.Fatalf("follow-up tick generation = %d, want %d", next[0].generation, tick.generation)
+		}
+		tick = next[0]
+	}
+
+	// Last pending section: no further tick scheduled.
+	_, lastCmd := appModel.Update(tick)
+	if extra := collectStaggerMsgs(lastCmd); len(extra) != 0 {
+		t.Fatalf("chain should end after last pending section, got %d extra ticks", len(extra))
+	}
+}
+
+func TestStaggeredRefreshDropsSupersededChain(t *testing.T) {
+	appModel := newStaggerTestModel(t)
+
+	_, firstCmd := appModel.forwardMessageStaggered(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	firstTicks := collectStaggerMsgs(firstCmd)
+	if len(firstTicks) != 1 {
+		t.Fatalf("got %d staggeredRefreshMsg, want 1", len(firstTicks))
+	}
+
+	// Second broadcast supersedes the first chain.
+	appModel.forwardMessageStaggered(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	if appModel.refreshGeneration != 2 {
+		t.Fatalf("refreshGeneration = %d, want 2", appModel.refreshGeneration)
+	}
+
+	// A tick from the superseded chain must be dropped: no section update, no
+	// follow-up tick scheduled.
+	_, cmd := appModel.Update(firstTicks[0])
+	if cmd != nil {
+		t.Fatal("stale-generation tick should produce no command")
+	}
+}
+
 func waitForString(t *testing.T, tm *teatest.TestModel, s string) {
 	t.Helper()
 	teatest.WaitFor(
