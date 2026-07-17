@@ -51,6 +51,20 @@ type clearBannerMsg struct{}
 // autoRefreshMsg is sent periodically to refresh all views when a refresh interval is configured.
 type autoRefreshMsg struct{}
 
+// staggerRefreshDelay spaces out section refreshes so a broadcast does not hit
+// the Docker daemon with all section list calls at once.
+const staggerRefreshDelay = 200 * time.Millisecond
+
+// staggeredRefreshMsg carries a broadcast message to the remaining sections,
+// delivering it to one section per tick. generation ties the tick to the
+// broadcast that started it; ticks from a superseded broadcast are dropped so
+// overlapping broadcasts never run parallel chains.
+type staggeredRefreshMsg struct {
+	msg        tea.Msg
+	pending    []sections.Section
+	generation uint64
+}
+
 var (
 	bannerSuccessStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("229")).
@@ -94,6 +108,9 @@ type model struct {
 	systemInfo       systeminfo.Model
 	showSystemInfo   bool
 	refreshInterval  time.Duration
+	// refreshGeneration identifies the latest broadcast refresh; staggered
+	// ticks from older broadcasts are dropped (see staggeredRefreshMsg).
+	refreshGeneration uint64
 }
 
 type spinnerRequest struct {
@@ -206,6 +223,25 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	m.updateContextualMenu(msg)
+
+	// Handle staggered refresh ticks before the form/filter/overlay guards so
+	// the refresh chain is never swallowed while one of them is active.
+	if staggerMsg, ok := msg.(staggeredRefreshMsg); ok {
+		if staggerMsg.generation != m.refreshGeneration {
+			log.Printf(
+				"[app] staggeredRefreshMsg: dropping superseded chain gen=%d current=%d",
+				staggerMsg.generation,
+				m.refreshGeneration,
+			)
+			return m, tea.Batch(cmds...)
+		}
+		log.Printf("[app] staggeredRefreshMsg: gen=%d pending=%d", staggerMsg.generation, len(staggerMsg.pending))
+		cmds = append(cmds, staggerMsg.pending[0].Update(staggerMsg.msg))
+		if len(staggerMsg.pending) > 1 {
+			cmds = append(cmds, staggerRefreshTick(staggerMsg.msg, staggerMsg.pending[1:], staggerMsg.generation))
+		}
+		return m, tea.Batch(cmds...)
+	}
 
 	if m.showForm {
 		if _, ok := msg.(tea.WindowSizeMsg); !ok {
@@ -351,7 +387,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			return model, tea.Batch(cmds...)
 		}
-		model, cmd := m.forwardMessageToAll(msg.KeyMsg)
+		model, cmd := m.forwardMessageStaggered(msg.KeyMsg)
 		cmds = append(cmds, cmd)
 		return model, tea.Batch(cmds...)
 
@@ -363,7 +399,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case autoRefreshMsg:
 		log.Printf("[app] autoRefreshMsg")
-		_, cmd := m.forwardMessageToAll(tea.KeyPressMsg{Code: 'r', Text: "r"})
+		_, cmd := m.forwardMessageStaggered(tea.KeyPressMsg{Code: 'r', Text: "r"})
 		cmds = append(cmds, cmd, tea.Tick(m.refreshInterval, func(_ time.Time) tea.Msg {
 			return autoRefreshMsg{}
 		}))
@@ -402,7 +438,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 			return model, tea.Batch(cmds...)
 		case key.Matches(msg, m.keys.RefreshAll):
-			model, cmd := m.forwardMessageToAll(tea.KeyPressMsg{
+			model, cmd := m.forwardMessageStaggered(tea.KeyPressMsg{
 				Code: 'r',
 				Text: "r",
 			})
@@ -641,14 +677,49 @@ func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) forwardMessageToAll(msg tea.Msg) (tea.Model, tea.Cmd) {
-	cmds := []tea.Cmd{
-		m.containerSection.Update(msg),
-		m.imageSection.Update(msg),
-		m.volumeSection.Update(msg),
-		m.networkSection.Update(msg),
-		m.composeSection.Update(msg),
+	cmds := make([]tea.Cmd, 0, len(m.allSections()))
+	for _, section := range m.allSections() {
+		cmds = append(cmds, section.Update(msg))
 	}
 	return m, tea.Batch(cmds...)
+}
+
+// forwardMessageStaggered delivers msg to the active section immediately and
+// to the remaining sections one at a time, staggerRefreshDelay apart, to avoid
+// hammering the Docker daemon with simultaneous refreshes. Each call starts a
+// new generation, superseding any chain still in flight so overlapping
+// broadcasts coalesce into the newest one.
+func (m *model) forwardMessageStaggered(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.refreshGeneration++
+	active := m.activeSection()
+	cmds := []tea.Cmd{active.Update(msg)}
+
+	var pending []sections.Section
+	for _, section := range m.allSections() {
+		if section != active {
+			pending = append(pending, section)
+		}
+	}
+	if len(pending) > 0 {
+		cmds = append(cmds, staggerRefreshTick(msg, pending, m.refreshGeneration))
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func staggerRefreshTick(msg tea.Msg, pending []sections.Section, generation uint64) tea.Cmd {
+	return tea.Tick(staggerRefreshDelay, func(_ time.Time) tea.Msg {
+		return staggeredRefreshMsg{msg: msg, pending: pending, generation: generation}
+	})
+}
+
+func (m *model) allSections() []sections.Section {
+	return []sections.Section{
+		m.containerSection,
+		m.imageSection,
+		m.volumeSection,
+		m.networkSection,
+		m.composeSection,
+	}
 }
 
 func (m *model) activeSection() sections.Section {

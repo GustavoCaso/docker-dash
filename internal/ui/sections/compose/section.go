@@ -121,16 +121,14 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 		}
 
 		return base.UpdateResult{
-			Cmd: tea.Batch(
-				s.updateComposeCmd(),
-				func() tea.Msg {
-					return message.ShowBannerMsg{
-						Message: fmt.Sprintf("Compose project %s %s", msg.project.Name, msg.action),
-						IsError: false,
-					}
-				},
-			),
-			Handled: true,
+			Cmd: func() tea.Msg {
+				return message.ShowBannerMsg{
+					Message: fmt.Sprintf("Compose project %s %s", msg.project.Name, msg.action),
+					IsError: false,
+				}
+			},
+			Handled:            true,
+			RefreshAllSections: true,
 		}
 	}
 

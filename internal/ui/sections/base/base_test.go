@@ -561,3 +561,71 @@ func TestUpdateItemsEmptyResetsSection(t *testing.T) {
 		t.Errorf("cmds[1] (Reset/Close) should be nil for fakePanel, got non-nil")
 	}
 }
+
+// collectMsgs runs a command tree (following tea.BatchMsg) and returns every
+// message it produces.
+func collectMsgs(cmd tea.Cmd) []tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	msg := cmd()
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		var out []tea.Msg
+		for _, c := range batch {
+			out = append(out, collectMsgs(c)...)
+		}
+		return out
+	}
+	return []tea.Msg{msg}
+}
+
+func findBubbleUpMsg(t *testing.T, msgs []tea.Msg) (message.BubbleUpMsg, bool) {
+	t.Helper()
+	for _, msg := range msgs {
+		if bubble, ok := msg.(message.BubbleUpMsg); ok {
+			return bubble, true
+		}
+	}
+	return message.BubbleUpMsg{}, false
+}
+
+type fakeActionMsg struct{}
+
+func TestRefreshAllSectionsEmitsBroadcastRefresh(t *testing.T) {
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
+	section.HandleMsg = func(msg tea.Msg) UpdateResult {
+		if _, ok := msg.(fakeActionMsg); ok {
+			return UpdateResult{Handled: true, RefreshAllSections: true}
+		}
+		return UpdateResult{}
+	}
+
+	msgs := collectMsgs(section.Update(fakeActionMsg{}))
+
+	bubble, found := findBubbleUpMsg(t, msgs)
+	if !found {
+		t.Fatal("RefreshAllSections should emit a BubbleUpMsg")
+	}
+	if bubble.OnlyActive {
+		t.Error("broadcast refresh must target all sections, got OnlyActive=true")
+	}
+	if bubble.KeyMsg.Text != "r" {
+		t.Errorf("BubbleUpMsg key = %q, want %q (refresh)", bubble.KeyMsg.Text, "r")
+	}
+}
+
+func TestHandledResultWithoutRefreshAllSectionsDoesNotBroadcast(t *testing.T) {
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
+	section.HandleMsg = func(msg tea.Msg) UpdateResult {
+		if _, ok := msg.(fakeActionMsg); ok {
+			return UpdateResult{Handled: true}
+		}
+		return UpdateResult{}
+	}
+
+	msgs := collectMsgs(section.Update(fakeActionMsg{}))
+
+	if _, found := findBubbleUpMsg(t, msgs); found {
+		t.Error("BubbleUpMsg should not be emitted when RefreshAllSections is false")
+	}
+}

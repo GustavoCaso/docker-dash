@@ -298,16 +298,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 				IsError: false,
 			}
 		}
-		refreshComponents := func() tea.Msg {
-			return message.BubbleUpMsg{
-				KeyMsg:     tea.KeyPressMsg{Code: 'r', Text: "r"},
-				OnlyActive: false,
-			}
-		}
 		return base.UpdateResult{
-			Cmd:         tea.Batch(banner, refreshComponents),
-			Handled:     true,
-			StopSpinner: true,
+			Cmd:                banner,
+			RefreshAllSections: true,
+			Handled:            true,
+			StopSpinner:        true,
 		}
 	}
 	return base.UpdateResult{}

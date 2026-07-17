@@ -64,10 +64,11 @@ type Section struct {
 
 // UpdateResult describes the outcome of a section-specific handler.
 type UpdateResult struct {
-	Cmd          tea.Cmd
-	Handled      bool
-	StartSpinner bool
-	StopSpinner  bool
+	Cmd                tea.Cmd
+	Handled            bool
+	StartSpinner       bool
+	StopSpinner        bool
+	RefreshAllSections bool
 }
 
 type focusTarget int
@@ -433,6 +434,15 @@ func (b *Section) cancelSpinnerCmd() tea.Cmd {
 	}
 }
 
+func (b *Section) refreshAllSectionsCmd() tea.Cmd {
+	return func() tea.Msg {
+		return message.BubbleUpMsg{
+			KeyMsg:     tea.KeyPressMsg{Code: 'r', Text: "r"},
+			OnlyActive: false,
+		}
+	}
+}
+
 // WithSpinner starts the section spinner before running cmd.
 func (b *Section) WithSpinner(cmd tea.Cmd) tea.Cmd {
 	if cmd == nil {
@@ -441,7 +451,7 @@ func (b *Section) WithSpinner(cmd tea.Cmd) tea.Cmd {
 	return tea.Batch(b.showSpinnerCmd(), cmd)
 }
 
-const maxUpdateCommands = 3
+const maxUpdateCommands = 4
 
 func (b *Section) applyUpdateResult(result UpdateResult) tea.Cmd {
 	cmds := make([]tea.Cmd, 0, maxUpdateCommands)
@@ -452,6 +462,10 @@ func (b *Section) applyUpdateResult(result UpdateResult) tea.Cmd {
 	if result.StopSpinner {
 		cmds = append(cmds, b.cancelSpinnerCmd())
 	}
+	if result.RefreshAllSections {
+		cmds = append(cmds, b.refreshAllSectionsCmd())
+	}
+
 	return tea.Batch(cmds...)
 }
 

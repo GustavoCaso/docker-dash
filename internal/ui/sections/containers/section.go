@@ -143,10 +143,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			helper.FormatSize(msg.report.SpaceReclaimed),
 		)
 		return base.UpdateResult{
-			Cmd: tea.Batch(s.updateContainersCmd(), func() tea.Msg {
+			Cmd: func() tea.Msg {
 				return message.ShowBannerMsg{Message: summary, IsError: false}
-			}),
-			Handled: true,
+			},
+			Handled:            true,
+			RefreshAllSections: true,
 		}
 	case containerActionMsg:
 		log.Printf(
@@ -168,15 +169,8 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			}
 		}
 		var cmds []tea.Cmd
-		stopSpinner := true
 		if msg.Action == "deleting" {
 			cmds = append(cmds, s.RemoveItemAndUpdatePanel(msg.Idx))
-		}
-		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" ||
-			msg.Action == "pausing" ||
-			msg.Action == "unpausing" || msg.Action == "terminating" {
-			cmds = append(cmds, s.updateContainersCmd())
-			stopSpinner = false
 		}
 		return base.UpdateResult{
 			Cmd: tea.Batch(append(cmds, func() tea.Msg {
@@ -185,8 +179,11 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 					IsError: false,
 				}
 			})...),
-			Handled:     true,
-			StopSpinner: stopSpinner,
+			Handled: true,
+			// The broadcast refresh triggered by RefreshAllSections reloads this
+			// section too; its containersLoadedMsg stops the spinner.
+			StopSpinner:        false,
+			RefreshAllSections: true,
 		}
 	case execCloseMsg:
 		log.Printf("[containers] execCloseMsg")
