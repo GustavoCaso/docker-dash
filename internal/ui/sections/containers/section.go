@@ -169,16 +169,8 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 			}
 		}
 		var cmds []tea.Cmd
-		stopSpinner := true
 		if msg.Action == "deleting" {
 			cmds = append(cmds, s.RemoveItemAndUpdatePanel(msg.Idx))
-		}
-		if msg.Action == "starting" || msg.Action == "stopping" || msg.Action == "restarting" ||
-			msg.Action == "pausing" ||
-			msg.Action == "unpausing" || msg.Action == "terminating" {
-			// The broadcast refresh triggered by RefreshAllSections reloads this
-			// section too; its containersLoadedMsg stops the spinner.
-			stopSpinner = false
 		}
 		return base.UpdateResult{
 			Cmd: tea.Batch(append(cmds, func() tea.Msg {
@@ -187,8 +179,10 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 					IsError: false,
 				}
 			})...),
-			Handled:            true,
-			StopSpinner:        stopSpinner,
+			Handled: true,
+			// The broadcast refresh triggered by RefreshAllSections reloads this
+			// section too; its containersLoadedMsg stops the spinner.
+			StopSpinner:        false,
 			RefreshAllSections: true,
 		}
 	case execCloseMsg:
