@@ -60,6 +60,7 @@ changelog:
       - Merge remote-tracking branch
       - Merge branch
       - go mod tidy
+      - Bump
 
 homebrew_casks:
   - name: docker-dash
