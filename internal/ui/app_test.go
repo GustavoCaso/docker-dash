@@ -24,7 +24,7 @@ func TestImageListRendersItems(t *testing.T) {
 	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "nginx")
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -35,7 +35,7 @@ func TestImageListLayersVisible(t *testing.T) {
 	// We fetch the layers of the second image
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
 	waitForString(t, tm, "ADD file:eb15dbd6")
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -52,7 +52,7 @@ func TestImagePruneCommand(t *testing.T) {
 		return !strings.Contains(s, "<none>:<none>")
 	})
 	waitForString(t, tm, "nginx") // used images remain
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -72,7 +72,7 @@ func TestImageUpdateInterval(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	waitForString(t, tm, "⬆")
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -93,7 +93,7 @@ func TestContainerListLogsPanel(t *testing.T) {
 
 	waitForString(t, tm, "Starting application")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -123,7 +123,7 @@ func TestExecPanel(t *testing.T) {
 	// Wait for the exec input prompt to appear
 	waitForString(t, tm, "$")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -137,7 +137,7 @@ func TestContainerListDetailsVisible(t *testing.T) {
 	// Select a container - details panel is always shown (it's the default panel)
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
 	waitForString(t, tm, "Container:")
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -159,7 +159,7 @@ func TestContainerListStatsShowsLabels(t *testing.T) {
 		s := string(b)
 		return strings.Contains(s, "NET") && strings.Contains(s, "I/O")
 	}, teatest.WithCheckInterval(time.Millisecond*100), teatest.WithDuration(time.Second*3))
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -174,7 +174,7 @@ func TestSwitchingSectionResetActiveView(t *testing.T) {
 	waitFor(t, tm, func(b []byte) bool {
 		return !strings.Contains(string(b), "old-container")
 	})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -195,7 +195,7 @@ func TestContainerListPrune(t *testing.T) {
 		return !strings.Contains(s, "old-container")
 	})
 	waitForString(t, tm, "nginx-proxy") // running containers remain
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -217,7 +217,7 @@ func TestContainerListRestartConfirmationModal(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'n', Text: "n"})
 	waitForString(t, tm, "nginx-proxy")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -241,7 +241,7 @@ func TestContainerFilesPanelShowsEntries(t *testing.T) {
 		return strings.Contains(s, "etc") && strings.Contains(s, "nginx.conf")
 	})
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -262,7 +262,7 @@ func TestVolumesView(t *testing.T) {
 	waitForString(t, tm, "postgres_data")
 
 	// Quit
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -279,7 +279,7 @@ func TestSwitchingSectionSetNetworksActiveView(t *testing.T) {
 		s := string(b)
 		return strings.Contains(s, "bridge") && strings.Contains(s, "abc123def456")
 	})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -301,7 +301,7 @@ func TestNetworkListDelete(t *testing.T) {
 	})
 	tm.Send(tea.KeyPressMsg{Code: 'y', Text: "y"}) // confirm delete command
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -331,7 +331,7 @@ func TestVolumeListDelete(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	waitForString(t, tm, "deleted")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -354,7 +354,7 @@ func TestVolumePruneCommand(t *testing.T) {
 	})
 	waitForString(t, tm, "postgres_data") // in-use volumes remain
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -372,7 +372,7 @@ func TestComposeSectionVisible(t *testing.T) {
 
 	waitForString(t, tm, "web-app")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -386,7 +386,7 @@ func TestAutoRefreshInvalidInterval(t *testing.T) {
 	// Invalid interval should surface as an error banner
 	waitForString(t, tm, "Invalid refresh interval")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -400,7 +400,7 @@ func TestAutoRefreshValidInterval(t *testing.T) {
 	// UI should still render normally with a valid interval configured
 	waitForString(t, tm, "Images")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -423,7 +423,7 @@ func TestConfirmationModalAppearsOnDelete(t *testing.T) {
 
 	// Dismiss the modal before quitting — 'q' is swallowed by the modal.
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -441,7 +441,7 @@ func TestConfirmationModalDismissedOnN(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'n', Text: "n"})
 	waitForString(t, tm, "nginx")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -459,7 +459,7 @@ func TestConfirmationModalDismissedOnEsc(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	waitForString(t, tm, "nginx")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -477,7 +477,7 @@ func TestConfirmationModalConfirmDeletesImage(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	waitForString(t, tm, "deleted")
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -617,7 +617,7 @@ func TestFilterModeBlocksGlobalShortcuts(t *testing.T) {
 
 	// Exit filter mode with Esc, then quit normally.
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 

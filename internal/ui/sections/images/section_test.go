@@ -143,7 +143,7 @@ func TestImageReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd")
 	}
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -155,7 +155,7 @@ func TestImageListDelete(t *testing.T) {
 	// Delete selected image
 	tm.Send(tea.KeyPressMsg{Code: 'd', Text: "d"})
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
@@ -199,7 +199,7 @@ func TestImageListPrune(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
 	time.Sleep(500 * time.Millisecond)
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 

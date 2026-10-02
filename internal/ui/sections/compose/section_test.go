@@ -75,7 +75,7 @@ func TestComposeReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd for compose section")
 	}
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -94,7 +94,7 @@ func TestComposeRefresh(t *testing.T) {
 		t.Error("expected View() to still contain 'web-app' after refresh")
 	}
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
