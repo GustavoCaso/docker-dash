@@ -451,7 +451,7 @@ func (s *mockContainerService) Logs(ctx context.Context, id string, opts LogOpti
 	return NewLogsSession(io.NopCloser(pr), func() {}), nil
 }
 
-func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
+func (s *mockContainerService) Exec(ctx context.Context, id string, width, height uint) (*ExecSession, error) {
 	for _, c := range s.containers {
 		if c.ID == id || c.Name == id {
 			if c.State != StateRunning {
@@ -461,6 +461,7 @@ func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSessio
 			pr, pw := io.Pipe()
 
 			return NewExecSession(
+				"43242dsabda",
 				pr,
 				&mockExecWriter{pw: pw},
 				func() {
@@ -471,6 +472,11 @@ func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSessio
 		}
 	}
 	return nil, fmt.Errorf("container not found: %s", id)
+}
+
+// TODO: complete mock of execresize.
+func (s *mockContainerService) ExecResize(ctx context.Context, execID string, width, height uint) error {
+	return nil
 }
 
 // mockStatsJSON is a single Docker stats response frame used by the mock.
