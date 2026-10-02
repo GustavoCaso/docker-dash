@@ -71,7 +71,7 @@ func TestContainerReset(t *testing.T) {
 		t.Error("Reset() should return non-nil cmd when activePanel was set")
 	}
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -83,7 +83,7 @@ func TestContainerListStartStop(t *testing.T) {
 		tea.KeyPressMsg{Code: 's', Text: "s"},
 	) // We stop the container with id "abc123def456" or the first container
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
 	m, ok := fm.(containerSectionModel)
@@ -116,7 +116,7 @@ func TestContainerListDelete(t *testing.T) {
 	// Delete
 	tm.Send(tea.KeyPressMsg{Code: 'D', Text: "D"})
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
@@ -193,7 +193,7 @@ func TestContainerPauseUnpause(t *testing.T) {
 		tea.KeyPressMsg{Code: 'p', Text: "p"},
 	) // We pause the container with id "abc123def456" or the first container
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
 	m, ok := fm.(containerSectionModel)
@@ -225,7 +225,7 @@ func TestContainerKill(t *testing.T) {
 		tea.KeyPressMsg{Code: 'K', Text: "K"},
 	) // We kill the container with id "abc123def456" or the first container
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 	m, ok := fm.(containerSectionModel)
 	if !ok {
@@ -295,7 +295,7 @@ func TestContainerRestart(t *testing.T) {
 
 	tm.Send(tea.KeyPressMsg{Code: 'R', Text: "R"})
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
 	m, ok := fm.(containerSectionModel)

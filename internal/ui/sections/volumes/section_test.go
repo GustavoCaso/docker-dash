@@ -57,7 +57,7 @@ func TestVolumeReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd")
 	}
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -67,7 +67,7 @@ func TestVolumeListPrune(t *testing.T) {
 
 	// Wait for the post-prune reload to settle, then quit and inspect model state.
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
 	m, ok := fm.(volumeSectionModel)
@@ -111,7 +111,7 @@ func TestVolumeDelete(t *testing.T) {
 	// Delete key for volumes is 'd'
 	tm.Send(tea.KeyPressMsg{Code: 'd', Text: "d"})
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 

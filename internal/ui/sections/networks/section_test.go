@@ -58,7 +58,7 @@ func TestNetworkReset(t *testing.T) {
 		t.Error("Reset() should return nil cmd")
 	}
 
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }
 
@@ -68,7 +68,7 @@ func TestNetworkPrune(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
 	time.Sleep(500 * time.Millisecond)
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyDown})
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 
@@ -101,7 +101,7 @@ func TestNetworkDelete(t *testing.T) {
 	// Delete first network with ID abc123def456abc1
 	tm.Send(tea.KeyPressMsg{Code: 'D', Text: "D"})
 	time.Sleep(500 * time.Millisecond)
-	tm.Send(tea.KeyPressMsg{Code: 'q', Text: "q"})
+	tm.Quit()
 
 	fm := tm.FinalModel(t, teatest.WithFinalTimeout(time.Second))
 

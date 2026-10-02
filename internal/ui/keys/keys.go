@@ -69,7 +69,7 @@ var panelNavigation = key.NewBinding(
 )
 
 func (k *KeyMap) navigationKeys() []key.Binding {
-	return []key.Binding{navigation, focus, panelNavigation, k.Filter}
+	return []key.Binding{navigation, focus, panelNavigation, k.Filter, k.Quit}
 }
 
 var Keys = &KeyMap{
@@ -218,8 +218,8 @@ var Keys = &KeyMap{
 		key.WithHelp("?", "help"),
 	),
 	Quit: key.NewBinding(
-		key.WithKeys("q", "ctrl+c"),
-		key.WithHelp("q", "quit"),
+		key.WithKeys("ctrl+c"),
+		key.WithHelp("ctrl+c", "quit"),
 	),
 }
 
