@@ -162,8 +162,9 @@ Press `?` in the app to see the full keymap. The most commonly used bindings are
 | `y` | Copy ID to clipboard |
 | `/` | Filter |
 | `r / ctrl+r` | Refresh current view / refresh all |
+| `ctrl+]` | Exit Container Exec panel |
 | `?` | Toggle help |
-| `q` | Quit |
+| `q`/ `ctrl+c` | Quit |
 
 When focus is on the panels the navigations keys `←→↑↓` are redirected to the panel. If you want to change sections you need to swicth the focus back to the lits using the `tab`
 
