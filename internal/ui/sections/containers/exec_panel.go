@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
+	"sync"
 
 	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/textinput"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/taigrr/bubbleterm"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
@@ -21,41 +23,60 @@ import (
 
 var noStyle = lipgloss.NewStyle()
 
-// execOutputMsg is sent when exec output is received from the background reader.
+var cursorStyle = lipgloss.NewStyle().Reverse(true)
+
+const (
+	defaultVtWidth  = 120
+	defaultVtHeight = 30
+	minimumVpWidth  = 30
+	minimumVpHeight = 10
+)
+
+// execOutputMsg reports an exec session error.
 type execOutputMsg struct {
-	output string
-	err    error
+	err error
 }
 
 type execSessionStartedMsg struct {
 	session *client.ExecSession
 }
 
-type execCloseMsg struct{}
+// execCloseMsg is sent when the remote shell's output stream ends. It carries
+// the session so a stale message from a replaced session is ignored.
+type execCloseMsg struct {
+	session *client.ExecSession
+}
 
+// eofReader wraps the exec reader so the panel learns when the shell exits;
+// bubbleterm's pipe read loop stops silently on EOF.
+type eofReader struct {
+	r    io.Reader
+	once sync.Once
+	done chan struct{}
+}
+
+func (e *eofReader) Read(p []byte) (int, error) {
+	n, err := e.r.Read(p)
+	if err != nil {
+		e.once.Do(func() { close(e.done) })
+	}
+	return n, err
+}
+
+// execPanel runs an interactive shell inside the container, rendered by the
+// bubbleterm terminal emulator. While focused with a live session it captures
+// all keyboard input (see sections.InputCapturer).
 type execPanel struct {
-	ctx        context.Context
-	service    client.ContainerService
-	session    *client.ExecSession
-	viewport   viewport.Model
-	input      textinput.Model
-	output     string
-	history    []string
-	historyIdx int
-	width      int
+	ctx     context.Context
+	service client.ContainerService
+	session *client.ExecSession
+	term    *bubbleterm.Model
+	width   int
+	height  int
 }
 
 func NewExecPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
-	ti := textinput.New()
-	ti.Prompt = "$ "
-	vp := viewport.New()
-	return &execPanel{
-		ctx:      ctx,
-		service:  svc,
-		input:    ti,
-		viewport: vp,
-		history:  []string{},
-	}
+	return &execPanel{ctx: ctx, service: svc}
 }
 
 func (e *execPanel) Init(item sections.ListItem) tea.Cmd {
@@ -73,145 +94,185 @@ func (e *execPanel) Init(item sections.ListItem) tea.Cmd {
 	}
 
 	log.Printf("[containers][exec-panel] Init: containerID=%q", item.ID())
-	e.output = ""
-	e.history = []string{}
-	e.historyIdx = 0
-	e.input.Focus()
-	return tea.Batch(
-		textinput.Blink,
-		e.startSession(container),
-		e.extendHelpCmd(),
-	)
+	return tea.Batch(e.startSession(container), e.extendHelpCmd())
 }
 
 func (e *execPanel) Name() string {
 	return "Exec"
 }
 
-func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
-	var viewportCmd tea.Cmd
+// ownsSession reports whether session is the panel's current session.
+func (e *execPanel) ownsSession(session *client.ExecSession) bool {
+	return session != nil && e.session == session
+}
 
+// CapturesInput implements sections.InputCapturer.
+func (e *execPanel) CapturesInput() bool {
+	return e.term != nil
+}
+
+func (e *execPanel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case execSessionStartedMsg:
-		log.Printf("[containers][exec-panel] session started")
-		e.session = msg.session
-		return e.readOutput()
+		return e.attach(msg.session)
 	case execOutputMsg:
 		if msg.err != nil {
-			return tea.Batch(e.Close(), func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: fmt.Sprintf("Exec session error. Err: %s", msg.err),
-					IsError: true,
-				}
-			})
+			return e.fail(msg.err)
 		}
-		log.Printf("[containers][exec-panel] output chunk: bytes=%d", len(msg.output))
-		e.output += msg.output
-		e.viewport.SetContent(noStyle.Width(e.width).Render(e.output))
-		e.viewport.GotoBottom()
-		return e.readOutput()
-	case tea.KeyPressMsg:
-		return e.handleKeyInput(msg)
-	default:
-		// Mouse Scroll messages
-		e.viewport, viewportCmd = e.viewport.Update(msg)
+		return nil
+	case tea.WindowSizeMsg:
+		return e.execResize(e.width, e.height)
+	case tea.MouseMsg:
+		// bubbleterm forwards raw screen coordinates; the panel sits at an
+		// offset inside the split layout, so mouse events would be misplaced.
+		return nil
 	}
 
-	// Forward blinking cursor ticks to the text input.
-	var inputCmd tea.Cmd
-	e.input, inputCmd = e.input.Update(msg)
-	return tea.Batch([]tea.Cmd{inputCmd, viewportCmd}...)
+	if e.term == nil {
+		return nil
+	}
+
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		return e.sendKey(msg)
+	case tea.PasteMsg:
+		// bubbleterm ignores paste events.
+		if err := e.term.GetEmulator().SendKey(msg.Content); err != nil {
+			return e.fail(err)
+		}
+		return nil
+	}
+
+	_, cmd := e.term.Update(msg)
+	return cmd
+}
+
+// sendKey writes a key press to the shell synchronously. bubbleterm returns the
+// write as a tea.Cmd, and Bubble Tea runs each Cmd in its own goroutine, so
+// keystrokes would otherwise reach the shell out of order.
+func (e *execPanel) sendKey(msg tea.KeyPressMsg) tea.Cmd {
+	_, cmd := e.term.Update(msg)
+	if cmd == nil {
+		return nil
+	}
+	if result := cmd(); result != nil {
+		return func() tea.Msg { return result }
+	}
+	return nil
 }
 
 func (e *execPanel) View() string {
-	return lipgloss.JoinVertical(lipgloss.Left, e.viewport.View(), e.input.View())
+	if e.term == nil {
+		return ""
+	}
+	return e.renderCursor(e.term.View().Content)
+}
+
+// renderCursor draws the emulator cursor as a reverse-video cell; bubbleterm
+// renders screen contents only.
+func (e *execPanel) renderCursor(content string) string {
+	pos, visible := e.term.GetEmulator().Cursor()
+	if !visible {
+		return content
+	}
+	rows := strings.Split(content, "\n")
+	if pos.Y < 0 || pos.Y >= len(rows) || pos.X < 0 {
+		return content
+	}
+	row := rows[pos.Y]
+	if pos.X >= ansi.StringWidth(row) {
+		return content
+	}
+	cell := ansi.Strip(ansi.Cut(row, pos.X, pos.X+1))
+	if cell == "" {
+		cell = " "
+	}
+	rows[pos.Y] = ansi.Truncate(row, pos.X, "") + cursorStyle.Render(cell) + ansi.TruncateLeft(row, pos.X+1, "")
+	return strings.Join(rows, "\n")
 }
 
 func (e *execPanel) Close() tea.Cmd {
 	log.Printf("[containers][exec-panel] closing session")
-	e.input.Blur()
+	if e.term != nil {
+		_ = e.term.Close()
+		e.term = nil
+	}
 	if e.session != nil {
 		e.session.Close()
 		e.session = nil
 	}
-	e.output = ""
-	e.history = []string{}
-	e.historyIdx = 0
-	e.viewport.SetContent("")
-
 	return func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} }
 }
 
 func (e *execPanel) SetSize(width, height int) {
 	e.width = width
-	e.viewport.SetWidth(width)
-	e.viewport.SetHeight(height - 1) // reserve 1 line for input
+	e.height = height
+	if e.term != nil {
+		// Resize synchronously; SetSize cannot return a Cmd.
+		_ = e.term.GetEmulator().Resize(max(width, 1), max(height, 1))
+	}
 }
 
-func (e *execPanel) handleKeyInput(msg tea.KeyPressMsg) tea.Cmd {
-	switch {
-	case key.Matches(msg, keys.Keys.Enter):
-		if e.session == nil {
-			return nil
+func (e *execPanel) attach(session *client.ExecSession) tea.Cmd {
+	log.Printf("[containers][exec-panel] session started")
+	if e.term != nil {
+		_ = e.term.Close()
+	}
+	e.session = session
+	done := make(chan struct{})
+	reader := &eofReader{r: session.Reader, done: done}
+
+	writer := newQueuedWriter(session.Writer)
+	term, err := bubbleterm.NewWithPipes(max(e.width, 1), max(e.height, 1), reader, writer)
+	if err != nil {
+		return e.fail(err)
+	}
+	e.term = term
+
+	return tea.Batch(
+		term.Init(),
+		e.execResize(e.width, e.height),
+		func() tea.Msg {
+			<-done
+			return execCloseMsg{session: session}
+		},
+	)
+}
+
+func (e *execPanel) fail(err error) tea.Cmd {
+	return tea.Batch(e.Close(), func() tea.Msg {
+		return message.ShowBannerMsg{
+			Message: fmt.Sprintf("Exec session error. Err: %s", err),
+			IsError: true,
 		}
-		cmd := e.input.Value()
-		if cmd == "" {
-			return nil
-		}
-		if strings.TrimSpace(cmd) == "clear" {
-			e.input.Reset()
-			e.output = ""
-			e.viewport.SetContent("")
-			return nil
-		}
-		log.Printf("[containers][exec-panel] executing command: %q", cmd)
-		e.history = append(e.history, cmd)
-		e.historyIdx = len(e.history)
-		e.input.Reset()
-		_, err := e.session.Writer.Write([]byte(cmd + "\n"))
-		if err != nil {
-			return func() tea.Msg {
-				return message.ShowBannerMsg{Message: "Exec write failed", IsError: true}
-			}
+	})
+}
+
+func (e *execPanel) execResize(width, height int) tea.Cmd {
+	if e.session == nil {
+		return nil
+	}
+	svc := e.service
+	execID := e.session.ID
+	ctx := e.ctx
+
+	vpWidth := uint(max(width, minimumVpWidth))
+	vpHeight := uint(max(height, minimumVpHeight))
+
+	return func() tea.Msg {
+		if err := svc.ExecResize(ctx, execID, vpWidth, vpHeight); err != nil {
+			return execOutputMsg{err: err}
 		}
 		return nil
-	case key.Matches(msg, keys.Keys.Up):
-		if len(e.history) == 0 {
-			return nil
-		}
-		switch {
-		case e.historyIdx > 0:
-			e.historyIdx--
-		case e.historyIdx == len(e.history):
-			e.historyIdx = len(e.history) - 1
-		default:
-			return nil
-		}
-		e.input.SetValue(e.history[e.historyIdx])
-		return nil
-	case key.Matches(msg, keys.Keys.Down):
-		if len(e.history) == 0 || e.historyIdx == len(e.history) {
-			return nil
-		}
-		e.historyIdx++
-		if e.historyIdx == len(e.history) {
-			e.input.Reset()
-		} else {
-			e.input.SetValue(e.history[e.historyIdx])
-		}
-		return nil
-	default:
-		var inputCmd tea.Cmd
-		e.input, inputCmd = e.input.Update(msg)
-		return inputCmd
 	}
 }
 
 func (e *execPanel) startSession(container client.Container) tea.Cmd {
 	ctx := e.ctx
 	svc := e.service
+
 	return func() tea.Msg {
-		session, err := svc.Exec(ctx, container.ID)
+		session, err := svc.Exec(ctx, container.ID, defaultVtWidth, defaultVtHeight)
 		if err != nil {
 			return execOutputMsg{err: err}
 		}
@@ -219,27 +280,10 @@ func (e *execPanel) startSession(container client.Container) tea.Cmd {
 	}
 }
 
-func (e *execPanel) readOutput() tea.Cmd {
-	session := e.session
-	if session == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		buf := make([]byte, readBufSize)
-		n, err := session.Reader.Read(buf)
-		if err != nil {
-			return execOutputMsg{err: err}
-		}
-		return execOutputMsg{output: string(buf[:n])}
-	}
-}
-
 func (e *execPanel) extendHelpCmd() tea.Cmd {
 	return func() tea.Msg {
 		return message.AddContextualKeyBindingsMsg{Bindings: []key.Binding{
-			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "send command")),
-			key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "history up")),
-			key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "history down")),
+			keys.Keys.ReleaseInput,
 		}}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"context"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -69,7 +70,7 @@ func TestMockClient_ContainerExec(t *testing.T) {
 	}
 
 	// Use the first running container
-	session, err := client.Containers().Exec(context.Background(), containers[0].ID)
+	session, err := client.Containers().Exec(context.Background(), containers[0].ID, 80, 40)
 	if err != nil {
 		t.Fatalf("Exec() error = %v", err)
 	}
@@ -82,11 +83,15 @@ func TestMockClient_ContainerExec(t *testing.T) {
 		errCh <- err
 	}()
 
-	// Read output
+	// Read until the command output arrives (the prompt is printed first).
+	var output strings.Builder
 	buf := make([]byte, 1024)
-	n, err := session.Reader.Read(buf)
-	if err != nil {
-		t.Fatalf("Read() error = %v", err)
+	for !strings.Contains(output.String(), "mock output for: echo hello") {
+		n, readErr := session.Reader.Read(buf)
+		if readErr != nil {
+			t.Fatalf("Read() error = %v; output so far %q", readErr, output.String())
+		}
+		output.Write(buf[:n])
 	}
 
 	// Check write succeeded
@@ -94,9 +99,8 @@ func TestMockClient_ContainerExec(t *testing.T) {
 		t.Fatalf("Write() error = %v", writeErr)
 	}
 
-	output := string(buf[:n])
-	if output == "" {
-		t.Error("Read() returned empty output, want mock shell output")
+	if !strings.HasPrefix(output.String(), "$ ") {
+		t.Errorf("output %q does not start with the shell prompt", output.String())
 	}
 }
 

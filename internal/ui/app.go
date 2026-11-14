@@ -277,6 +277,12 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	}
 
+	if m.isInputCaptured(msg) {
+		model, cmd := m.forwardMessageToActive(msg)
+		cmds = append(cmds, cmd)
+		return model, tea.Batch(cmds...)
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		log.Printf("[app] WindowSizeMsg: width=%d height=%d", msg.Width, msg.Height)
@@ -667,6 +673,16 @@ func (m *model) activeSectionName() string {
 
 func (m *model) isFilterActive() bool {
 	return m.activeSection().IsFilter()
+}
+
+// isInputCaptured reports whether msg is keyboard input that must bypass the
+// global bindings because the active section's focused panel captures input.
+func (m *model) isInputCaptured(msg tea.Msg) bool {
+	switch msg.(type) {
+	case tea.KeyPressMsg, tea.PasteMsg:
+		return m.activeSection().CapturesInput()
+	}
+	return false
 }
 
 func (m *model) forwardMessageToActive(msg tea.Msg) (tea.Model, tea.Cmd) {

@@ -155,6 +155,10 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 		return tea.Batch(filterCmds...)
 	}
 
+	if handled, captureCmd := b.handleCapturedInput(msg); handled {
+		return captureCmd
+	}
+
 	//nolint:nestif // The complexity is acceptable because Update function
 	// handles all the logic
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
@@ -232,7 +236,7 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 				currentPanel := b.ActivePanel()
 				var listCmd tea.Cmd
 				b.List, listCmd = b.List.Update(keyMsg)
-				return tea.Batch(listCmd, currentPanel.Close(), b.clearActivePanel())
+				return tea.Batch(listCmd, tea.Sequence(currentPanel.Close(), b.clearActivePanel()))
 			}
 			var listCmd tea.Cmd
 			b.List, listCmd = b.List.Update(keyMsg)
@@ -320,12 +324,14 @@ func (b *Section) UpdateActivePanel() tea.Cmd {
 	return b.ActivePanel().Init(listItem)
 }
 
-// clearActivePanel set the active panel index to 0 and initialize it.
-// Returns nil when no item is selected or there are no panels.
+// clearActivePanel sets the active panel index to 0 and initializes it.
+// Returns nil (after resetting the index) when no item is selected, or when
+// there are no panels.
 func (b *Section) clearActivePanel() tea.Cmd {
 	if len(b.panels) == 0 {
 		return nil
 	}
+	b.activePanelIdx = 0
 	selected := b.List.SelectedItem()
 	if selected == nil {
 		return nil
@@ -334,7 +340,6 @@ func (b *Section) clearActivePanel() tea.Cmd {
 	if !ok {
 		return nil
 	}
-	b.activePanelIdx = 0
 	return b.ActivePanel().Init(listItem)
 }
 
@@ -344,6 +349,45 @@ func (b *Section) IsFilter() bool {
 
 func (b *Section) IsPanelFocused() bool {
 	return len(b.panels) > 0 && b.focus == focusPanel
+}
+
+// CapturesInput reports whether the focused panel captures all keyboard input.
+func (b *Section) CapturesInput() bool {
+	if !b.IsPanelFocused() {
+		return false
+	}
+	capturer, ok := b.ActivePanel().(sections.InputCapturer)
+	return ok && capturer.CapturesInput()
+}
+
+// handleCapturedInput routes key presses and pastes while the focused panel
+// captures input. ReleaseInput closes the panel, switches back to the first
+// (details) panel and returns focus to the list; everything else goes
+// straight to the panel. Pastes are dropped when no panel is capturing so they
+// do not leak into an unfocused terminal.
+// Returns (true, cmd) when the message was consumed.
+func (b *Section) handleCapturedInput(msg tea.Msg) (bool, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		if !b.CapturesInput() {
+			return false, nil
+		}
+		if key.Matches(msg, keys.Keys.ReleaseInput) {
+			log.Printf("[%s] releasing captured input", b.name)
+			b.focus = focusList
+			// Close the capturing panel and go back to the first (details)
+			// panel so it is obvious the terminal is no longer active.
+			currentPanel := b.ActivePanel()
+			return true, tea.Sequence(currentPanel.Close(), b.clearActivePanel())
+		}
+		return true, b.ActivePanel().Update(msg)
+	case tea.PasteMsg:
+		if !b.CapturesInput() {
+			return true, nil
+		}
+		return true, b.ActivePanel().Update(msg)
+	}
+	return false, nil
 }
 
 func (b *Section) toggleFocus() {
@@ -382,7 +426,7 @@ func (b *Section) handleFilterKey(msg tea.Msg) (bool, []tea.Cmd) {
 			cmds = append(cmds, func() tea.Msg { return message.ClearContextualKeyBindingsMsg{} })
 			if len(b.panels) > 0 {
 				currentPanel := b.ActivePanel()
-				cmds = append(cmds, currentPanel.Close(), b.UpdateActivePanel())
+				cmds = append(cmds, b.switchPanel(currentPanel))
 			}
 		}
 	}
@@ -549,6 +593,14 @@ func (b *Section) setSizeWithPanels(width, height int) {
 	b.ActivePanel().SetSize(b.panelWidth, b.panelHeight)
 }
 
+// switchPanel closes previous and initialises the now-active panel in order.
+// The two must not be batched: panels emit contextual key binding messages on
+// Close (clear) and Init (add), and batched commands run concurrently, so the
+// previous panel's clear could land after the new panel's add and wipe it.
+func (b *Section) switchPanel(previous sections.Panel) tea.Cmd {
+	return tea.Sequence(previous.Close(), b.UpdateActivePanel())
+}
+
 // handlePanelKeys handles PanelNext and PanelPrev key bindings, cycling through
 // b.panels.  b.name is used for log output.
 // Returns (true, cmd) when a panel key was matched, (false, nil) otherwise.
@@ -558,12 +610,12 @@ func (b *Section) handlePanelKeys(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		currentPanel := b.ActivePanel()
 		b.activePanelIdx = (b.activePanelIdx + 1) % len(b.panels)
 		log.Printf("[%s] switching panel to: %q", b.name, b.panels[b.activePanelIdx].Name())
-		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
+		return true, b.switchPanel(currentPanel)
 	case key.Matches(msg, keys.Keys.PanelPrev):
 		currentPanel := b.ActivePanel()
 		b.activePanelIdx = (b.activePanelIdx - 1 + len(b.panels)) % len(b.panels)
 		log.Printf("[%s] switching panel to: %q", b.name, b.panels[b.activePanelIdx].Name())
-		return true, tea.Batch(currentPanel.Close(), b.UpdateActivePanel())
+		return true, b.switchPanel(currentPanel)
 	}
 	return false, nil
 }

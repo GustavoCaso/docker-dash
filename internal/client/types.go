@@ -224,13 +224,14 @@ func (e *LogsSession) Close() {
 
 // ExecSession represents an interactive exec session inside a container.
 type ExecSession struct {
+	ID     string
 	Reader io.ReadCloser
 	Writer io.WriteCloser
 	closer func()
 }
 
-func NewExecSession(reader io.ReadCloser, writer io.WriteCloser, closer func()) *ExecSession {
-	return &ExecSession{Reader: reader, Writer: writer, closer: closer}
+func NewExecSession(id string, reader io.ReadCloser, writer io.WriteCloser, closer func()) *ExecSession {
+	return &ExecSession{ID: id, Reader: reader, Writer: writer, closer: closer}
 }
 
 func (e *ExecSession) Close() {

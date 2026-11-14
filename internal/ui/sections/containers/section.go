@@ -187,11 +187,15 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 		}
 	case execCloseMsg:
 		log.Printf("[containers] execCloseMsg")
-		s.ActivePanel().Close()
+		ep, ok := s.ActivePanel().(*execPanel)
+		if !ok || !ep.ownsSession(msg.session) {
+			// Stale message from a session that was already closed or replaced.
+			return base.UpdateResult{Handled: true}
+		}
 		return base.UpdateResult{
-			Cmd: func() tea.Msg {
+			Cmd: tea.Batch(ep.Close(), func() tea.Msg {
 				return message.ShowBannerMsg{Message: "Exec session closed", IsError: false}
-			},
+			}),
 			Handled: true,
 		}
 	}
@@ -199,13 +203,6 @@ func (s *Section) handleMsg(msg tea.Msg) base.UpdateResult {
 }
 
 func (s *Section) handleKey(msg tea.KeyPressMsg) base.UpdateResult {
-	// When exec panel is active, route ALL keys directly to it.
-	if s.IsPanelFocused() {
-		if ep, ok := s.ActivePanel().(*execPanel); ok {
-			log.Print("[containers] forward message to exec panel")
-			return base.UpdateResult{Cmd: ep.Update(msg), Handled: true}
-		}
-	}
 	switch {
 	case key.Matches(msg, keys.Keys.ContainerDelete):
 		return base.UpdateResult{Cmd: s.confirmContainerDelete(), Handled: true}

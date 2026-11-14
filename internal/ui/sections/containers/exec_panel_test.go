@@ -2,251 +2,206 @@ package containers
 
 import (
 	"context"
-	"errors"
-	"io"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/creack/pty"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
-	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
-func newTestExecPanel() *execPanel {
-	return NewExecPanel(context.Background(), client.NewMockClient().Containers()).(*execPanel)
+// driver runs tea.Cmds in goroutines and feeds results back into the panel,
+// emulating the Bubble Tea runtime.
+type driver struct {
+	t    *testing.T
+	p    *execPanel
+	msgs chan tea.Msg
+	seen []tea.Msg
 }
 
-func TestExecPanelInitStartsSession(t *testing.T) {
-	client := client.NewMockClient()
-	containers, err := client.Containers().List(t.Context())
-	if err != nil {
-		t.Errorf("List failed, got %v", err)
-	}
-	p := newTestExecPanel()
-	cmd := p.Init(containerItem{container: containers[0]})
+func newDriver(t *testing.T, p *execPanel) *driver {
+	return &driver{t: t, p: p, msgs: make(chan tea.Msg, 256)}
+}
+
+func (d *driver) run(cmd tea.Cmd) {
 	if cmd == nil {
-		t.Fatal("Init() returned nil cmd")
+		return
 	}
-	msg := cmd()
-
-	batch, ok := msg.(tea.BatchMsg)
-	if !ok {
-		t.Fatal("Init() not returned BatchMsg")
-	}
-
-	startSessionCmd := false
-	extendCmd := false
-
-	for _, cmd := range batch {
-		msg := cmd()
-		switch msg.(type) {
-		case execSessionStartedMsg:
-			startSessionCmd = true
-		case message.AddContextualKeyBindingsMsg:
-			extendCmd = true
-		}
-	}
-
-	if !startSessionCmd {
-		t.Fatal("Init() not returned execSessionStartedMsg msg")
-	}
-
-	if !extendCmd {
-		t.Fatal("Init() not returned AddContextualKeyBindingsMsg msg")
-	}
-}
-
-func TestExecPanelInitErrorWhenContainerIsNotRunning(t *testing.T) {
-	mockClient := client.NewMockClient()
-	containers, err := mockClient.Containers().List(t.Context())
-	if err != nil {
-		t.Errorf("List failed, got %v", err)
-	}
-	c := containers[0]
-	c.State = client.StateStopped
-	p := newTestExecPanel()
-	cmd := p.Init(containerItem{container: c})
-	if cmd == nil {
-		t.Fatal("Init() returned nil cmd")
-	}
-	msg := cmd()
-
-	execMsg, ok := msg.(execOutputMsg)
-	if !ok {
-		t.Fatal("Init() not returned execOutputMsg")
-	}
-
-	if execMsg.err == nil {
-		t.Fatal("expected execOutputMsg to include error")
-	}
-
-	if !strings.Contains(execMsg.err.Error(), "container is not running") {
-		t.Errorf("error message does not match, expected 'container is not running' got %q", execMsg.err.Error())
-	}
-}
-
-func TestExecPanelUpdateOnSessionStartedStoresSession(t *testing.T) {
-	p := newTestExecPanel()
-	pr, pw := io.Pipe()
-	session := client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
-
 	go func() {
-		pw.Write([]byte("output\n"))
-		pw.Close()
+		msg := cmd()
+		if msg != nil {
+			d.msgs <- msg
+		}
 	}()
-
-	cmd := p.Update(execSessionStartedMsg{session: session})
-	if cmd == nil {
-		t.Fatal("Update(execSessionStartedMsg) returned nil cmd")
-	}
-	if p.session != session {
-		t.Error("Update should store the session")
-	}
-
-	cmd() // drain goroutine
 }
 
-func TestExecPanelAccumulatesOutput(t *testing.T) {
-	p := newTestExecPanel()
-
-	p.Update(execOutputMsg{output: "line one\n"})
-	p.Update(execOutputMsg{output: "line two\n"})
-
-	if !strings.Contains(p.output, "line one") {
-		t.Errorf("output missing 'line one', got %q", p.output)
+func (d *driver) send(msg tea.Msg) {
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		for _, c := range batch {
+			d.run(c)
+		}
+		return
 	}
-	if !strings.Contains(p.output, "line two") {
-		t.Errorf("output missing 'line two', got %q", p.output)
-	}
+	d.seen = append(d.seen, msg)
+	d.run(d.p.Update(msg))
 }
 
-func TestExecPanelErrorEmitsBanner(t *testing.T) {
-	p := newTestExecPanel()
-	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
-
-	cmd := p.Update(execOutputMsg{err: errors.New("pipe broken")})
-
-	if p.session != nil {
-		t.Error("Update with error should close session")
-	}
-	if cmd == nil {
-		t.Fatal("Update with error should return banner cmd")
-	}
-	batch, ok := cmd().(tea.BatchMsg)
-	if !ok {
-		t.Fatalf("expected BatchMsg, got %T", cmd())
-	}
-	var found bool
-	for _, c := range batch {
-		if msg, isBanner := c().(message.ShowBannerMsg); isBanner {
-			if !msg.IsError {
-				t.Error("ShowBannerMsg.IsError should be true")
-			}
-			found = true
+func (d *driver) until(desc string, cond func() bool) {
+	d.t.Helper()
+	deadline := time.After(5 * time.Second)
+	for !cond() {
+		select {
+		case msg := <-d.msgs:
+			d.send(msg)
+		case <-deadline:
+			d.t.Fatalf("timeout waiting for %s; view:\n%s", desc, ansi.Strip(d.p.View()))
 		}
 	}
-	if !found {
-		t.Error("expected ShowBannerMsg in batch")
+}
+
+func (d *driver) typeText(s string) {
+	for _, r := range s {
+		switch r {
+		case '\r':
+			d.send(tea.KeyPressMsg{Code: tea.KeyEnter})
+		default:
+			d.send(tea.KeyPressMsg{Code: r, Text: string(r)})
+		}
 	}
 }
 
-func TestExecPanelClearClearsOutput(t *testing.T) {
-	p := newTestExecPanel()
-	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
-	p.output = "old output"
-	p.input.Focus()
+func plain(p *execPanel) string { return ansi.Strip(p.View()) }
 
-	// Set the value directly and then send Enter to trigger the command
-	p.input.SetValue("clear")
-	p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-
-	if p.output != "" {
-		t.Errorf("output should be cleared, got %q", p.output)
+// startShell attaches a real /bin/sh through a PTY, mirroring a Docker TTY exec stream.
+func startShell(t *testing.T, d *driver) {
+	t.Helper()
+	cmd := exec.Command("/bin/sh")
+	cmd.Env = []string{"PS1=PROMPT$ ", "TERM=xterm-256color", "PATH=/usr/bin:/bin"}
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: 80, Rows: 24})
+	if err != nil {
+		t.Fatalf("pty start: %v", err)
 	}
-
-	p.session.Close()
+	t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	session := client.NewExecSession("test", ptmx, ptmx, func() { _ = ptmx.Close() })
+	d.send(execSessionStartedMsg{session: session})
 }
 
-func TestExecPanelClearWithExtraSpaceClearsOutput(t *testing.T) {
-	p := newTestExecPanel()
-	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
-	p.output = "old output"
-	p.input.Focus()
-
-	// Set the value directly and then send Enter to trigger the command
-	p.input.SetValue(" clear ")
-	p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-
-	if p.output != "" {
-		t.Errorf("output should be cleared, got %q", p.output)
-	}
-
-	p.session.Close()
+func newSizedPanel() *execPanel {
+	p := NewExecPanel(context.Background(), client.NewMockClient().Containers()).(*execPanel)
+	p.SetSize(80, 24)
+	return p
 }
 
-func TestExecPanelHistoryNavigation(t *testing.T) {
-	p := newTestExecPanel()
-	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
-	p.history = []string{"ls", "pwd"}
-	p.historyIdx = len(p.history)
-	p.input.Focus()
+func TestBubbletermShellEcho(t *testing.T) {
+	p := newSizedPanel()
+	d := newDriver(t, p)
+	startShell(t, d)
 
-	// Press Up: should show "pwd" (most recent)
-	p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	if p.input.Value() != "pwd" {
-		t.Errorf("after Up: input = %q, want 'pwd'", p.input.Value())
-	}
-
-	// Press Up again: should show "ls"
-	p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	if p.input.Value() != "ls" {
-		t.Errorf("after second Up: input = %q, want 'ls'", p.input.Value())
-	}
-
-	// Press Down: should go back to "pwd"
-	p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	if p.input.Value() != "pwd" {
-		t.Errorf("after Down: input = %q, want 'pwd'", p.input.Value())
-	}
-
-	p.session.Close()
+	d.until("prompt", func() bool { return strings.Contains(plain(p), "PROMPT$") })
+	d.typeText("echo hello-$((40+2))\r")
+	d.until("echo output", func() bool { return strings.Contains(plain(p), "hello-42") })
 }
 
-func TestExecPanelCloseNilsSession(t *testing.T) {
-	p := newTestExecPanel()
-	pr, pw := io.Pipe()
-	p.session = client.NewExecSession(io.NopCloser(pr), pw, func() { pr.Close(); pw.Close() })
-	p.output = "some output"
+func TestBubbletermCursorAddressingAndColor(t *testing.T) {
+	p := newSizedPanel()
+	d := newDriver(t, p)
+	startShell(t, d)
 
-	p.Close()
-
-	if p.session != nil {
-		t.Error("Close() should nil out session")
-	}
-	if p.output != "" {
-		t.Errorf("Close() should clear output, got %q", p.output)
+	d.until("prompt", func() bool { return strings.Contains(plain(p), "PROMPT$") })
+	// Clear screen, jump to row 10 col 20, print red text.
+	d.typeText(`printf '\033[2J\033[10;20H\033[31mRED\033[0m'` + "\r")
+	d.until("positioned text", func() bool {
+		lines := strings.Split(plain(p), "\n")
+		return len(lines) > 9 && strings.Index(lines[9], "RED") == 19
+	})
+	if !strings.Contains(p.View(), "\x1b[31m") {
+		t.Fatalf("expected red SGR in rendered view, got %q", p.View())
 	}
 }
 
-func TestExecPanelCloseIsIdempotent(t *testing.T) {
-	p := newTestExecPanel()
-	p.Close()
-	p.Close() // must not panic
+func TestBubbletermCtrlCInterrupts(t *testing.T) {
+	p := newSizedPanel()
+	d := newDriver(t, p)
+	startShell(t, d)
+
+	d.until("prompt", func() bool { return strings.Contains(plain(p), "PROMPT$") })
+	d.typeText("sleep 30\r")
+	time.Sleep(200 * time.Millisecond)
+	d.send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	d.typeText("echo after-int\r")
+	d.until("shell responsive after ctrl+c", func() bool { return strings.Contains(plain(p), "after-int") })
 }
 
-func TestExecPanelSetSizeSizesViewport(t *testing.T) {
-	p := newTestExecPanel()
-	p.SetSize(100, 30)
+func TestBubbletermResize(t *testing.T) {
+	p := newSizedPanel()
+	d := newDriver(t, p)
+	startShell(t, d)
+	d.until("prompt", func() bool { return strings.Contains(plain(p), "PROMPT$") })
 
-	if p.width != 100 {
-		t.Errorf("width = %d, want 100", p.width)
+	p.SetSize(40, 10)
+	d.send(tea.WindowSizeMsg{Width: 40, Height: 10})
+	d.typeText("echo resized\r")
+	d.until("resized frame", func() bool {
+		lines := strings.Split(plain(p), "\n")
+		return len(lines) == 10 && strings.Contains(plain(p), "resized")
+	})
+}
+
+func TestBubbletermExitClosesPanel(t *testing.T) {
+	p := newSizedPanel()
+	d := newDriver(t, p)
+	startShell(t, d)
+	d.until("prompt", func() bool { return strings.Contains(plain(p), "PROMPT$") })
+
+	d.typeText("exit\r")
+	d.until("execCloseMsg", func() bool {
+		for _, m := range d.seen {
+			if _, ok := m.(execCloseMsg); ok {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func TestBubbletermAltScreen(t *testing.T) {
+	p := newSizedPanel()
+	d := newDriver(t, p)
+	startShell(t, d)
+	d.until("prompt", func() bool { return strings.Contains(plain(p), "PROMPT$") })
+
+	d.typeText("echo main-marker\r")
+	d.until("main marker", func() bool { return strings.Contains(plain(p), "main-marker") })
+	d.typeText(`printf '\033[?1049h\033[HALT''SCREEN'; read x; printf '\033[?1049l'` + "\r")
+	d.until("alt screen", func() bool {
+		v := plain(p)
+		return strings.Contains(v, "ALTSCREEN") && !strings.Contains(v, "main-marker")
+	})
+	d.typeText("\r")
+	d.until("main screen restored", func() bool {
+		v := plain(p)
+		return strings.Contains(v, "main-marker") && !strings.Contains(v, "ALTSCREEN")
+	})
+}
+
+func TestBubbletermRendersCursor(t *testing.T) {
+	p := newSizedPanel()
+	d := newDriver(t, p)
+	startShell(t, d)
+	d.until("prompt", func() bool { return strings.Contains(plain(p), "PROMPT$") })
+
+	d.typeText("ab")
+	d.until("typed text", func() bool { return strings.Contains(plain(p), "PROMPT$ ab") })
+	// Cursor sits right after "PROMPT$ ab" on the first row, drawn in reverse video.
+	firstRow := strings.Split(p.View(), "\n")[0]
+	if !strings.Contains(firstRow, "\x1b[7m") {
+		t.Fatalf("expected reverse-video cursor on first row, got %q", firstRow)
 	}
-	if p.viewport.Height() != 29 { // height - 1 for input
-		t.Errorf("viewport.Height = %d, want 29", p.viewport.Height())
+	if got := ansi.StringWidth(firstRow); got != 80 {
+		t.Fatalf("cursor rendering changed row width: got %d, want 80", got)
 	}
 }
