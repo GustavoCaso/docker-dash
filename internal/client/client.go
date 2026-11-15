@@ -98,7 +98,10 @@ type ContainerService interface {
 	Restart(ctx context.Context, id string) error
 	Remove(ctx context.Context, id string, force bool) error
 	Kill(ctx context.Context, id string, signal string) error
-	FileTree(ctx context.Context, id string) (*FileNode, error)
+	// FileTree walks the container filesystem and calls emit with batches of
+	// entries as they are discovered. It returns once the walk completes,
+	// fails or ctx is cancelled. emit is called from the calling goroutine.
+	FileTree(ctx context.Context, id string, emit func([]FileEntry)) error
 	Logs(ctx context.Context, id string, opts LogOptions) (*LogsSession, error)
 	Exec(ctx context.Context, id string, width, height uint) (*ExecSession, error)
 	ExecResize(ctx context.Context, execID string, width, height uint) error

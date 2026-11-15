@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -22,16 +23,45 @@ var highlightStyle = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("6
 var normalStyle = lipgloss.NewStyle()
 var statusBarSpace = 2
 
-// fileNodeLoadedMsg is sent when the file tree has been loaded asynchronously.
-type fileNodeLoadedMsg struct {
+const (
+	// fileTreeEventBuffer bounds how many batches the producer can run ahead
+	// of the UI before it blocks.
+	fileTreeEventBuffer = 8
+	fileTreeCacheTTL    = time.Minute
+	fileTreeCacheSize   = 5
+)
+
+// fileTreeEvent is produced by the background file tree walk.
+type fileTreeEvent struct {
+	entries []client.FileEntry
+	done    bool
+	err     error
+}
+
+// fileTreeChunkMsg delivers one or more batches of file entries. Until done is
+// set, the panel keeps waiting on events for more.
+type fileTreeChunkMsg struct {
 	requestID int
+	events    <-chan fileTreeEvent
+	entries   []client.FileEntry
+	done      bool
 	err       error
-	fileNode  *client.FileNode
+}
+
+func (m *fileTreeChunkMsg) apply(ev fileTreeEvent) {
+	m.entries = append(m.entries, ev.entries...)
+	if ev.done {
+		m.done = true
+		m.err = ev.err
+	}
 }
 
 type filesPanel struct {
 	ctx           context.Context
 	service       client.ContainerService
+	cache         *fileTreeCache
+	cancelFetch   context.CancelFunc
+	builder       *client.FileTreeBuilder
 	loading       bool
 	width, height int
 	containerID   string
@@ -42,7 +72,11 @@ type filesPanel struct {
 }
 
 func newFilesPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
-	return &filesPanel{ctx: ctx, service: svc}
+	return &filesPanel{
+		ctx:     ctx,
+		service: svc,
+		cache:   newFileTreeCache(fileTreeCacheTTL, fileTreeCacheSize),
+	}
 }
 
 func (f *filesPanel) Name() string {
@@ -50,12 +84,67 @@ func (f *filesPanel) Name() string {
 }
 
 func (f *filesPanel) Init(listItem sections.ListItem) tea.Cmd {
-	f.containerID = listItem.ID()
-	log.Printf("[containers][files-panel] Init: containerID=%q", f.containerID)
+	containerID := listItem.ID()
+	log.Printf("[containers][files-panel] Init: containerID=%q", containerID)
+
+	// The section re-initialises the active panel on every list refresh; keep
+	// an in-flight load for the same container instead of restarting it.
+	if f.loading && containerID == f.containerID {
+		return f.extendHelpCmd()
+	}
+
+	// Switching container without a Close: drop the previous load.
+	abortCmd := f.abortLoad()
+
+	if root, ok := f.cache.get(containerID); ok {
+		if root != f.root {
+			f.root = root
+			f.cursor = 0
+		}
+		f.containerID = containerID
+		f.visible = computeVisible(f.root)
+		f.cursor = min(f.cursor, max(len(f.visible)-1, 0))
+		return tea.Batch(abortCmd, f.extendHelpCmd())
+	}
+
+	f.containerID = containerID
 	f.loading = true
+	f.builder = client.NewFileTreeBuilder()
+	f.root = f.builder.Root()
+	f.visible = nil
+	f.cursor = 0
 	f.requestID++
 	requestID := f.requestID
-	return tea.Batch(f.showSpinnerCmd(requestID), f.fetchCmd(f.containerID, requestID), f.extendHelpCmd())
+
+	ctx, cancel := context.WithCancel(f.ctx)
+	f.cancelFetch = cancel
+	return tea.Batch(
+		abortCmd,
+		f.showSpinnerCmd(requestID),
+		f.fetchCmd(ctx, containerID, requestID),
+		f.extendHelpCmd(),
+	)
+}
+
+// abortLoad cancels an in-flight load, invalidates its pending messages and
+// returns the command hiding its spinner (nil when nothing was loading).
+func (f *filesPanel) abortLoad() tea.Cmd {
+	if !f.loading {
+		return nil
+	}
+	requestID := f.requestID
+	f.requestID++
+	f.stopFetch()
+	f.builder = nil
+	f.loading = false
+	return f.cancelSpinnerCmd(requestID)
+}
+
+func (f *filesPanel) stopFetch() {
+	if f.cancelFetch != nil {
+		f.cancelFetch()
+		f.cancelFetch = nil
+	}
 }
 
 func computeVisible(root *client.FileNode) []*client.FileNode {
@@ -77,23 +166,8 @@ func computeVisible(root *client.FileNode) []*client.FileNode {
 
 func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
-	case fileNodeLoadedMsg:
-		log.Printf("[containers][files-panel] fileNodeLoadedMsg: requestID=%d err=%v", msg.requestID, msg.err)
-		if msg.requestID != f.requestID {
-			return nil
-		}
-		f.loading = false
-		if msg.err != nil {
-			return tea.Batch(f.cancelSpinnerCmd(msg.requestID), func() tea.Msg {
-				return message.ShowBannerMsg{
-					Message: msg.err.Error(),
-					IsError: true,
-				}
-			})
-		}
-		f.root = msg.fileNode
-		f.visible = computeVisible(f.root)
-		return f.cancelSpinnerCmd(msg.requestID)
+	case fileTreeChunkMsg:
+		return f.handleChunk(msg)
 
 	case tea.KeyPressMsg:
 		log.Printf("[containers][files-panel] KeyMsg: key=%q", msg.String())
@@ -118,6 +192,9 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		case key.Matches(msg, keys.Keys.CpFromContainerToHost):
+			if len(f.visible) == 0 {
+				return nil
+			}
 			node := f.visible[f.cursor]
 			return f.copyFromContainerCmd(node)
 		}
@@ -126,11 +203,41 @@ func (f *filesPanel) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-func (f *filesPanel) View() string {
-	if f.loading {
-		return ""
+func (f *filesPanel) handleChunk(msg fileTreeChunkMsg) tea.Cmd {
+	if msg.requestID != f.requestID || f.builder == nil {
+		return nil
 	}
 
+	for _, e := range msg.entries {
+		f.builder.Add(e)
+	}
+	if len(msg.entries) > 0 {
+		f.visible = computeVisible(f.root)
+	}
+
+	if !msg.done {
+		return waitFileTreeCmd(msg.events, msg.requestID)
+	}
+
+	log.Printf("[containers][files-panel] file tree loaded: entries=%d err=%v", f.builder.Len(), msg.err)
+	f.loading = false
+	f.stopFetch()
+	f.builder = nil
+
+	if msg.err != nil {
+		return tea.Batch(f.cancelSpinnerCmd(msg.requestID), func() tea.Msg {
+			return message.ShowBannerMsg{
+				Message: fmt.Sprintf("error getting the file tree: %v", msg.err),
+				IsError: true,
+			}
+		})
+	}
+
+	f.cache.put(f.containerID, f.root)
+	return f.cancelSpinnerCmd(msg.requestID)
+}
+
+func (f *filesPanel) View() string {
 	if len(f.visible) == 0 {
 		return ""
 	}
@@ -186,6 +293,10 @@ func (f *filesPanel) View() string {
 
 	var statusBar strings.Builder
 
+	if f.loading && f.builder != nil {
+		fmt.Fprintf(&statusBar, "loading %d entries… ", f.builder.Len())
+	}
+
 	if len(f.visible) > 0 {
 		node := f.visible[f.cursor]
 		if node.IsDir {
@@ -207,6 +318,9 @@ func (f *filesPanel) Close() tea.Cmd {
 	log.Printf("[containers][files-panel] Close")
 	requestID := f.requestID
 	f.requestID++
+	f.stopFetch()
+	f.builder = nil
+	f.containerID = ""
 	f.loading = false
 	f.root = nil
 	f.visible = []*client.FileNode{}
@@ -222,15 +336,54 @@ func (f *filesPanel) SetSize(width, height int) {
 	f.height = height
 }
 
-func (f *filesPanel) fetchCmd(containerID string, requestID int) tea.Cmd {
-	ctx := f.ctx
+// fetchCmd starts walking the container filesystem in the background and
+// returns the first chunk of entries. ctx cancellation stops the walk.
+func (f *filesPanel) fetchCmd(ctx context.Context, containerID string, requestID int) tea.Cmd {
 	svc := f.service
 	return func() tea.Msg {
-		fileNode, err := svc.FileTree(ctx, containerID)
-		if err != nil {
-			return fileNodeLoadedMsg{requestID: requestID, err: fmt.Errorf("error getting the file tree: %w", err)}
+		events := make(chan fileTreeEvent, fileTreeEventBuffer)
+		go func() {
+			defer close(events)
+			send := func(ev fileTreeEvent) {
+				select {
+				case events <- ev:
+				case <-ctx.Done():
+				}
+			}
+			err := svc.FileTree(ctx, containerID, func(entries []client.FileEntry) {
+				send(fileTreeEvent{entries: entries})
+			})
+			send(fileTreeEvent{done: true, err: err})
+		}()
+		return waitFileTreeCmd(events, requestID)()
+	}
+}
+
+// waitFileTreeCmd blocks for the next event, then drains whatever else is
+// already buffered so the UI rebuilds its view once per burst of batches.
+func waitFileTreeCmd(events <-chan fileTreeEvent, requestID int) tea.Cmd {
+	return func() tea.Msg {
+		msg := fileTreeChunkMsg{requestID: requestID, events: events}
+		ev, ok := <-events
+		if !ok {
+			// Only happens when the walk was cancelled; the request is stale.
+			msg.done = true
+			return msg
 		}
-		return fileNodeLoadedMsg{requestID: requestID, fileNode: fileNode}
+		msg.apply(ev)
+		for !msg.done {
+			select {
+			case ev, ok = <-events:
+				if !ok {
+					msg.done = true
+					return msg
+				}
+				msg.apply(ev)
+			default:
+				return msg
+			}
+		}
+		return msg
 	}
 }
 
