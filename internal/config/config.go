@@ -17,6 +17,7 @@ type Config struct {
 	Debug       DebugConfig       `toml:"debug"`
 	UpdateCheck UpdateCheckConfig `toml:"update_check"`
 	Logs        LogsConfig        `toml:"logs"`
+	Files       FilesConfig       `toml:"files"`
 }
 
 // DockerConfig holds Docker client connection settings.
@@ -65,6 +66,20 @@ func DefaultLogsConfig() LogsConfig {
 	}
 }
 
+// FilesConfig holds container file browser settings.
+type FilesConfig struct {
+	// CacheTTL is how long a loaded container file tree is reused before it is
+	// walked again (e.g. "30s", "5m"). A zero duration disables the cache.
+	CacheTTL string `toml:"cache_ttl"`
+}
+
+// DefaultFilesConfig returns sensible defaults for the container file browser.
+func DefaultFilesConfig() FilesConfig {
+	return FilesConfig{
+		CacheTTL: "1m",
+	}
+}
+
 // DefaultPath returns the default config file path: $HOME/.config/docker-dash.toml.
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
@@ -79,6 +94,7 @@ func DefaultPath() string {
 func Load(path string) (*Config, error) {
 	cfg := &Config{}
 	cfg.Logs = DefaultLogsConfig()
+	cfg.Files = DefaultFilesConfig()
 	_, err := toml.DecodeFile(path, cfg)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {

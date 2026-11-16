@@ -75,7 +75,12 @@ type Section struct {
 }
 
 // New creates a new container list.
-func New(ctx context.Context, svc client.ContainerService, logsCfg config.LogsConfig) *Section {
+func New(
+	ctx context.Context,
+	svc client.ContainerService,
+	logsCfg config.LogsConfig,
+	filesCfg config.FilesConfig,
+) *Section {
 	cl := &Section{
 		ctx:     ctx,
 		service: svc,
@@ -83,7 +88,7 @@ func New(ctx context.Context, svc client.ContainerService, logsCfg config.LogsCo
 			NewDetailsPanel(ctx, svc),
 			NewLogsPanel(ctx, svc, logsCfg),
 			NewStatsPanel(ctx, svc),
-			newFilesPanel(ctx, svc),
+			newFilesPanel(ctx, svc, filesCfg),
 			NewExecPanel(ctx, svc),
 		}),
 	}

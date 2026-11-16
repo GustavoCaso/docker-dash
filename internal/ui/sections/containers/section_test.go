@@ -24,7 +24,7 @@ type containerSectionModel struct {
 
 func newContainerSectionModel() containerSectionModel {
 	client := client.NewMockClient()
-	section := New(context.Background(), client.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), client.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 	return containerSectionModel{section: section}
 }
@@ -138,7 +138,12 @@ func TestContainerListDelete(t *testing.T) {
 
 func TestExecPanelCapturesInput(t *testing.T) {
 	dockerClient := client.NewMockClient()
-	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
+	section := New(
+		context.Background(),
+		dockerClient.Containers(),
+		config.DefaultLogsConfig(),
+		config.DefaultFilesConfig(),
+	)
 	section.SetSize(120, 40)
 
 	// Set focus on panels
@@ -191,7 +196,12 @@ func TestExecPanelCapturesInput(t *testing.T) {
 
 func TestExecCloseMsgIgnoresStaleSession(t *testing.T) {
 	dockerClient := client.NewMockClient()
-	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
+	section := New(
+		context.Background(),
+		dockerClient.Containers(),
+		config.DefaultLogsConfig(),
+		config.DefaultFilesConfig(),
+	)
 	section.SetSize(120, 40)
 	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	section.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
@@ -224,7 +234,12 @@ func (nopWriteCloser) Close() error                { return nil }
 
 func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	dockerClient := client.NewMockClient()
-	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
+	section := New(
+		context.Background(),
+		dockerClient.Containers(),
+		config.DefaultLogsConfig(),
+		config.DefaultFilesConfig(),
+	)
 	section.SetSize(120, 40)
 
 	// Set focus on panels
@@ -309,7 +324,7 @@ func TestContainerKill(t *testing.T) {
 
 func TestContainersLoadedMsgCallsUpdateItems(t *testing.T) {
 	c := client.NewMockClient()
-	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 
 	if len(section.List.Items()) != 0 {
@@ -329,7 +344,7 @@ func TestContainersLoadedMsgCallsUpdateItems(t *testing.T) {
 
 func TestContainersLoadedMsgEmptyCallsUpdateItemsReset(t *testing.T) {
 	c := client.NewMockClient()
-	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 
 	section.Update(section.RefreshCmd()())
@@ -380,7 +395,7 @@ func TestContainerRestart(t *testing.T) {
 
 func TestContainerDeleteConfirmationMsg(t *testing.T) {
 	c := client.NewMockClient()
-	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 	section.Update(section.RefreshCmd()())
 
@@ -403,7 +418,7 @@ func TestContainerDeleteConfirmationMsg(t *testing.T) {
 
 func TestContainerRestartConfirmationMsg(t *testing.T) {
 	c := client.NewMockClient()
-	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 	section.Update(section.RefreshCmd()())
 
@@ -423,7 +438,7 @@ func TestContainerRestartConfirmationMsg(t *testing.T) {
 
 func TestContainerActionMsgError(t *testing.T) {
 	c := client.NewMockClient()
-	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 
 	result := section.handleMsg(containerActionMsg{
@@ -450,7 +465,7 @@ func TestContainerActionMsgError(t *testing.T) {
 
 func TestContainersPrunedMsgError(t *testing.T) {
 	c := client.NewMockClient()
-	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 
 	result := section.handleMsg(containersPrunedMsg{err: errors.New("prune failed")})
@@ -472,7 +487,7 @@ func TestContainersPrunedMsgError(t *testing.T) {
 
 func TestContainersLoadedMsgError(t *testing.T) {
 	c := client.NewMockClient()
-	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig())
+	section := New(context.Background(), c.Containers(), config.DefaultLogsConfig(), config.DefaultFilesConfig())
 	section.SetSize(120, 40)
 
 	result := section.handleMsg(containersLoadedMsg{error: errors.New("connection refused")})

@@ -13,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/helper"
 	"github.com/GustavoCaso/docker-dash/internal/ui/keys"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
@@ -27,8 +28,9 @@ const (
 	// fileTreeEventBuffer bounds how many batches the producer can run ahead
 	// of the UI before it blocks.
 	fileTreeEventBuffer = 8
-	fileTreeCacheTTL    = time.Minute
-	fileTreeCacheSize   = 5
+	// defaultFileTreeCacheTTL is used when the configured cache TTL is empty or invalid.
+	defaultFileTreeCacheTTL = time.Minute
+	fileTreeCacheSize       = 5
 )
 
 // fileTreeEvent is produced by the background file tree walk.
@@ -71,12 +73,26 @@ type filesPanel struct {
 	requestID     int
 }
 
-func newFilesPanel(ctx context.Context, svc client.ContainerService) sections.Panel {
+func newFilesPanel(ctx context.Context, svc client.ContainerService, cfg config.FilesConfig) sections.Panel {
 	return &filesPanel{
 		ctx:     ctx,
 		service: svc,
-		cache:   newFileTreeCache(fileTreeCacheTTL, fileTreeCacheSize),
+		cache:   newFileTreeCache(fileTreeCacheTTL(cfg), fileTreeCacheSize),
 	}
+}
+
+// fileTreeCacheTTL parses the configured cache TTL, falling back to
+// defaultFileTreeCacheTTL when it is empty or not a valid duration.
+func fileTreeCacheTTL(cfg config.FilesConfig) time.Duration {
+	if cfg.CacheTTL == "" {
+		return defaultFileTreeCacheTTL
+	}
+	ttl, err := time.ParseDuration(cfg.CacheTTL)
+	if err != nil {
+		log.Printf("[containers][files-panel] invalid cache TTL %q, using default: %v", cfg.CacheTTL, err)
+		return defaultFileTreeCacheTTL
+	}
+	return ttl
 }
 
 func (f *filesPanel) Name() string {

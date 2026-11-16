@@ -138,7 +138,7 @@ func New(ctx context.Context, version string, cfg *config.Config, client client.
 		spinner:          sp,
 		spinnerRequests:  make(map[string]spinnerRequest),
 		confirmation:     confirmation.New(),
-		containerSection: containers.New(ctx, client.Containers(), cfg.Logs),
+		containerSection: containers.New(ctx, client.Containers(), cfg.Logs, cfg.Files),
 		imageSection:     images.New(ctx, client, cfg.UpdateCheck),
 		volumeSection:    volumes.New(ctx, client.Volumes()),
 		networkSection:   networks.New(ctx, client.Networks()),

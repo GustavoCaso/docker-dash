@@ -11,11 +11,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
+	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/message"
 )
 
 func newTestFileTreePanel() *filesPanel {
-	return newFilesPanel(context.Background(), client.NewMockClient().Containers()).(*filesPanel)
+	return newFilesPanel(context.Background(), client.NewMockClient().Containers(), config.DefaultFilesConfig()).(*filesPanel)
 }
 
 // loadFileTree runs Init's commands through Update and follows the file tree
@@ -362,7 +363,7 @@ func TestFileTreePanelStreamsBatchesProgressively(t *testing.T) {
 		block:     true,
 		cancelled: make(chan struct{}),
 	}
-	p := newFilesPanel(context.Background(), svc).(*filesPanel)
+	p := newFilesPanel(context.Background(), svc, config.DefaultFilesConfig()).(*filesPanel)
 	p.SetSize(80, 40)
 
 	var chunk fileTreeChunkMsg
@@ -400,7 +401,7 @@ func TestFileTreePanelStreamsBatchesProgressively(t *testing.T) {
 
 func TestFileTreePanelSwitchingContainerCancelsPreviousWalk(t *testing.T) {
 	svc := &fakeFileTreeService{block: true, cancelled: make(chan struct{})}
-	p := newFilesPanel(context.Background(), svc).(*filesPanel)
+	p := newFilesPanel(context.Background(), svc, config.DefaultFilesConfig()).(*filesPanel)
 
 	initCmd := p.Init(containerItem{container: client.Container{ID: "c1"}})
 	// Start the walk; it blocks until cancelled.
@@ -442,7 +443,7 @@ func TestFileTreePanelIgnoresStaleChunks(t *testing.T) {
 
 func TestFileTreePanelUsesCache(t *testing.T) {
 	svc := &fakeFileTreeService{batches: [][]client.FileEntry{{{Path: "etc/hosts"}}}}
-	p := newFilesPanel(context.Background(), svc).(*filesPanel)
+	p := newFilesPanel(context.Background(), svc, config.DefaultFilesConfig()).(*filesPanel)
 	p.SetSize(80, 40)
 
 	loadFileTree(t, p, "c1")
@@ -469,7 +470,7 @@ func TestFileTreePanelUsesCache(t *testing.T) {
 	}
 
 	// Once expired, the tree is fetched again.
-	p.cache.now = func() time.Time { return time.Now().Add(2 * fileTreeCacheTTL) }
+	p.cache.now = func() time.Time { return time.Now().Add(2 * defaultFileTreeCacheTTL) }
 	p.Close()
 	loadFileTree(t, p, "c1")
 	if svc.calls != 2 {
@@ -482,7 +483,7 @@ func TestFileTreePanelDoesNotCacheFailedLoads(t *testing.T) {
 		batches: [][]client.FileEntry{{{Path: "etc/hosts"}}},
 		err:     errors.New("boom"),
 	}
-	p := newFilesPanel(context.Background(), svc).(*filesPanel)
+	p := newFilesPanel(context.Background(), svc, config.DefaultFilesConfig()).(*filesPanel)
 
 	loadFileTree(t, p, "c1")
 	p.Close()
@@ -509,5 +510,30 @@ func TestFileTreeCacheEvictsOldest(t *testing.T) {
 		if _, ok := c.get(id); !ok {
 			t.Errorf("entry %q should still be cached", id)
 		}
+	}
+}
+
+func TestFileTreeCacheTTLFromConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		cacheTTL string
+		want     time.Duration
+	}{
+		{name: "empty uses default", cacheTTL: "", want: defaultFileTreeCacheTTL},
+		{name: "invalid uses default", cacheTTL: "not-a-duration", want: defaultFileTreeCacheTTL},
+		{name: "custom duration", cacheTTL: "5m", want: 5 * time.Minute},
+		{name: "zero disables cache", cacheTTL: "0s", want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := newFilesPanel(
+				context.Background(),
+				client.NewMockClient().Containers(),
+				config.FilesConfig{CacheTTL: tt.cacheTTL},
+			).(*filesPanel)
+			if p.cache.ttl != tt.want {
+				t.Errorf("cache ttl = %v, want %v", p.cache.ttl, tt.want)
+			}
+		})
 	}
 }
