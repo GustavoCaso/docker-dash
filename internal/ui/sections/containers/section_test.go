@@ -136,7 +136,7 @@ func TestContainerListDelete(t *testing.T) {
 	}
 }
 
-func TestContainerListExecMouseScroll(t *testing.T) {
+func TestExecPanelCapturesInput(t *testing.T) {
 	dockerClient := client.NewMockClient()
 	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
 	section.SetSize(120, 40)
@@ -146,21 +146,81 @@ func TestContainerListExecMouseScroll(t *testing.T) {
 	// Navigate to exec panel (details=0, logs=1, stats=2, files=3 exec=4)
 	// Moving one to the left wraps to exec (index 4)
 	section.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
-	ep := section.ActivePanel().(*execPanel)
+	ep, ok := section.ActivePanel().(*execPanel)
+	if !ok {
+		t.Fatal("active panel is not the exec panel")
+	}
 
-	// Give the viewport content tall enough to scroll
-	lines := strings.Repeat("output line\n", 50)
-	ep.viewport.SetContent(lines)
-	ep.viewport.GotoBottom()
-	beforeOffset := ep.viewport.YOffset()
+	if section.CapturesInput() {
+		t.Fatal("section must not capture input before the exec session starts")
+	}
 
-	// Send a scroll-up mouse event directly to the section
-	section.Update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	containers, err := dockerClient.Containers().List(t.Context())
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	session, err := dockerClient.Containers().Exec(t.Context(), containers[0].ID, 80, 24)
+	if err != nil {
+		t.Fatalf("Exec failed: %v", err)
+	}
+	ep.Update(execSessionStartedMsg{session: session})
+	t.Cleanup(func() { ep.Close() })
 
-	if ep.viewport.YOffset() >= beforeOffset {
-		t.Errorf("scroll up should decrease YOffset: before=%d after=%d", beforeOffset, ep.viewport.YOffset())
+	if !section.CapturesInput() {
+		t.Fatal("section should capture input while the exec session is live")
+	}
+
+	// 'd' is the container delete binding; it must reach the shell instead.
+	if cmd := section.Update(tea.KeyPressMsg{Code: 'd', Text: "d"}); cmd != nil {
+		if _, isConfirm := cmd().(message.ShowConfirmationMsg); isConfirm {
+			t.Fatal("delete binding fired while exec panel captures input")
+		}
+	}
+
+	section.Update(tea.KeyPressMsg{Code: ']', Mod: tea.ModCtrl})
+	if section.CapturesInput() || section.IsPanelFocused() {
+		t.Fatal("ctrl+] should release input and return focus to the list")
+	}
+	if name := section.ActivePanelName(); name != "Details" {
+		t.Fatalf("ctrl+] should switch back to the details panel, got %q", name)
+	}
+	if ep.session != nil || ep.term != nil {
+		t.Fatal("ctrl+] should close the exec session")
 	}
 }
+
+func TestExecCloseMsgIgnoresStaleSession(t *testing.T) {
+	dockerClient := client.NewMockClient()
+	section := New(context.Background(), dockerClient.Containers(), config.DefaultLogsConfig())
+	section.SetSize(120, 40)
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
+	ep, ok := section.ActivePanel().(*execPanel)
+	if !ok {
+		t.Fatal("active panel is not the exec panel")
+	}
+
+	live := client.NewExecSession("live", io.NopCloser(strings.NewReader("")), nopWriteCloser{}, nil)
+	ep.session = live
+
+	stale := client.NewExecSession("stale", io.NopCloser(strings.NewReader("")), nopWriteCloser{}, nil)
+	if cmd := section.Update(execCloseMsg{session: stale}); cmd != nil {
+		t.Fatal("stale execCloseMsg should be ignored")
+	}
+	if ep.session != live {
+		t.Fatal("stale execCloseMsg closed the live session")
+	}
+
+	section.Update(execCloseMsg{session: live})
+	if ep.session != nil {
+		t.Fatal("execCloseMsg for the live session should close it")
+	}
+}
+
+type nopWriteCloser struct{}
+
+func (nopWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
+func (nopWriteCloser) Close() error                { return nil }
 
 func TestActivePanelClosedOnLogsSessionClose(t *testing.T) {
 	dockerClient := client.NewMockClient()

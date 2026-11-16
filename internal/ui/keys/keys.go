@@ -41,6 +41,11 @@ type KeyMap struct {
 	PanelNext key.Binding
 	PanelPrev key.Binding
 
+	// ReleaseInput closes a panel that captures all keyboard input (e.g. the
+	// exec terminal), switches back to the details panel and returns focus to
+	// the list.
+	ReleaseInput key.Binding
+
 	LogScrollLeft  key.Binding
 	LogScrollRight key.Binding
 
@@ -218,8 +223,12 @@ var Keys = &KeyMap{
 		key.WithHelp("?", "help"),
 	),
 	Quit: key.NewBinding(
-		key.WithKeys("ctrl+c"),
-		key.WithHelp("ctrl+c", "quit"),
+		key.WithKeys("q", "ctrl+c"),
+		key.WithHelp("q", "quit"),
+	),
+	ReleaseInput: key.NewBinding(
+		key.WithKeys("ctrl+]"),
+		key.WithHelp("ctrl+]", "exit terminal"),
 	),
 }
 

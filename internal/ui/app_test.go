@@ -120,9 +120,27 @@ func TestExecPanel(t *testing.T) {
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
 
-	// Wait for the exec input prompt to appear
-	waitForString(t, tm, "$")
+	// Wait for the mock shell prompt and the status bar hint on how to leave
+	// the terminal. Checked together: each wait consumes the output stream.
+	waitFor(t, tm, func(b []byte) bool {
+		out := string(b)
+		return strings.Contains(out, "$ ") && strings.Contains(out, "exit terminal")
+	})
 
+	// While the terminal captures input, keys go to the shell.
+	for _, r := range "qx" {
+		tm.Send(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForString(t, tm, "mock output for: qx")
+
+	// ctrl+c is the quit binding, but inside the terminal it must reach the
+	// shell instead (the mock shell echoes it as ^C) and the app keeps running.
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	waitForString(t, tm, "^C")
+
+	// Release the terminal, then quit works again.
+	tm.Send(tea.KeyPressMsg{Code: ']', Mod: tea.ModCtrl})
 	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(time.Second))
 }

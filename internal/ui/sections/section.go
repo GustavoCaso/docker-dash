@@ -30,6 +30,13 @@ type Panel interface {
 	SetSize(width, height int)
 }
 
+// InputCapturer is implemented by panels that, while focused, need every key
+// press and paste delivered to them (e.g. an interactive terminal). Global and
+// section key bindings are bypassed until keys.Keys.ReleaseInput is pressed.
+type InputCapturer interface {
+	CapturesInput() bool
+}
+
 type Section interface {
 	// Initialize Section
 	Init() tea.Cmd
@@ -49,6 +56,10 @@ type Section interface {
 	// IsPanelFocused returns true when a section with panels has the focus on
 	// the panel side, false otherwise.
 	IsPanelFocused() bool
+	// CapturesInput returns true when the focused panel is capturing all
+	// keyboard input. The app must then forward keys and pastes straight to
+	// the section without applying global bindings.
+	CapturesInput() bool
 	// UpdateItems update the list items
 	// If there are no items to set it reset the section otherewise if update the active panel
 	UpdateItems(items []list.Item) []tea.Cmd

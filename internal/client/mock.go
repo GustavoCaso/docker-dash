@@ -9,6 +9,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -451,7 +452,7 @@ func (s *mockContainerService) Logs(ctx context.Context, id string, opts LogOpti
 	return NewLogsSession(io.NopCloser(pr), func() {}), nil
 }
 
-func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSession, error) {
+func (s *mockContainerService) Exec(ctx context.Context, id string, width, height uint) (*ExecSession, error) {
 	for _, c := range s.containers {
 		if c.ID == id || c.Name == id {
 			if c.State != StateRunning {
@@ -459,10 +460,13 @@ func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSessio
 			}
 
 			pr, pw := io.Pipe()
+			shell := &mockExecWriter{pw: pw, ready: make(chan struct{})}
+			go shell.prompt()
 
 			return NewExecSession(
+				"43242dsabda",
 				pr,
-				&mockExecWriter{pw: pw},
+				shell,
 				func() {
 					pw.Close()
 					pr.Close()
@@ -471,6 +475,11 @@ func (s *mockContainerService) Exec(ctx context.Context, id string) (*ExecSessio
 		}
 	}
 	return nil, fmt.Errorf("container not found: %s", id)
+}
+
+// TODO: complete mock of execresize.
+func (s *mockContainerService) ExecResize(ctx context.Context, execID string, width, height uint) error {
+	return nil
 }
 
 // mockStatsJSON is a single Docker stats response frame used by the mock.
@@ -510,16 +519,66 @@ func (s *mockContainerService) Stats(ctx context.Context, id string) (*StatsSess
 	return nil, fmt.Errorf("container not found: %s", id)
 }
 
-// mockExecWriter simulates shell output by echoing back commands with a fake prompt.
+// mockExecPrompt is the prompt printed by the mock shell.
+const mockExecPrompt = "$ "
+
+// Control bytes understood by the mock shell (as sent by a TTY).
+const (
+	mockKeyCtrlC     = 0x03
+	mockKeyBackspace = 0x7f
+)
+
+// mockExecWriter simulates an interactive TTY shell: it echoes typed bytes,
+// handles backspace and ctrl+c, and answers each line with fake output
+// followed by a new prompt. Typing "exit" ends the session.
 type mockExecWriter struct {
-	pw *io.PipeWriter
+	mu    sync.Mutex
+	pw    *io.PipeWriter
+	line  []byte
+	ready chan struct{} // closed once the initial prompt has been written
+}
+
+func (w *mockExecWriter) prompt() {
+	defer close(w.ready)
+	_, _ = w.pw.Write([]byte(mockExecPrompt))
 }
 
 func (w *mockExecWriter) Write(p []byte) (int, error) {
-	cmd := strings.TrimSpace(string(p))
-	output := fmt.Sprintf("$ %s\nmock output for: %s\n", cmd, cmd)
-	_, err := w.pw.Write([]byte(output))
-	if err != nil {
+	<-w.ready
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	var out strings.Builder
+	for _, b := range p {
+		switch b {
+		case '\r', '\n':
+			cmd := strings.TrimSpace(string(w.line))
+			w.line = w.line[:0]
+			if cmd == "exit" {
+				if _, err := w.pw.Write([]byte(out.String() + "\r\n")); err != nil {
+					return 0, err
+				}
+				return len(p), w.pw.Close()
+			}
+			out.WriteString("\r\n")
+			if cmd != "" {
+				fmt.Fprintf(&out, "mock output for: %s\r\n", cmd)
+			}
+			out.WriteString(mockExecPrompt)
+		case mockKeyBackspace:
+			if len(w.line) > 0 {
+				w.line = w.line[:len(w.line)-1]
+				out.WriteString("\b \b")
+			}
+		case mockKeyCtrlC:
+			w.line = w.line[:0]
+			out.WriteString("^C\r\n" + mockExecPrompt)
+		default:
+			w.line = append(w.line, b)
+			out.WriteByte(b)
+		}
+	}
+	if _, err := w.pw.Write([]byte(out.String())); err != nil {
 		return 0, err
 	}
 	return len(p), nil
