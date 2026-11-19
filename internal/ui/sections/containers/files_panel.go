@@ -28,6 +28,9 @@ const (
 	// fileTreeEventBuffer bounds how many batches the producer can run ahead
 	// of the UI before it blocks.
 	fileTreeEventBuffer = 8
+	// fileTreeMaxDrain caps how many events one message coalesces, so a
+	// producer that keeps the buffer full cannot starve UI updates.
+	fileTreeMaxDrain = fileTreeEventBuffer
 	// defaultFileTreeCacheTTL is used when the configured cache TTL is empty or invalid.
 	defaultFileTreeCacheTTL = time.Minute
 	fileTreeCacheSize       = 5
@@ -376,7 +379,8 @@ func (f *filesPanel) fetchCmd(ctx context.Context, containerID string, requestID
 }
 
 // waitFileTreeCmd blocks for the next event, then drains whatever else is
-// already buffered so the UI rebuilds its view once per burst of batches.
+// already buffered (up to fileTreeMaxDrain events) so the UI rebuilds its view
+// once per burst of batches.
 func waitFileTreeCmd(events <-chan fileTreeEvent, requestID int) tea.Cmd {
 	return func() tea.Msg {
 		msg := fileTreeChunkMsg{requestID: requestID, events: events}
@@ -387,7 +391,7 @@ func waitFileTreeCmd(events <-chan fileTreeEvent, requestID int) tea.Cmd {
 			return msg
 		}
 		msg.apply(ev)
-		for !msg.done {
+		for drained := 1; !msg.done && drained < fileTreeMaxDrain; drained++ {
 			select {
 			case ev, ok = <-events:
 				if !ok {

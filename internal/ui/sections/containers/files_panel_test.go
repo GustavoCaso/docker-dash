@@ -3,6 +3,7 @@ package containers
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -570,5 +571,38 @@ func TestFileTreeCacheTTLFromConfig(t *testing.T) {
 				t.Errorf("cache ttl = %v, want %v", p.cache.ttl, tt.want)
 			}
 		})
+	}
+}
+
+func TestWaitFileTreeCmdCapsEventsPerMessage(t *testing.T) {
+	const batches = 2*fileTreeMaxDrain + 1
+	events := make(chan fileTreeEvent, batches+1)
+	for i := range batches {
+		events <- fileTreeEvent{entries: []client.FileEntry{{Path: "/f" + strconv.Itoa(i)}}}
+	}
+	events <- fileTreeEvent{done: true}
+	close(events)
+
+	var total, msgs int
+	for {
+		msg, ok := waitFileTreeCmd(events, 1)().(fileTreeChunkMsg)
+		if !ok {
+			t.Fatal("expected fileTreeChunkMsg")
+		}
+		msgs++
+		if len(msg.entries) > fileTreeMaxDrain {
+			t.Fatalf("message %d coalesced %d entries, want at most %d", msgs, len(msg.entries), fileTreeMaxDrain)
+		}
+		total += len(msg.entries)
+		if msg.done {
+			break
+		}
+	}
+
+	if total != batches {
+		t.Errorf("received %d entries, want %d", total, batches)
+	}
+	if want := batches/fileTreeMaxDrain + 1; msgs != want {
+		t.Errorf("got %d messages, want %d", msgs, want)
 	}
 }
