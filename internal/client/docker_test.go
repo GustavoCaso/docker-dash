@@ -90,12 +90,23 @@ func findNode(root *FileNode, name string) *FileNode {
 	return nil
 }
 
+// buildContainerFileTree reads a tar export into a tree the way the UI does.
+func buildContainerFileTree(r io.Reader) (*FileNode, error) {
+	b := NewFileTreeBuilder()
+	_, err := readTarEntries(r, func(entries []FileEntry) {
+		for _, e := range entries {
+			b.Add(e)
+		}
+	})
+	return b.Root(), err
+}
+
 func TestBuildContainerFileTree_ExplicitDirs(t *testing.T) {
 	b := newTarBuilder()
 	b.addDir("etc/")
 	b.addFile("etc/hosts", 100)
 
-	root := buildContainerFileTree(b.reader())
+	root, _ := buildContainerFileTree(b.reader())
 
 	if root == nil {
 		t.Fatal("expected non-nil root")
@@ -127,7 +138,7 @@ func TestBuildContainerFileTree_ImplicitDir_DepthAndPath(t *testing.T) {
 	b := newTarBuilder()
 	b.addFile("usr/bin/env", 50)
 
-	root := buildContainerFileTree(b.reader())
+	root, _ := buildContainerFileTree(b.reader())
 	usr := findNode(root, "usr")
 	if usr == nil {
 		t.Error("usr node not found")
@@ -139,8 +150,8 @@ func TestBuildContainerFileTree_ImplicitDir_DepthAndPath(t *testing.T) {
 		t.Errorf("implicit dir 'usr' depth: got %d, want 1", usr.Depth)
 	}
 
-	if usr.Path != "usr" {
-		t.Errorf("implicit dir 'usr' path: got %q, want %q", usr.Path, "usr")
+	if usr.Path != "/usr" {
+		t.Errorf("implicit dir 'usr' path: got %q, want %q", usr.Path, "/usr")
 	}
 
 	if len(usr.Children) != 1 {
@@ -157,8 +168,8 @@ func TestBuildContainerFileTree_ImplicitDir_DepthAndPath(t *testing.T) {
 	if bin.Depth != 2 {
 		t.Errorf("implicit dir 'bin' depth: got %d, want 2", bin.Depth)
 	}
-	if bin.Path != "usr/bin" {
-		t.Errorf("implicit dir 'bin' path: got %q, want %q", bin.Path, "usr/bin")
+	if bin.Path != "/usr/bin" {
+		t.Errorf("implicit dir 'bin' path: got %q, want %q", bin.Path, "/usr/bin")
 	}
 }
 
@@ -170,7 +181,7 @@ func TestBuildContainerFileTree_NonEOFError(t *testing.T) {
 	sentinelErr := errors.New("disk read error")
 	badReader := &errReader{r: bytes.NewReader(data), err: sentinelErr}
 
-	root := buildContainerFileTree(badReader)
+	root, _ := buildContainerFileTree(badReader)
 	if root == nil {
 		t.Fatal("expected non-nil root even on read error")
 	}
@@ -210,7 +221,7 @@ func TestBuildContainerFileTree_ComplexTree(t *testing.T) {
 	b.addDir("etc/conf.d/")
 	b.addFile("etc/conf.d/app.conf", 42)
 
-	root := buildContainerFileTree(b.reader())
+	root, _ := buildContainerFileTree(b.reader())
 
 	// Root should have two children: usr and etc.
 	if len(root.Children) != 2 {

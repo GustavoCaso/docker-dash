@@ -25,6 +25,11 @@ func main() {
 		"",
 		"Refresh interval. Override value from configuration file if exists",
 	)
+	filesCacheTTL := flag.String(
+		"files.cache_ttl",
+		"",
+		"Container file tree cache TTL. Override value from configuration file if exists",
+	)
 	host := flag.String("docker.host", "", "Docker host. Override value from configuration file if exists")
 	debug := flag.Bool("debug", false, "Enable debug logging to ./docker-dash-debug.log")
 	flag.Parse()
@@ -53,6 +58,11 @@ func main() {
 	if *refreshConfig != "" {
 		cfg.Refresh.Interval = *refreshConfig
 		fmt.Fprintf(os.Stderr, "Override refresh intervalconfiguration with %s\n", *refreshConfig)
+	}
+
+	if *filesCacheTTL != "" {
+		cfg.Files.CacheTTL = *filesCacheTTL
+		fmt.Fprintf(os.Stderr, "Override files cache TTL configuration with %s\n", *filesCacheTTL)
 	}
 
 	if validationErr := validateIntervals(cfg, os.Stderr); validationErr != nil {
@@ -119,6 +129,13 @@ func validateIntervals(cfg *config.Config, stderr io.Writer) error {
 		_, err := time.ParseDuration(cfg.Refresh.Interval)
 		if err != nil {
 			return fmt.Errorf("invalid refresh interval %q: %w", cfg.Refresh.Interval, err)
+		}
+	}
+
+	if cfg.Files.CacheTTL != "" {
+		_, err := time.ParseDuration(cfg.Files.CacheTTL)
+		if err != nil {
+			return fmt.Errorf("invalid files cache TTL %q: %w", cfg.Files.CacheTTL, err)
 		}
 	}
 

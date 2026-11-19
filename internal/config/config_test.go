@@ -214,3 +214,32 @@ since = "30m"
 		t.Errorf("Since = %q, want %q", cfg.Logs.Since, "30m")
 	}
 }
+
+func TestDefaultFilesConfig(t *testing.T) {
+	cfg, err := config.Load("/nonexistent/path/config.toml")
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Files.CacheTTL != "1m" {
+		t.Errorf("default CacheTTL = %q, want %q", cfg.Files.CacheTTL, "1m")
+	}
+}
+
+func TestFilesConfigFromTOML(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "config*.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = f.WriteString(`
+[files]
+cache_ttl = "5m"
+`)
+	f.Close()
+	cfg, err := config.Load(f.Name())
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if cfg.Files.CacheTTL != "5m" {
+		t.Errorf("CacheTTL = %q, want %q", cfg.Files.CacheTTL, "5m")
+	}
+}

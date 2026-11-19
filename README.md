@@ -132,6 +132,11 @@ timestamps = false
 # "10m", "2h", "24h".
 # Empty string means show all available logs.
 since = "2h"
+
+[files]
+# How long a container's file tree (Files panel) is cached before it is walked again.
+# Examples: "30s", "1m", "5m". Set to "0s" to disable caching.
+cache_ttl = "1m"
 ```
 
 ### CLI flags
@@ -141,6 +146,7 @@ since = "2h"
 | `--config` | Path to config file (default: `~/.config/docker-dash/config.toml`) |
 | `--docker.host` | Docker daemon URL (overrides config file) |
 | `--refresh.interval` | Auto-refresh interval (overrides config file) |
+| `--files.cache_ttl` | Container file tree cache TTL, e.g. `5m` or `0s` to disable (overrides config file) |
 | `--debug` | Enable debug logging (overrides config file) |
 
 CLI flags take precedence over config values.

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"slices"
 	"strings"
 	"sync"
@@ -588,22 +589,14 @@ func (w *mockExecWriter) Close() error {
 	return w.pw.Close()
 }
 
-func (s *mockContainerService) FileTree(_ context.Context, _ string) (*FileNode, error) {
-	root := &FileNode{Name: ".", Path: ".", IsDir: true, Depth: 0}
-
-	etc := &FileNode{Name: "etc", Path: "/etc", IsDir: true, Depth: 1, Parent: root}
-	nginxConf := &FileNode{
-		Name: "nginx.conf", Path: "/etc/nginx.conf",
-		IsDir: false, Depth: 2, Size: 1024, Parent: etc,
-	}
-	etc.Children = []*FileNode{nginxConf}
-
-	usr := &FileNode{Name: "usr", Path: "/usr", IsDir: true, Depth: 1, Parent: root}
-	bin := &FileNode{Name: "bin", Path: "/usr/bin", IsDir: true, Depth: 2, Parent: usr}
-	usr.Children = []*FileNode{bin}
-
-	root.Children = []*FileNode{etc, usr}
-	return root, nil
+func (s *mockContainerService) FileTree(_ context.Context, _ string, emit func([]FileEntry)) error {
+	emit([]FileEntry{
+		{Path: "/etc", IsDir: true, Mode: fs.ModeDir | 0o755},
+		{Path: "/etc/nginx.conf", Size: 1024, Mode: 0o644},
+		{Path: "/usr", IsDir: true, Mode: fs.ModeDir | 0o755},
+		{Path: "/usr/bin", IsDir: true, Mode: fs.ModeDir | 0o755},
+	})
+	return nil
 }
 
 func (s *mockContainerService) Prune(_ context.Context, _ PruneOptions) (PruneReport, error) {

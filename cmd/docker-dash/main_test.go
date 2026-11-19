@@ -81,3 +81,24 @@ func TestValidateIntervals_IgnoresDisabledUpdateCheckInterval(t *testing.T) {
 		t.Fatalf("expected no stderr output when update checks are disabled, got %q", stderr.String())
 	}
 }
+
+func TestValidateIntervals_InvalidFilesCacheTTL(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Files: config.FilesConfig{
+			CacheTTL: "not-a-duration",
+		},
+	}
+
+	var stderr bytes.Buffer
+
+	err := validateIntervals(cfg, &stderr)
+	if err == nil {
+		t.Fatal("validateIntervals should return an error for an invalid files cache TTL")
+	}
+
+	if !strings.Contains(err.Error(), `invalid files cache TTL "not-a-duration"`) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

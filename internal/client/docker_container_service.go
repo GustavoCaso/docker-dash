@@ -1,7 +1,6 @@
 package client
 
 import (
-	"archive/tar"
 	"context"
 	"fmt"
 	"io"
@@ -455,82 +454,66 @@ func (s *containerService) Prune(ctx context.Context, _ PruneOptions) (PruneRepo
 	return PruneReport{ItemsDeleted: len(r.ContainersDeleted), SpaceReclaimed: r.SpaceReclaimed}, nil
 }
 
-func (s *containerService) FileTree(ctx context.Context, id string) (*FileNode, error) {
+func (s *containerService) FileTree(ctx context.Context, id string, emit func([]FileEntry)) error {
+	// Listing metadata with find inside the container is far cheaper than an
+	// export, which streams every file's contents just to read the tar headers.
+	n, err := s.fileTreeViaExec(ctx, id, emit)
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return ctxErr
+	}
+	if n > 0 {
+		return err
+	}
+
+	log.Printf("[docker] file tree via exec unavailable (%v), falling back to ContainerExport: id=%q", err, id)
+	return s.fileTreeViaExport(ctx, id, emit)
+}
+
+func (s *containerService) fileTreeViaExec(ctx context.Context, id string, emit func([]FileEntry)) (int, error) {
+	log.Printf("[docker] ContainerExecCreate (file tree): id=%q", id)
+	execResp, err := s.cli.ContainerExecCreate(ctx, id, container.ExecOptions{
+		// Run as root so the listing matches an export, which sees every file.
+		User:         "0",
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          []string{"/bin/sh", "-c", fileTreeScript},
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	attachResp, err := s.cli.ContainerExecAttach(ctx, execResp.ID, container.ExecStartOptions{})
+	if err != nil {
+		return 0, err
+	}
+	defer attachResp.Close()
+	// Closing the connection unblocks the reader when the caller gives up.
+	stop := context.AfterFunc(ctx, attachResp.Close)
+	defer stop()
+
+	pr, pw := io.Pipe()
+	defer pr.Close()
+	go func() {
+		_, copyErr := stdcopy.StdCopy(pw, io.Discard, attachResp.Reader)
+		pw.CloseWithError(copyErr)
+	}()
+
+	n, err := parseFindOutput(pr, emit)
+	log.Printf("[docker] file tree via exec: done entries=%d err=%v", n, err)
+	return n, err
+}
+
+func (s *containerService) fileTreeViaExport(ctx context.Context, id string, emit func([]FileEntry)) error {
 	log.Printf("[docker] ContainerExport (file tree): id=%q", id)
 	reader, err := s.cli.ContainerExport(ctx, id)
 	if err != nil {
-		return &FileNode{}, err
+		return err
 	}
-
 	defer reader.Close()
 
-	log.Printf("[docker] ContainerExport: done")
-	return buildContainerFileTree(reader), nil
-}
-
-func buildContainerFileTree(reader io.ReadCloser) *FileNode {
-	tr := tar.NewReader(reader)
-	t := &FileNode{Name: ".", Path: ".", IsDir: true}
-	for {
-		hdr, err := tr.Next()
-		if err != nil {
-			break
-		}
-		file := hdr.Name
-		subTree := t
-		isDir := hdr.Typeflag == tar.TypeDir
-		clean := strings.TrimSuffix(file, "/")
-		parts := strings.Split(clean, "/")
-
-		length := len(parts)
-
-		for i, part := range parts {
-			if part == "." || part == "" {
-				continue
-			}
-
-			isLast := i == length-1
-
-			if isLast && !isDir {
-				// file entry — add as leaf and move to next part
-				child := &FileNode{
-					Name:     part,
-					Path:     file,
-					IsDir:    false,
-					Linkname: hdr.Linkname,
-					Size:     hdr.Size,
-					Mode:     hdr.FileInfo().Mode(),
-					Parent:   subTree,
-					Depth:    i + 1,
-				}
-				subTree.Children = append(subTree.Children, child)
-				continue
-			}
-
-			// directory entry — find existing subtree or create one
-			found := false
-			for _, j := range subTree.Children {
-				if j.Name == part {
-					subTree = j
-					found = true
-					break
-				}
-			}
-			if !found {
-				c := &FileNode{
-					Name:   part,
-					Path:   strings.Join(parts[:i+1], "/"),
-					IsDir:  true,
-					Parent: subTree,
-					Depth:  i + 1,
-				}
-				subTree.Children = append(subTree.Children, c)
-				subTree = c
-			}
-		}
-	}
-
-	return t
+	n, err := readTarEntries(reader, emit)
+	log.Printf("[docker] ContainerExport: done entries=%d err=%v", n, err)
+	return err
 }
 
 func buildContainerHealth(h *container.Health) *HealthInfo {
