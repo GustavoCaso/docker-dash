@@ -44,6 +44,9 @@ func (c *fileTreeCache) get(containerID string) (*client.FileNode, bool) {
 }
 
 func (c *fileTreeCache) put(containerID string, root *client.FileNode) {
+	if c.ttl <= 0 {
+		return
+	}
 	if _, exists := c.entries[containerID]; !exists && len(c.entries) >= c.maxEntries {
 		c.evictOldest()
 	}

@@ -137,6 +137,41 @@ func TestParseFindOutput_Stat(t *testing.T) {
 	}
 }
 
+func TestParseFindOutput_ReadErrorMidStream(t *testing.T) {
+	record := func(fields ...string) string { return strings.Join(fields, "\x00") + "\x00" }
+	sentinelErr := errors.New("connection reset")
+
+	for name, output := range map[string]string{
+		"gnu at record boundary": "gnu\n" +
+			record("d", "4096", "755", "/", "") +
+			record("f", "120", "644", "/etc/hosts", ""),
+		"gnu inside record": "gnu\n" +
+			record("d", "4096", "755", "/", "") +
+			record("f", "120", "644", "/etc/hosts", "") +
+			"f\x0010\x00",
+		"stat at line boundary": "stat\n" +
+			"41ed 4096 '/'\n" +
+			"81a4 120 '/etc/hosts'\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			var got []FileEntry
+			r := &errReader{r: strings.NewReader(output), err: sentinelErr}
+			n, err := parseFindOutput(r, func(entries []FileEntry) {
+				got = append(got, entries...)
+			})
+			if !errors.Is(err, sentinelErr) {
+				t.Fatalf("err: got %v, want %v", err, sentinelErr)
+			}
+			if n != 2 || len(got) != 2 {
+				t.Fatalf("got n=%d emitted=%d, want 2 entries parsed before the error", n, len(got))
+			}
+			if got[0].Path != "/" || got[1].Path != "/etc/hosts" {
+				t.Errorf("entries: got %+v", got)
+			}
+		})
+	}
+}
+
 func TestParseFindOutput_NoUsableOutput(t *testing.T) {
 	for name, output := range map[string]string{
 		"empty":        "",

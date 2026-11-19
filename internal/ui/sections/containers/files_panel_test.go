@@ -513,6 +513,41 @@ func TestFileTreeCacheEvictsOldest(t *testing.T) {
 	}
 }
 
+func TestFileTreeCacheDisabledDoesNotStore(t *testing.T) {
+	for name, ttl := range map[string]time.Duration{
+		"zero":     0,
+		"negative": -time.Minute,
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := newFileTreeCache(ttl, fileTreeCacheSize)
+			c.put("a", &client.FileNode{})
+
+			if len(c.entries) != 0 {
+				t.Errorf("disabled cache stored %d entries, want 0", len(c.entries))
+			}
+			if _, ok := c.get("a"); ok {
+				t.Error("disabled cache should not return entries")
+			}
+		})
+	}
+}
+
+func TestFileTreePanelCacheDisabledRefetches(t *testing.T) {
+	svc := &fakeFileTreeService{batches: [][]client.FileEntry{{{Path: "etc/hosts"}}}}
+	p := newFilesPanel(context.Background(), svc, config.FilesConfig{CacheTTL: "0s"}).(*filesPanel)
+
+	loadFileTree(t, p, "c1")
+	p.Close()
+	loadFileTree(t, p, "c1")
+
+	if svc.calls != 2 {
+		t.Errorf("FileTree calls with cache disabled: got %d, want 2", svc.calls)
+	}
+	if len(p.cache.entries) != 0 {
+		t.Errorf("cache disabled but stored %d entries", len(p.cache.entries))
+	}
+}
+
 func TestFileTreeCacheTTLFromConfig(t *testing.T) {
 	tests := []struct {
 		name     string
