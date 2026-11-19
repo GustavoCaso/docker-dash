@@ -405,6 +405,54 @@ func TestFilterHandlesNonKeyMsg(t *testing.T) {
 	}
 }
 
+func TestFilterKeyTogglesFilterWhenListFocused(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, []sections.Panel{fp})
+
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+
+	if !section.IsFilter() {
+		t.Error("Filter key should enable filter mode when the list is focused")
+	}
+	if len(fp.updatedKeys) != 0 {
+		t.Errorf("Filter key should not reach the panel when the list is focused, got %q", fp.updatedKeys)
+	}
+}
+
+func TestFilterKeyIgnoredWhenPanelFocused(t *testing.T) {
+	fp := &fakePanel{name: "panel"}
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, []sections.Panel{fp})
+
+	// Focus the panel
+	section.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+
+	if section.IsFilter() {
+		t.Error("Filter key should not enable filter mode while a panel is focused")
+	}
+	if !slices.Contains(fp.updatedKeys, "/") {
+		t.Errorf("Filter key should be forwarded to the focused panel, got %q", fp.updatedKeys)
+	}
+}
+
+func TestResetClearsListFilterState(t *testing.T) {
+	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
+
+	section.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	if section.List.FilterState() != list.Filtering {
+		t.Fatalf("expected list to be filtering after Filter key, got %v", section.List.FilterState())
+	}
+
+	section.Reset()
+
+	if section.IsFilter() {
+		t.Error("Reset() should exit filter mode")
+	}
+	if section.List.FilterState() != list.Unfiltered {
+		t.Errorf("Reset() should clear the list filter state, got %v", section.List.FilterState())
+	}
+}
+
 func TestFilterInactiveIgnoresMsgs(t *testing.T) {
 	section := newSectionWithItems([]list.Item{fakeItem{name: "item1"}}, nil)
 

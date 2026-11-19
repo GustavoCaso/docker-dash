@@ -128,6 +128,7 @@ func (b *Section) View() string {
 // Reset resets internal state to the initial condition.
 func (b *Section) Reset() tea.Cmd {
 	b.isFilter = false
+	b.List.ResetFilter()
 	b.focus = focusList
 	if len(b.panels) > 0 {
 		cmd := b.ActivePanel().Close()
@@ -241,7 +242,9 @@ func (b *Section) Update(msg tea.Msg) tea.Cmd {
 			var listCmd tea.Cmd
 			b.List, listCmd = b.List.Update(keyMsg)
 			return listCmd
-		case key.Matches(keyMsg, keys.Keys.Filter):
+		// Filtering only applies to the list; while a panel is focused the key
+		// falls through to the panel instead of toggling the list filter.
+		case key.Matches(keyMsg, keys.Keys.Filter) && b.focus == focusList:
 			return tea.Batch(b.toggleFilter(keyMsg)...)
 		}
 	}
