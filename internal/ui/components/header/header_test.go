@@ -4,18 +4,25 @@ import (
 	"strings"
 	"testing"
 
+	zone "github.com/lrstanley/bubblezone/v2"
+
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
 func TestHeaderNewDefaults(t *testing.T) {
-	h := New("test")
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	h := New("test", zoneManager)
+
 	if h.ActiveView() != ViewImages {
 		t.Errorf("expected initial ActiveView to be ViewImages, got %v", h.ActiveView())
 	}
 }
 
 func TestHeaderMoveRight(t *testing.T) {
-	h := New("test")
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	h := New("test", zoneManager)
 
 	if h.ActiveView() != ViewImages {
 		t.Fatalf("expected ViewImages at start, got %v", h.ActiveView())
@@ -48,7 +55,9 @@ func TestHeaderMoveRight(t *testing.T) {
 }
 
 func TestHeaderMoveLeft(t *testing.T) {
-	h := New("test")
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	h := New("test", zoneManager)
 
 	h.MoveLeft()
 	if h.ActiveView() != ViewCompose {
@@ -76,8 +85,45 @@ func TestHeaderMoveLeft(t *testing.T) {
 	}
 }
 
+func TestHeaderMoveMouse(t *testing.T) {
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	h := New("test", zoneManager)
+
+	if h.ActiveView() != ViewImages {
+		t.Fatalf("expected ViewImages at start, got %v", h.ActiveView())
+	}
+
+	h.MoveMouse("compose")
+	if h.ActiveView() != ViewCompose {
+		t.Fatalf("expected ViewCompose, got %v", h.ActiveView())
+	}
+
+	h.MoveMouse("volumes")
+	if h.ActiveView() != ViewVolumes {
+		t.Fatalf("expected ViewVolumes, got %v", h.ActiveView())
+	}
+
+	h.MoveMouse("images")
+	if h.ActiveView() != ViewImages {
+		t.Fatalf("expected ViewImages, got %v", h.ActiveView())
+	}
+
+	h.MoveMouse("networks")
+	if h.ActiveView() != ViewNetworks {
+		t.Fatalf("expected ViewNetworks, got %v", h.ActiveView())
+	}
+
+	h.MoveMouse("containers")
+	if h.ActiveView() != ViewContainers {
+		t.Fatalf("expected ViewContainers, got %v", h.ActiveView())
+	}
+}
+
 func TestHeaderViewContainsSectionNames(t *testing.T) {
-	h := New("test")
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	h := New("test", zoneManager)
 	h.SetWidth(120)
 
 	output := h.View()
@@ -90,7 +136,9 @@ func TestHeaderViewContainsSectionNames(t *testing.T) {
 }
 
 func TestHeaderViewContainsDockerIcon(t *testing.T) {
-	h := New("test")
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	h := New("test", zoneManager)
 	h.SetWidth(120)
 
 	output := h.View()

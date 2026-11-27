@@ -11,6 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	zone "github.com/lrstanley/bubblezone/v2"
+
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui"
@@ -90,8 +92,10 @@ func main() {
 		dockerClient = client.NewMockClient()
 	}
 
+	zoneManager := zone.New()
+	defer zoneManager.Close()
 	p := tea.NewProgram(
-		ui.New(ctx, Version, cfg, dockerClient),
+		ui.New(ctx, Version, cfg, dockerClient, zoneManager),
 	)
 
 	_, runErr := p.Run()

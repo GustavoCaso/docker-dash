@@ -3,6 +3,8 @@ package header
 import (
 	"charm.land/lipgloss/v2"
 
+	zone "github.com/lrstanley/bubblezone/v2"
+
 	"github.com/GustavoCaso/docker-dash/internal/ui/theme"
 )
 
@@ -35,6 +37,7 @@ func (v View) String() string {
 }
 
 type headerItem struct {
+	id    string
 	icon  string
 	label string
 	view  View
@@ -42,6 +45,7 @@ type headerItem struct {
 
 // Header represents the top navigation tab bar component.
 type Header struct {
+	zoneManager *zone.Manager
 	logo        string
 	items       []headerItem
 	activeIndex int
@@ -49,16 +53,17 @@ type Header struct {
 }
 
 // New creates a new header with all sections.
-func New(version string) *Header {
+func New(version string, zoneManager *zone.Manager) *Header {
 	return &Header{
 		logo: theme.IconDocker + "  Docker Dash " + version,
 		items: []headerItem{
-			{icon: theme.IconImage, label: "Images", view: ViewImages},
-			{icon: theme.IconContainer, label: "Containers", view: ViewContainers},
-			{icon: theme.IconVolume, label: "Volumes", view: ViewVolumes},
-			{icon: theme.IconNetwork, label: "Networks", view: ViewNetworks},
-			{icon: theme.IconCompose, label: "Compose", view: ViewCompose},
+			{id: "images", icon: theme.IconImage, label: "Images", view: ViewImages},
+			{id: "containers", icon: theme.IconContainer, label: "Containers", view: ViewContainers},
+			{id: "volumes", icon: theme.IconVolume, label: "Volumes", view: ViewVolumes},
+			{id: "networks", icon: theme.IconNetwork, label: "Networks", view: ViewNetworks},
+			{id: "compose", icon: theme.IconCompose, label: "Compose", view: ViewCompose},
 		},
+		zoneManager: zoneManager,
 		activeIndex: 0,
 	}
 }
@@ -74,6 +79,31 @@ func (h *Header) ActiveView() View {
 		return h.items[h.activeIndex].view
 	}
 	return ViewImages
+}
+
+// MoveMouse navigates to the selected section with the mouse.
+func (h *Header) MoveMouse(id string) {
+	// Item indexes for direct access.
+	var (
+		images     = 0
+		containers = 1
+		volumes    = 2
+		networks   = 3
+		compose    = 4
+	)
+
+	switch id {
+	case "images":
+		h.activeIndex = images
+	case "containers":
+		h.activeIndex = containers
+	case "volumes":
+		h.activeIndex = volumes
+	case "networks":
+		h.activeIndex = networks
+	case "compose":
+		h.activeIndex = compose
+	}
 }
 
 // MoveLeft navigates to the previous section, wrapping around.
@@ -105,7 +135,7 @@ func (h *Header) View() string {
 		} else {
 			rendered = theme.HeaderItemStyle.Render(text)
 		}
-		tabParts = append(tabParts, rendered)
+		tabParts = append(tabParts, h.zoneManager.Mark(item.id, rendered))
 		if i < len(h.items)-1 {
 			tabParts = append(tabParts, sep)
 		}

@@ -12,6 +12,8 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 
+	zone "github.com/lrstanley/bubblezone/v2"
+
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
 	"github.com/GustavoCaso/docker-dash/internal/ui/components/confirmation"
@@ -80,6 +82,7 @@ type model struct {
 	cfg              *config.Config
 	client           client.Client
 	header           *header.Header
+	zoneManager      *zone.Manager
 	containerSection sections.Section
 	imageSection     sections.Section
 	volumeSection    sections.Section
@@ -119,7 +122,13 @@ type spinnerRequest struct {
 	Seq   uint64
 }
 
-func New(ctx context.Context, version string, cfg *config.Config, client client.Client) tea.Model {
+func New(
+	ctx context.Context,
+	version string,
+	cfg *config.Config,
+	client client.Client,
+	zoneManager *zone.Manager,
+) tea.Model {
 	sp := spinner.New()
 	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -133,7 +142,8 @@ func New(ctx context.Context, version string, cfg *config.Config, client client.
 		volumeKeys:       keys.Keys.VolumeKeyMap(),
 		networkKeys:      keys.Keys.NetworkKeyMap(),
 		composeKeys:      keys.Keys.ComposeKeyMap(),
-		header:           header.New(version),
+		header:           header.New(version, zoneManager),
+		zoneManager:      zoneManager,
 		statusBar:        statusbar.New(),
 		spinner:          sp,
 		spinnerRequests:  make(map[string]spinnerRequest),
@@ -411,6 +421,49 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}))
 		return m, tea.Batch(cmds...)
 
+	case tea.MouseClickMsg:
+		if m.zoneManager.Get("images").InBounds(msg) {
+			if m.activeSection().IsPanelFocused() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
+			m.header.MoveMouse("images")
+			return m, tea.Batch(cmds...)
+		} else if m.zoneManager.Get("containers").InBounds(msg) {
+			if m.activeSection().IsPanelFocused() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
+			m.header.MoveMouse("containers")
+			return m, tea.Batch(cmds...)
+		} else if m.zoneManager.Get("volumes").InBounds(msg) {
+			if m.activeSection().IsPanelFocused() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
+			m.header.MoveMouse("volumes")
+			return m, tea.Batch(cmds...)
+		} else if m.zoneManager.Get("networks").InBounds(msg) {
+			if m.activeSection().IsPanelFocused() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
+			m.header.MoveMouse("networks")
+			return m, tea.Batch(cmds...)
+		} else if m.zoneManager.Get("compose").InBounds(msg) {
+			if m.activeSection().IsPanelFocused() {
+				model, cmd := m.forwardMessageToActive(msg)
+				cmds = append(cmds, cmd)
+				return model, tea.Batch(cmds...)
+			}
+			m.header.MoveMouse("compose")
+			return m, tea.Batch(cmds...)
+		}
+
 	case tea.KeyPressMsg:
 		log.Printf("[app] KeyMsg: key=%q", msg.String())
 		switch {
@@ -560,7 +613,7 @@ func (m *model) View() tea.View {
 		content = helper.OverlayBottomRight(offset, content, m.spinner.View()+" "+spinnerText, m.width)
 	}
 
-	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View()))
+	v := tea.NewView(m.zoneManager.Scan(lipgloss.JoinVertical(lipgloss.Left, content, m.statusBar.View())))
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	return v
