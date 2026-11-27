@@ -112,6 +112,7 @@ func main() {
 
 	if runErr != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", runErr)
+		//nolint:gocritic // zoneManager.Close() it only stop the workers, which die anyway when the program finishes, no important job involved.
 		os.Exit(1)
 	}
 

@@ -422,7 +422,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case tea.MouseClickMsg:
-		if m.zoneManager.Get("images").InBounds(msg) {
+		switch {
+		case m.zoneManager.Get("images").InBounds(msg):
 			if m.activeSection().IsPanelFocused() {
 				model, cmd := m.forwardMessageToActive(msg)
 				cmds = append(cmds, cmd)
@@ -430,7 +431,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.header.MoveMouse("images")
 			return m, tea.Batch(cmds...)
-		} else if m.zoneManager.Get("containers").InBounds(msg) {
+		case m.zoneManager.Get("containers").InBounds(msg):
 			if m.activeSection().IsPanelFocused() {
 				model, cmd := m.forwardMessageToActive(msg)
 				cmds = append(cmds, cmd)
@@ -438,7 +439,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.header.MoveMouse("containers")
 			return m, tea.Batch(cmds...)
-		} else if m.zoneManager.Get("volumes").InBounds(msg) {
+		case m.zoneManager.Get("volumes").InBounds(msg):
 			if m.activeSection().IsPanelFocused() {
 				model, cmd := m.forwardMessageToActive(msg)
 				cmds = append(cmds, cmd)
@@ -446,7 +447,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.header.MoveMouse("volumes")
 			return m, tea.Batch(cmds...)
-		} else if m.zoneManager.Get("networks").InBounds(msg) {
+		case m.zoneManager.Get("networks").InBounds(msg):
 			if m.activeSection().IsPanelFocused() {
 				model, cmd := m.forwardMessageToActive(msg)
 				cmds = append(cmds, cmd)
@@ -454,7 +455,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.header.MoveMouse("networks")
 			return m, tea.Batch(cmds...)
-		} else if m.zoneManager.Get("compose").InBounds(msg) {
+		case m.zoneManager.Get("compose").InBounds(msg):
 			if m.activeSection().IsPanelFocused() {
 				model, cmd := m.forwardMessageToActive(msg)
 				cmds = append(cmds, cmd)
