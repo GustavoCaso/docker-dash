@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/charmbracelet/x/exp/teatest/v2"
+	zone "github.com/lrstanley/bubblezone/v2"
 
 	"github.com/GustavoCaso/docker-dash/internal/client"
 	"github.com/GustavoCaso/docker-dash/internal/config"
@@ -21,7 +22,9 @@ import (
 
 // Images.
 func TestImageListRendersItems(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "nginx")
 	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl, Text: "ctrl+c"})
@@ -29,7 +32,9 @@ func TestImageListRendersItems(t *testing.T) {
 }
 
 func TestImageListLayersVisible(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "No layer information available")
 	// We fetch the layers of the second image
@@ -40,7 +45,9 @@ func TestImageListLayersVisible(t *testing.T) {
 }
 
 func TestImagePruneCommand(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "<none>:<none>") // dangling image
 	tm.Send(tea.KeyPressMsg{Code: 'P', Text: "P"})
@@ -57,12 +64,14 @@ func TestImagePruneCommand(t *testing.T) {
 }
 
 func TestImageUpdateInterval(t *testing.T) {
+	zoneManager := zone.New()
+	defer zoneManager.Close()
 	m := New(context.Background(), "test", &config.Config{
 		UpdateCheck: config.UpdateCheckConfig{
 			Enabled:  true,
 			Interval: "1s",
 		},
-	}, client.NewMockClient())
+	}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "nginx:latest") // image with update
 	waitFor(t, tm, func(b []byte) bool {
@@ -78,7 +87,9 @@ func TestImageUpdateInterval(t *testing.T) {
 
 // Containers.
 func TestContainerListLogsPanel(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Navigate header right to switch to Containers view (default is Images)
@@ -98,7 +109,9 @@ func TestContainerListLogsPanel(t *testing.T) {
 }
 
 func TestExecPanel(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -146,7 +159,9 @@ func TestExecPanel(t *testing.T) {
 }
 
 func TestContainerListDetailsVisible(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	// Wait for initial render
 	waitForString(t, tm, "Images")
@@ -160,7 +175,9 @@ func TestContainerListDetailsVisible(t *testing.T) {
 }
 
 func TestContainerListStatsShowsLabels(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 
@@ -182,7 +199,9 @@ func TestContainerListStatsShowsLabels(t *testing.T) {
 }
 
 func TestSwitchingSectionResetActiveView(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Switch section and back
@@ -197,7 +216,9 @@ func TestSwitchingSectionResetActiveView(t *testing.T) {
 }
 
 func TestContainerListPrune(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 
@@ -218,7 +239,9 @@ func TestContainerListPrune(t *testing.T) {
 }
 
 func TestContainerListRestartConfirmationModal(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 
@@ -240,7 +263,9 @@ func TestContainerListRestartConfirmationModal(t *testing.T) {
 }
 
 func TestContainerFilesPanelShowsEntries(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 
@@ -265,7 +290,9 @@ func TestContainerFilesPanelShowsEntries(t *testing.T) {
 
 // Volumes.
 func TestVolumesView(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Wait for initial render
@@ -286,7 +313,9 @@ func TestVolumesView(t *testing.T) {
 
 // Networks.
 func TestSwitchingSectionSetNetworksActiveView(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Navigate to Networks view (Images -> Containers -> Volumes -> Networks)
@@ -302,7 +331,9 @@ func TestSwitchingSectionSetNetworksActiveView(t *testing.T) {
 }
 
 func TestNetworkListDelete(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 	// Navigate to Networks view (Images -> Containers -> Volumes -> Networks)
@@ -325,7 +356,9 @@ func TestNetworkListDelete(t *testing.T) {
 
 // Volumes.
 func TestVolumeListDelete(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 
@@ -354,7 +387,9 @@ func TestVolumeListDelete(t *testing.T) {
 }
 
 func TestVolumePruneCommand(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 
@@ -378,7 +413,9 @@ func TestVolumePruneCommand(t *testing.T) {
 
 // Compose.
 func TestComposeSectionVisible(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 	waitForString(t, tm, "Images")
 
@@ -395,10 +432,12 @@ func TestComposeSectionVisible(t *testing.T) {
 }
 
 func TestAutoRefreshInvalidInterval(t *testing.T) {
+	zoneManager := zone.New()
+	defer zoneManager.Close()
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "not-a-duration"},
 	}
-	m := New(context.Background(), "test", cfg, client.NewMockClient())
+	m := New(context.Background(), "test", cfg, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Invalid interval should surface as an error banner
@@ -409,10 +448,12 @@ func TestAutoRefreshInvalidInterval(t *testing.T) {
 }
 
 func TestAutoRefreshValidInterval(t *testing.T) {
+	zoneManager := zone.New()
+	defer zoneManager.Close()
 	cfg := &config.Config{
 		Refresh: config.RefreshConfig{Interval: "500ms"},
 	}
-	m := New(context.Background(), "test", cfg, client.NewMockClient())
+	m := New(context.Background(), "test", cfg, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// UI should still render normally with a valid interval configured
@@ -423,7 +464,9 @@ func TestAutoRefreshValidInterval(t *testing.T) {
 }
 
 func TestConfirmationModalAppearsOnDelete(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Default view is Images — wait for it
@@ -446,7 +489,9 @@ func TestConfirmationModalAppearsOnDelete(t *testing.T) {
 }
 
 func TestConfirmationModalDismissedOnN(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	waitForString(t, tm, "nginx")
@@ -464,7 +509,9 @@ func TestConfirmationModalDismissedOnN(t *testing.T) {
 }
 
 func TestConfirmationModalDismissedOnEsc(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	waitForString(t, tm, "nginx")
@@ -482,7 +529,9 @@ func TestConfirmationModalDismissedOnEsc(t *testing.T) {
 }
 
 func TestConfirmationModalConfirmDeletesImage(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	waitForString(t, tm, "nginx")
@@ -500,7 +549,9 @@ func TestConfirmationModalConfirmDeletesImage(t *testing.T) {
 }
 
 func TestContextualKeyBindingsBeforeViewRender(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 
 	// Send AddContextualKeyBindingsMsg before activeKeys is set — must not panic.
 	m.Update(message.AddContextualKeyBindingsMsg{
@@ -512,7 +563,9 @@ func TestContextualKeyBindingsBeforeViewRender(t *testing.T) {
 }
 
 func TestSpinnerOverlayFollowsShowAndCancelMessages(t *testing.T) {
-	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager).(*model)
 	if !ok {
 		t.Fatal("New should return *model")
 	}
@@ -538,7 +591,9 @@ func TestSpinnerOverlayFollowsShowAndCancelMessages(t *testing.T) {
 }
 
 func TestSpinnerOverlayHidesWhenActiveSectionHasNoSpinner(t *testing.T) {
-	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager).(*model)
 	if !ok {
 		t.Fatal("New should return *model")
 	}
@@ -566,7 +621,9 @@ func TestSpinnerOverlayHidesWhenActiveSectionHasNoSpinner(t *testing.T) {
 }
 
 func TestSpinnerOverlayIgnoresNestedActiveSpinner(t *testing.T) {
-	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager).(*model)
 	if !ok {
 		t.Fatal("New should return *model")
 	}
@@ -588,7 +645,9 @@ func TestSpinnerOverlayIgnoresNestedActiveSpinner(t *testing.T) {
 }
 
 func TestSpinnerOverlayShowsNestedSpinnerForActivePanel(t *testing.T) {
-	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager).(*model)
 	if !ok {
 		t.Fatal("New should return *model")
 	}
@@ -615,7 +674,9 @@ func TestSpinnerOverlayShowsNestedSpinnerForActivePanel(t *testing.T) {
 }
 
 func TestFilterModeBlocksGlobalShortcuts(t *testing.T) {
-	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient())
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	m := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager)
 	tm := teatest.NewTestModel(t, m, teatest.WithInitialTermSize(300, 100))
 
 	// Default view is Images — wait for it
@@ -640,7 +701,9 @@ func TestFilterModeBlocksGlobalShortcuts(t *testing.T) {
 }
 
 func TestContextualKeyBindingsProcessedDuringFilterMode(t *testing.T) {
-	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager).(*model)
 	if !ok {
 		t.Fatal("New should return *model")
 	}
@@ -692,7 +755,9 @@ func TestContextualKeyBindingsProcessedDuringFilterMode(t *testing.T) {
 }
 
 func TestArrowKeysStayInContainersWhenLogsPanelFocused(t *testing.T) {
-	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	zoneManager := zone.New()
+	defer zoneManager.Close()
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager).(*model)
 	if !ok {
 		t.Fatal("New should return *model")
 	}
@@ -744,8 +809,10 @@ func collectStaggerMsgs(cmd tea.Cmd) []staggeredRefreshMsg {
 }
 
 func newStaggerTestModel(t *testing.T) *model {
+	zoneManager := zone.New()
+	defer zoneManager.Close()
 	t.Helper()
-	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient()).(*model)
+	appModel, ok := New(context.Background(), "test", &config.Config{}, client.NewMockClient(), zoneManager).(*model)
 	if !ok {
 		t.Fatal("New should return *model")
 	}
